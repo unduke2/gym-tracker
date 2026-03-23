@@ -8,29 +8,6 @@
 <meta name="apple-mobile-web-app-title" content="PHUL Tracker"/>
 <meta name="theme-color" content="#111318"/>
 <title>PHUL Tracker</title>
-<script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js').then(reg => {
-        // Check for updates every time app opens
-        reg.update();
-        reg.addEventListener('updatefound', () => {
-          const newWorker = reg.installing;
-          newWorker.addEventListener('statechange', () => {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              // New version available — activate immediately
-              newWorker.postMessage({ type: 'SKIP_WAITING' });
-            }
-          });
-        });
-      });
-      // Reload once new service worker takes control
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        window.location.reload();
-      });
-    });
-  }
-</script>
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body { margin: 0; background: #111318; font-family: 'Courier New', monospace; color: #f0f0f0; overscroll-behavior: none; }
@@ -290,7 +267,7 @@ function App() {
       <div style={{ padding:"22px 18px 0", borderBottom:"1px solid #181818", position:"sticky", top:0, background:"#111318", zIndex:20 }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
           <div>
-            <div style={{ fontSize:10, color:"#7888a0", letterSpacing:3, marginBottom:3 }}>PHUL TRACKER <span style={{ color:"#3a4455", letterSpacing:1 }}>v1.2</span></div>
+            <div style={{ fontSize:10, color:"#7888a0", letterSpacing:3, marginBottom:3 }}>PHUL TRACKER <span style={{ color:"#3a4455", letterSpacing:1 }}>v1.3</span></div>
             <div style={{ fontSize:20, fontWeight:700, letterSpacing:-1 }}>UNDUKE <span style={{ color:phase==="bulk"?"#ff4d1c":"#1cb8ff", fontSize:14 }}>// {phase.toUpperCase()}</span></div>
           </div>
           <button onClick={() => setPhase(p => p==="bulk"?"cut":"bulk")}
