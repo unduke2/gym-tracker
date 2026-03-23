@@ -286,7 +286,7 @@ function App() {
 
       <div style={{ padding:"18px 18px 0" }}>
         {tab==="dash"    && <Dashboard latest={latest} phase={phase} kcalTarget={kcalTarget} todayDiet={todayDiet} workoutLogs={workoutLogs} setTab={setTab} setActiveSession={setActiveSession} draftSession={draftSession} />}
-        {tab==="workout" && <WorkoutTab workoutLogs={workoutLogs} setActiveSession={setActiveSession} draftSession={draftSession} />}
+        {tab==="workout" && <WorkoutTab workoutLogs={workoutLogs} setWorkoutLogs={setWorkoutLogs} setActiveSession={setActiveSession} draftSession={draftSession} />}
         {tab==="diet"    && <DietTab today={today} todayDiet={todayDiet} kcalTarget={kcalTarget} dietLogs={dietLogs} setDietLogs={setDietLogs} />}
         {tab==="stats"   && <StatsTab stats={stats} setStats={setStats} />}
       </div>
@@ -797,9 +797,15 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, savedSession,
 }
 
 // ─── WORKOUT TAB ──────────────────────────────────────────────────────────────
-function WorkoutTab({ workoutLogs, setActiveSession, draftSession }) {
+function WorkoutTab({ workoutLogs, setWorkoutLogs, setActiveSession, draftSession }) {
   const [view, setView] = useState("plan");
+  const [confirmDelete, setConfirmDelete] = useState(null);
   const history = Object.entries(workoutLogs).sort((a,b) => b[1].ts-a[1].ts);
+
+  const deleteSession = (key) => {
+    setWorkoutLogs(prev => { const n = {...prev}; delete n[key]; return n; });
+    setConfirmDelete(null);
+  };
   return (
     <div>
       {draftSession?.dayName && (
@@ -856,12 +862,28 @@ function WorkoutTab({ workoutLogs, setActiveSession, draftSession }) {
             const filled = Object.entries(log.exercises||{}).filter(([,sets]) => sets.some(s => s.weight||s.reps));
             return (
               <div key={key} style={{ background:"#1a1d24", borderRadius:12, padding:16, marginBottom:10, borderLeft:`3px solid ${p?.color||"#333"}` }}>
-                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
-                  <div style={{ fontWeight:700, fontSize:14 }}>{p?.icon} {log.day}</div>
-                  <div style={{ textAlign:"right" }}>
-                    <div style={{ fontSize:12, color:"#8898b0" }}>{log.date}</div>
-                    {log.durationMins > 0 && <div style={{ fontSize:11, color:"#7888a0" }}>{log.durationMins} min</div>}
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
+                  <div>
+                    <div style={{ fontWeight:700, fontSize:14 }}>{p?.icon} {log.day}</div>
+                    <div style={{ fontSize:12, color:"#8898b0" }}>{log.date}{log.durationMins > 0 ? ` · ${log.durationMins} min` : ""}</div>
                   </div>
+                  {confirmDelete === key ? (
+                    <div style={{ display:"flex", gap:6 }}>
+                      <button onClick={() => setConfirmDelete(null)}
+                        style={{ background:"#21252e", border:"1px solid #2e3340", borderRadius:6, padding:"5px 10px", color:"#7888a0", fontSize:11, cursor:"pointer" }}>
+                        cancel
+                      </button>
+                      <button onClick={() => deleteSession(key)}
+                        style={{ background:"#ff4d1c", border:"none", borderRadius:6, padding:"5px 10px", color:"#fff", fontWeight:700, fontSize:11, cursor:"pointer" }}>
+                        delete
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setConfirmDelete(key)}
+                      style={{ background:"none", border:"1px solid #2e3340", borderRadius:6, padding:"5px 10px", color:"#506070", fontSize:11, cursor:"pointer" }}>
+                      🗑
+                    </button>
+                  )}
                 </div>
                 {filled.map(([name,sets]) => (
                   <div key={name} style={{ fontSize:11, color:"#9aaac0", marginBottom:3 }}>
