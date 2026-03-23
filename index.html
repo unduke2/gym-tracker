@@ -203,7 +203,7 @@ const PHUL = {
 };
 const DAYS = ["Upper Power","Lower Power","Upper Hypertrophy","Lower Hypertrophy"];
 const BULK_KCAL = 2900, CUT_KCAL = 2200, PROTEIN_G = 155;
-const INIT_STATS = { weight: 74.1, height: 180, bodyFat: 14.3, muscleMass: 63.3, visceralFat: 5, bmr: 2200, date: "2026-03-23" };
+const INIT_STATS = { weight: 74.1, height: 180, bodyFat: 14.3, bmr: 2200, date: "2026-03-23" };
 
 // ─── SHARED UI ────────────────────────────────────────────────────────────────
 const Pill = ({ color, children }) => (
@@ -278,7 +278,7 @@ function App() {
       <div style={{ padding:"22px 18px 0", borderBottom:"1px solid #181818", position:"sticky", top:0, background:"#111318", zIndex:20 }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
           <div>
-            <div style={{ fontSize:10, color:"#7888a0", letterSpacing:3, marginBottom:3 }}>PHUL TRACKER <span style={{ color:"#3a4455", letterSpacing:1 }}>v1.8</span></div>
+            <div style={{ fontSize:10, color:"#7888a0", letterSpacing:3, marginBottom:3 }}>PHUL TRACKER <span style={{ color:"#3a4455", letterSpacing:1 }}>v1.9</span></div>
             <div style={{ fontSize:20, fontWeight:700, letterSpacing:-1 }}>UNDUKE <span style={{ color:phase==="bulk"?"#ff4d1c":"#1cb8ff", fontSize:14 }}>// {phase.toUpperCase()}</span></div>
           </div>
           <button onClick={() => setPhase(p => p==="bulk"?"cut":"bulk")}
@@ -302,7 +302,7 @@ function App() {
         {tab==="dash"    && <Dashboard latest={latest} phase={phase} kcalTarget={kcalTarget} todayDiet={todayDiet} workoutLogs={workoutLogs} setTab={setTab} setActiveSession={setActiveSession} draftSession={draftSession} />}
         {tab==="workout" && <WorkoutTab workoutLogs={workoutLogs} setWorkoutLogs={setWorkoutLogs} setActiveSession={setActiveSession} draftSession={draftSession} />}
         {tab==="diet"    && <DietTab today={today} todayDiet={todayDiet} kcalTarget={kcalTarget} dietLogs={dietLogs} setDietLogs={setDietLogs} />}
-        {tab==="stats"   && <StatsTab stats={stats} setStats={setStats} />}
+        {tab==="stats"   && <StatsTab stats={stats} setStats={setStats} phase={phase} />}
       </div>
     </div>
   );
@@ -347,7 +347,7 @@ function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, 
           {[
             { label:"WEIGHT", val:latest.weight+"kg", color:"#f0f0f0" },
             { label:"BODY FAT", val:latest.bodyFat+"%", color:bfColor },
-            { label:"LEAN MASS", val:latest.muscleMass+"kg", color:"#3db8ff" },
+            { label:"LEAN MASS", val:(latest.weight*(1-latest.bodyFat/100)).toFixed(1)+"kg", color:"#3db8ff" },
           ].map(s => (
             <div key={s.label} style={{ textAlign:"center" }}>
               <div style={{ fontSize:10, color:"#7888a0", letterSpacing:2, marginBottom:6 }}>{s.label}</div>
@@ -1002,88 +1002,234 @@ function DietTab({ today, todayDiet, kcalTarget, dietLogs, setDietLogs }) {
   );
 }
 
+// ─── BODY ANALYSIS ENGINE ────────────────────────────────────────────────────
+// Thresholds calibrated for 23yo male, bulk/cut cycle
+const BF_BULK_STOP  = 18;   // stop bulk, start cut
+const BF_CUT_TARGET = 12;   // summer target
+const BF_IDEAL_BULK = 14;   // ideal bulk start point
+const WEIGHT_NOISE  = 0.5;  // kg — within this = "stable"
+const BF_NOISE      = 0.4;  // % — within this = "stable"
+
+function analyseProgress(stats, phase) {
+  if (stats.length < 2) return null;
+  const latest = stats[stats.length - 1];
+  const prev   = stats[stats.length - 2];
+
+  const wDelta  = latest.weight  - prev.weight;
+  const bfDelta = latest.bodyFat - prev.bodyFat;
+
+  // Derived fat mass change in kg
+  const fatKgNow  = latest.weight * (latest.bodyFat / 100);
+  const fatKgPrev = prev.weight   * (prev.bodyFat   / 100);
+  const fatKgDelta = fatKgNow - fatKgPrev;
+
+  // Lean mass change
+  const leanNow  = latest.weight - fatKgNow;
+  const leanPrev = prev.weight   - fatKgPrev;
+  const leanDelta = leanNow - leanPrev;
+
+  const wUp   = wDelta  >  WEIGHT_NOISE;
+  const wDown = wDelta  < -WEIGHT_NOISE;
+  const wFlat = !wUp && !wDown;
+  const bfUp  = bfDelta >  BF_NOISE;
+  const bfDn  = bfDelta < -BF_NOISE;
+  const bfFlt = !bfUp && !bfDn;
+
+  let scenario, emoji, color, advice;
+
+  if (phase === "bulk") {
+    if (wUp && bfFlt)       { scenario = "Clean bulk"; emoji = "✅"; color = "#00e87a"; advice = "Weight up, body fat stable. You're building muscle cleanly. Keep it up."; }
+    else if (wUp && bfDn)   { scenario = "Exceptional bulk"; emoji = "🔥"; color = "#00e87a"; advice = "Weight up AND body fat dropping. You're gaining muscle faster than fat. Rare — keep doing exactly what you're doing."; }
+    else if (wUp && bfUp)   { scenario = "Dirty bulk"; emoji = "⚠️"; color = "#ffc94d"; advice = `Weight and body fat both rising. You're gaining too much fat. Consider dropping ~200 kcal/day or cleaning up food quality.${latest.bodyFat >= BF_BULK_STOP ? " You're at " + latest.bodyFat + "% — time to consider switching to cut." : ""}`; }
+    else if (wFlat && bfDn) { scenario = "Recomposition"; emoji = "🔥"; color = "#00e87a"; advice = "Weight stable but body fat dropping — you're losing fat while gaining muscle simultaneously. This is ideal for your level."; }
+    else if (wFlat && bfFlt){ scenario = "Stalled"; emoji = "⏸"; color = "#ffc94d"; advice = "Nothing is changing. You're likely at maintenance. Increase calories by 150-200 kcal/day to restart the bulk."; }
+    else if (wDown && bfFlt){ scenario = "Losing muscle"; emoji = "🚨"; color = "#ff4d1c"; advice = "Weight dropping but body fat staying the same — you're losing lean mass. Increase calories and check protein intake (target 155g/day)."; }
+    else if (wDown && bfDn) { scenario = "Cutting in bulk phase"; emoji = "⚠️"; color = "#ffc94d"; advice = "You're losing both fat and weight — you're in a deficit during your bulk. Eat more."; }
+    else                    { scenario = "Mixed signals"; emoji = "🔍"; color = "#7888a0"; advice = "Changes are within noise range. Log another measurement in a week to see a clearer trend."; }
+  } else {
+    // cut phase
+    if (wDown && bfDn)      { scenario = "Clean cut"; emoji = "✅"; color = "#00e87a"; advice = `Losing weight and body fat together — textbook cut. Muscle is being preserved. ${latest.bodyFat <= BF_CUT_TARGET ? "You're approaching your summer target of " + BF_CUT_TARGET + "%! 🎯" : "Keep going."}`; }
+    else if (wDown && bfFlt){ scenario = "Losing muscle"; emoji = "🚨"; color = "#ff4d1c"; advice = "Weight dropping but body fat not moving — you're losing lean mass, not fat. Deficit is too aggressive or protein too low. Reduce deficit and up protein."; }
+    else if (wDown && bfUp) { scenario = "Muscle loss"; emoji = "🚨"; color = "#ff4d1c"; advice = "Weight down and body fat % rising — you're losing muscle faster than fat. Serious red flag. Cut the deficit and prioritise protein."; }
+    else if (wFlat && bfDn) { scenario = "Recomposition"; emoji = "🔥"; color = "#00e87a"; advice = "Weight stable, body fat dropping — gaining muscle while losing fat. Best case scenario during a cut."; }
+    else if (wFlat && bfFlt){ scenario = "Stalled"; emoji = "⏸"; color = "#ffc94d"; advice = "No change. Either your deficit is too small or your body has adapted. Try reducing calories by 100-150 kcal or adding a short walk after meals."; }
+    else if (wUp && bfDn)   { scenario = "Muscle gain dominant"; emoji = "✅"; color = "#00e87a"; advice = "Weight slightly up but body fat dropping — you're building muscle faster than expected during a cut. Keep it up."; }
+    else                    { scenario = "Mixed signals"; emoji = "🔍"; color = "#7888a0"; advice = "Changes within noise range. Measure again in a week for a clearer picture."; }
+  }
+
+  // Phase-specific warnings
+  let warning = null;
+  if (phase === "bulk" && latest.bodyFat >= BF_BULK_STOP) {
+    warning = { text: `Body fat at ${latest.bodyFat}% — above the ${BF_BULK_STOP}% bulk stop point. Consider switching to cut.`, color: "#ff4d1c" };
+  } else if (phase === "cut" && latest.bodyFat <= BF_CUT_TARGET) {
+    warning = { text: `Body fat at ${latest.bodyFat}% — you've hit your ${BF_CUT_TARGET}% summer target! 🎯`, color: "#00e87a" };
+  }
+
+  return { scenario, emoji, color, advice, warning, wDelta, bfDelta, fatKgDelta: fatKgDelta.toFixed(1), leanDelta: leanDelta.toFixed(1) };
+}
+
 // ─── STATS TAB ────────────────────────────────────────────────────────────────
-function StatsTab({ stats, setStats }) {
-  const [form, setForm] = useState({ weight:"", bodyFat:"", muscleMass:"", visceralFat:"" });
+function StatsTab({ stats, setStats, phase }) {
+  const [form, setForm] = useState({ weight:"", bodyFat:"" });
   const [saved, setSaved] = useState(false);
   const latest = stats[stats.length-1];
   const first  = stats[0];
+  const analysis = analyseProgress(stats, phase);
 
   const addEntry = () => {
+    if (!form.weight || !form.bodyFat) return;
+    const w  = Number(form.weight);
+    const bf = Number(form.bodyFat);
     const e = {
       date: new Date().toISOString().slice(0,10),
-      weight:     Number(form.weight)     || latest.weight,
-      bodyFat:    Number(form.bodyFat)    || latest.bodyFat,
-      muscleMass: Number(form.muscleMass) || latest.muscleMass,
-      visceralFat:Number(form.visceralFat)|| latest.visceralFat,
-      bmr: latest.bmr, height: latest.height
+      weight: w,
+      bodyFat: bf,
+      leanMass: parseFloat((w * (1 - bf/100)).toFixed(1)),
+      height: latest.height,
+      bmr: latest.bmr,
     };
     setStats(prev => [...prev, e]);
-    setForm({ weight:"", bodyFat:"", muscleMass:"", visceralFat:"" });
+    setForm({ weight:"", bodyFat:"" });
     setSaved(true); setTimeout(() => setSaved(false), 2000);
   };
 
-  const delta = (key, good) => {
-    const d = latest[key] - first[key];
-    const color = good==="pos" ? (d>0?"#00e87a":"#ff4d1c") : (d>0?"#ff4d1c":"#00e87a");
-    return <span style={{ color, fontWeight:700 }}>{d>0?"+":""}{d.toFixed(1)}</span>;
-  };
-
-  const inp = (key, label, ph) => (
-    <div key={key}>
-      <div style={{ fontSize:10, color:"#8898b0", marginBottom:6 }}>{label}</div>
-      <input value={form[key]} onChange={e => setForm(f => ({...f,[key]:e.target.value}))} placeholder={String(ph)} type="number" inputMode="decimal"
-        style={{ width:"100%", background:"#21252e", border:"1px solid #2e3340", borderRadius:8, padding:"10px 12px", color:"#f0f0f0", fontSize:14 }}/>
-    </div>
-  );
+  const wDelta  = latest.weight  - first.weight;
+  const bfDelta = latest.bodyFat - first.bodyFat;
+  const leanNow   = latest.weight * (1 - latest.bodyFat/100);
+  const leanFirst = first.weight  * (1 - first.bodyFat/100);
+  const leanDelta = leanNow - leanFirst;
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+
+      {/* CURRENT STATS */}
       <div style={{ background:"#1a1d24", borderRadius:12, padding:16 }}>
-        <div style={{ fontSize:10, color:"#7888a0", letterSpacing:2, fontSize:12, marginBottom:14 }}>PROGRESS FROM BASELINE</div>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:10 }}>
-          {[
-            { label:"WEIGHT", key:"weight", unit:"kg", good:"pos" },
-            { label:"LEAN", key:"muscleMass", unit:"kg", good:"pos" },
-            { label:"FAT %", key:"bodyFat", unit:"%", good:"neg" },
-            { label:"VISC", key:"visceralFat", unit:"", good:"neg" },
-          ].map(({ label, key, unit, good }) => (
-            <div key={key} style={{ textAlign:"center" }}>
-              <div style={{ fontSize:9, color:"#7888a0", letterSpacing:2, marginBottom:6 }}>{label}</div>
-              <div style={{ fontSize:15 }}>{delta(key,good)}{unit}</div>
+        <div style={{ fontSize:12, color:"#7888a0", letterSpacing:2, marginBottom:14, fontWeight:700 }}>CURRENT</div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:10 }}>
+          <div style={{ textAlign:"center" }}>
+            <div style={{ fontSize:10, color:"#506070", letterSpacing:2, marginBottom:6 }}>WEIGHT</div>
+            <div style={{ fontSize:26, fontWeight:700, color:"#f0f0f0" }}>{latest.weight}<span style={{ fontSize:13, color:"#7888a0" }}>kg</span></div>
+          </div>
+          <div style={{ textAlign:"center" }}>
+            <div style={{ fontSize:10, color:"#506070", letterSpacing:2, marginBottom:6 }}>BODY FAT</div>
+            <div style={{ fontSize:26, fontWeight:700, color: latest.bodyFat >= BF_BULK_STOP ? "#ff4d1c" : latest.bodyFat <= BF_CUT_TARGET ? "#00e87a" : "#ffc94d" }}>{latest.bodyFat}<span style={{ fontSize:13, color:"#7888a0" }}>%</span></div>
+          </div>
+          <div style={{ textAlign:"center" }}>
+            <div style={{ fontSize:10, color:"#506070", letterSpacing:2, marginBottom:6 }}>LEAN MASS</div>
+            <div style={{ fontSize:26, fontWeight:700, color:"#3db8ff" }}>{leanNow.toFixed(1)}<span style={{ fontSize:13, color:"#7888a0" }}>kg</span></div>
+          </div>
+        </div>
+        {/* BF range indicator */}
+        <div style={{ marginTop:8 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", fontSize:10, color:"#506070", marginBottom:4 }}>
+            <span>cut target {BF_CUT_TARGET}%</span>
+            <span>bulk stop {BF_BULK_STOP}%</span>
+          </div>
+          <div style={{ height:6, background:"#21252e", borderRadius:3, position:"relative" }}>
+            <div style={{ position:"absolute", left:`${Math.min(100,Math.max(0,(BF_CUT_TARGET/25)*100))}%`, height:"100%", width:`${((BF_BULK_STOP-BF_CUT_TARGET)/25)*100}%`, background:"#00e87a22", borderRadius:3 }}/>
+            <div style={{ position:"absolute", left:`${Math.min(98,Math.max(0,((latest.bodyFat)/25)*100))}%`, top:-2, width:10, height:10, background:"#ff4d1c", borderRadius:"50%", transform:"translateX(-50%)" }}/>
+          </div>
+          <div style={{ display:"flex", justifyContent:"space-between", fontSize:10, color:"#506070", marginTop:4 }}>
+            <span>lean</span><span>healthy</span><span>cut now</span>
+          </div>
+        </div>
+        <div style={{ fontSize:10, color:"#506070", marginTop:8, textAlign:"right" }}>last updated {latest.date}</div>
+      </div>
+
+      {/* ANALYSIS */}
+      {analysis && (
+        <div style={{ background:"#1a1d24", borderRadius:12, padding:16, borderLeft:`3px solid ${analysis.color}` }}>
+          <div style={{ fontSize:12, color:"#7888a0", letterSpacing:2, marginBottom:12, fontWeight:700 }}>ANALYSIS</div>
+          <div style={{ fontSize:18, fontWeight:700, color:analysis.color, marginBottom:8 }}>
+            {analysis.emoji} {analysis.scenario}
+          </div>
+          <div style={{ fontSize:13, color:"#a0b0c0", lineHeight:1.6, marginBottom:14 }}>{analysis.advice}</div>
+          {/* Delta breakdown */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:8, background:"#21252e", borderRadius:8, padding:10 }}>
+            {[
+              { label:"WEIGHT", val:(analysis.wDelta>0?"+":"")+analysis.wDelta.toFixed(1)+"kg", color: analysis.wDelta > 0 ? "#ff4d1c" : analysis.wDelta < 0 ? "#3db8ff" : "#7888a0" },
+              { label:"FAT %", val:(analysis.bfDelta>0?"+":"")+analysis.bfDelta.toFixed(1)+"%", color: analysis.bfDelta > 0 ? "#ff4d1c" : analysis.bfDelta < 0 ? "#00e87a" : "#7888a0" },
+              { label:"FAT kg", val:(analysis.fatKgDelta>0?"+":"")+analysis.fatKgDelta+"kg", color: Number(analysis.fatKgDelta) > 0 ? "#ff4d1c" : Number(analysis.fatKgDelta) < 0 ? "#00e87a" : "#7888a0" },
+              { label:"LEAN", val:(analysis.leanDelta>0?"+":"")+analysis.leanDelta+"kg", color: Number(analysis.leanDelta) > 0 ? "#00e87a" : Number(analysis.leanDelta) < 0 ? "#ff4d1c" : "#7888a0" },
+            ].map(d => (
+              <div key={d.label} style={{ textAlign:"center" }}>
+                <div style={{ fontSize:9, color:"#506070", letterSpacing:1, marginBottom:4 }}>{d.label}</div>
+                <div style={{ fontSize:13, fontWeight:700, color:d.color }}>{d.val}</div>
+              </div>
+            ))}
+          </div>
+          {analysis.warning && (
+            <div style={{ marginTop:10, padding:"8px 12px", background:analysis.warning.color+"15", borderRadius:8, fontSize:12, color:analysis.warning.color }}>
+              ⚡ {analysis.warning.text}
             </div>
-          ))}
+          )}
+        </div>
+      )}
+
+      {/* PROGRESS FROM BASELINE */}
+      <div style={{ background:"#1a1d24", borderRadius:12, padding:16 }}>
+        <div style={{ fontSize:12, color:"#7888a0", letterSpacing:2, marginBottom:14, fontWeight:700 }}>SINCE BASELINE</div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10 }}>
+          {[
+            { label:"WEIGHT", val:wDelta, unit:"kg", good:"pos" },
+            { label:"BODY FAT", val:bfDelta, unit:"%", good:"neg" },
+            { label:"LEAN MASS", val:leanDelta, unit:"kg", good:"pos" },
+          ].map(({ label, val, unit, good }) => {
+            const color = good==="pos" ? (val>0?"#00e87a":val<0?"#ff4d1c":"#7888a0") : (val<0?"#00e87a":val>0?"#ff4d1c":"#7888a0");
+            return (
+              <div key={label} style={{ textAlign:"center" }}>
+                <div style={{ fontSize:9, color:"#506070", letterSpacing:2, marginBottom:6 }}>{label}</div>
+                <div style={{ fontSize:16, fontWeight:700, color }}>{val>0?"+":""}{val.toFixed(1)}{unit}</div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
+      {/* LOG NEW */}
       <div style={{ background:"#1a1d24", borderRadius:12, padding:16 }}>
-        <div style={{ fontSize:10, color:"#7888a0", letterSpacing:2, fontSize:12, marginBottom:14 }}>LOG MEASUREMENT</div>
+        <div style={{ fontSize:12, color:"#7888a0", letterSpacing:2, marginBottom:14, fontWeight:700 }}>LOG MEASUREMENT</div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
-          {inp("weight",     "WEIGHT (kg)",    latest.weight)}
-          {inp("bodyFat",    "BODY FAT (%)",   latest.bodyFat)}
-          {inp("muscleMass", "LEAN MASS (kg)", latest.muscleMass)}
-          {inp("visceralFat","VISCERAL FAT",   latest.visceralFat)}
+          <div>
+            <div style={{ fontSize:11, color:"#8898b0", marginBottom:6 }}>WEIGHT (kg)</div>
+            <input value={form.weight} onChange={e => setForm(f=>({...f,weight:e.target.value}))} placeholder={String(latest.weight)} type="number" inputMode="decimal"
+              style={{ width:"100%", background:"#21252e", border:"1px solid #2e3340", borderRadius:8, padding:"12px", color:"#f0f0f0", fontSize:18, textAlign:"center" }}/>
+          </div>
+          <div>
+            <div style={{ fontSize:11, color:"#8898b0", marginBottom:6 }}>BODY FAT (%)</div>
+            <input value={form.bodyFat} onChange={e => setForm(f=>({...f,bodyFat:e.target.value}))} placeholder={String(latest.bodyFat)} type="number" inputMode="decimal"
+              style={{ width:"100%", background:"#21252e", border:"1px solid #2e3340", borderRadius:8, padding:"12px", color:"#f0f0f0", fontSize:18, textAlign:"center" }}/>
+          </div>
         </div>
-        <button onClick={addEntry} style={{ width:"100%", background:saved?"#00e87a18":"#1cb8ff", border:saved?"1px solid #00e87a33":"none", borderRadius:8, padding:"13px", color:saved?"#00e87a":"#fff", fontWeight:700, fontSize:12, cursor:"pointer", letterSpacing:2 }}>
+        {form.weight && form.bodyFat && (
+          <div style={{ fontSize:12, color:"#506070", marginBottom:10, textAlign:"center" }}>
+            lean mass: <span style={{ color:"#3db8ff", fontWeight:700 }}>{(Number(form.weight)*(1-Number(form.bodyFat)/100)).toFixed(1)}kg</span> (auto-calculated)
+          </div>
+        )}
+        <button onClick={addEntry} disabled={!form.weight||!form.bodyFat}
+          style={{ width:"100%", background:saved?"#00e87a18":(!form.weight||!form.bodyFat)?"#1a1d24":"#3db8ff", border:saved?"1px solid #00e87a33":"none", borderRadius:8, padding:"13px", color:saved?"#00e87a":(!form.weight||!form.bodyFat)?"#3a4455":"#fff", fontWeight:700, fontSize:12, cursor:(!form.weight||!form.bodyFat)?"default":"pointer", letterSpacing:2 }}>
           {saved?"LOGGED ✓":"LOG MEASUREMENT"}
         </button>
       </div>
 
+      {/* HISTORY */}
       <div style={{ background:"#1a1d24", borderRadius:12, padding:16 }}>
-        <div style={{ fontSize:12, color:"#7888a0", letterSpacing:2, marginBottom:6, fontWeight:700 }}>HISTORY</div>
-        {[...stats].reverse().map((s,i) => (
-          <div key={i} style={{ padding:"10px 0", borderTop:i>0?"1px solid #252b36":"none" }}>
-            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-              <div style={{ fontSize:12, fontWeight:700 }}>{s.date}</div>
-              <div style={{ fontSize:13, color:"#c0ccd8" }}>{s.weight} kg</div>
+        <div style={{ fontSize:12, color:"#7888a0", letterSpacing:2, marginBottom:12, fontWeight:700 }}>HISTORY</div>
+        {[...stats].reverse().map((s,i) => {
+          const lean = (s.weight * (1 - s.bodyFat/100)).toFixed(1);
+          return (
+            <div key={i} style={{ padding:"10px 0", borderTop:i>0?"1px solid #252b36":"none" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+                <div style={{ fontSize:12, fontWeight:700 }}>{s.date}</div>
+                <div style={{ fontSize:13, color:"#c0ccd8", fontWeight:700 }}>{s.weight}kg</div>
+              </div>
+              <div style={{ display:"flex", gap:16, fontSize:11, color:"#8898b0" }}>
+                <span>BF <span style={{ color:"#ffc94d" }}>{s.bodyFat}%</span></span>
+                <span>Lean <span style={{ color:"#3db8ff" }}>{lean}kg</span></span>
+              </div>
             </div>
-            <div style={{ display:"flex", gap:14, fontSize:11, color:"#8898b0" }}>
-              <span>BF {s.bodyFat}%</span>
-              <span>Lean {s.muscleMass}kg</span>
-              <span>Visc {s.visceralFat}</span>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <DataBackup />
