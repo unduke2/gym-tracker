@@ -1,6 +1,6 @@
 // ── PHUL TRACKER SERVICE WORKER ──
 // Bump this version string on every update — triggers cache refresh on all devices
-const VERSION = 'v1.1';
+const VERSION = 'v1.2';
 const CACHE = `phul-${VERSION}`;
 
 // Files to cache for offline use
