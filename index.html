@@ -1,0 +1,1095 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="PHUL Tracker"/>
+<meta name="theme-color" content="#111318"/>
+<title>PHUL Tracker</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; background: #111318; font-family: 'Courier New', monospace; color: #f0f0f0; overscroll-behavior: none; }
+  input, textarea, button { font-family: 'Courier New', monospace; }
+  input:focus, textarea:focus { outline: none; border-color: #ff4d1c !important; }
+  ::-webkit-scrollbar { display: none; }
+
+  /* ── DESIGN TOKENS ── */
+  :root {
+    --bg:        #111318;
+    --bg2:       #1a1d24;
+    --bg3:       #21252e;
+    --border:    #2e3340;
+    --text:      #f0f0f0;
+    --text2:     #a0a8b8;
+    --text3:     #606878;
+    --orange:    #ff4d1c;
+    --blue:      #3db8ff;
+    --green:     #00e87a;
+    --yellow:    #ffc94d;
+    --card-radius: 14px;
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+// ─── LOCALSTORAGE HELPERS ─────────────────────────────────────────────────────
+function lsGet(key) {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; } catch { return null; }
+}
+function lsSet(key, val) {
+  try { if (val === null) { localStorage.removeItem(key); } else { localStorage.setItem(key, JSON.stringify(val)); } } catch {}
+}
+
+// ─── EQUIPMENT & PROGRESSION ──────────────────────────────────────────────────
+function getEquipmentType(exName) {
+  const barbell = ["Bench Press","OHP","Bent Over Row","Squat","Deadlift","Incline Barbell Press","Skull Crushers","EZ Bar Curl","Romanian Deadlift","Front Squat"];
+  const machine  = ["Leg Press","Lat Pulldown","Seated Cable Row","Leg Curl","Leg Extension","Calf Raise","Cable Fly","Face Pull","Tricep Pushdown","Hip Thrust","Hack Squat / Leg Press","Seated Calf Raise"];
+  const dbLight  = ["DB Lateral Raise","Incline DB Curl","Rear Delt Fly","Hammer Curl"];
+  if (barbell.includes(exName)) return "barbell";
+  if (machine.includes(exName)) return "machine";
+  if (dbLight.includes(exName)) return "dumbbell_light";
+  return "dumbbell_heavy";
+}
+function getBaseIncrement(t) {
+  if (t === "barbell") return 2.5;
+  if (t === "dumbbell_heavy") return 2.5;
+  if (t === "dumbbell_light") return 1;
+  if (t === "machine") return 5;
+  return 2.5;
+}
+function snapDB(weight) {
+  if (weight <= 10) return Math.round(weight);
+  return Math.round(weight / 2.5) * 2.5;
+}
+function snap(weight, equipType) {
+  if (equipType === "dumbbell_heavy" || equipType === "dumbbell_light") return snapDB(weight);
+  const step = getBaseIncrement(equipType);
+  return Math.round(weight / step) * step;
+}
+function dbIncrement(currentWeight) {
+  return currentWeight <= 10 ? 1 : 2.5;
+}
+function avgReps(sets) {
+  const f = sets.filter(s => s.reps && !isNaN(parseInt(s.reps)));
+  if (!f.length) return null;
+  return f.reduce((s, x) => s + parseInt(x.reps), 0) / f.length;
+}
+function calcNextWeight(exercise, logs) {
+  const eq = getEquipmentType(exercise.name);
+  const baseInc = getBaseIncrement(eq);
+  const [minR, maxR] = exercise.repRange.split("-").map(Number);
+  const history = [];
+  for (const [, session] of Object.entries(logs).sort((a,b) => b[1].ts - a[1].ts)) {
+    if (session.day === exercise.day) {
+      const sets = session.exercises?.[exercise.name];
+      if (sets?.length > 0) history.push(sets);
+      if (history.length >= 3) break;
+    }
+  }
+  if (!history.length) return { weight: exercise.startWeight, status: "start", increment: baseInc, eq, note: `Start: ${exercise.startWeight}kg` };
+  const lastSets = history[0];
+  const prevSets = history[1] || null;
+  const filledLast = lastSets.filter(s => s.weight && s.reps);
+  if (!filledLast.length) return { weight: exercise.startWeight, status: "start", increment: baseInc, eq, note: "No data yet" };
+  const lastWeight = parseFloat(filledLast[0].weight);
+  const lastAvg = avgReps(filledLast);
+  const allTop = filledLast.every(s => parseInt(s.reps) >= maxR);
+  const failed = filledLast.filter(s => parseInt(s.reps) < minR).length;
+  let inc = baseInc;
+  if (eq === "dumbbell_heavy" || eq === "dumbbell_light") inc = dbIncrement(lastWeight);
+  if (prevSets) {
+    const fp = prevSets.filter(s => s.weight && s.reps);
+    const prevW = parseFloat(fp[0]?.weight || lastWeight);
+    const prevAvg = avgReps(fp);
+    const wDelta = lastWeight - prevW;
+    if (wDelta > 0 && prevAvg !== null && lastAvg !== null) {
+      const drop = prevAvg - lastAvg;
+      const range = maxR - minR + 1;
+      if (drop > range) inc = Math.max(snap(baseInc / 2, eq), getBaseIncrement(eq === "machine" ? "dumbbell_heavy" : "dumbbell_light"));
+    }
+  }
+  if (allTop) {
+    const next = snap(lastWeight + inc, eq);
+    return { weight: next, status: "increase", increment: inc, eq, note: `↑ +${inc}kg — hit all reps` };
+  }
+  if (failed >= 2) {
+    const drop = snap(lastWeight * 0.9, eq);
+    return { weight: drop, status: "deload", increment: inc, eq, note: `↓ deload — missed ${failed} sets` };
+  }
+  return { weight: lastWeight, status: "same", increment: inc, eq, note: `→ repeat ${lastWeight}kg — avg ${lastAvg?.toFixed(1)} reps, need ${maxR}` };
+}
+
+// ─── REST TIMES ───────────────────────────────────────────────────────────────
+function getRestSeconds(exName, dayType) {
+  const heavy = ["Bench Press","OHP","Squat","Deadlift","Bent Over Row","Incline Barbell Press","Front Squat","Romanian Deadlift"];
+  const med   = ["Incline DB Press","Flat DB Press","Seated Cable Row","One Arm DB Row","Lat Pulldown","Leg Press","Hip Thrust","Hack Squat / Leg Press"];
+  if (heavy.includes(exName)) return dayType === "power" ? 240 : 90;
+  if (med.includes(exName))   return dayType === "power" ? 180 : 90;
+  return dayType === "power" ? 120 : 60;
+}
+
+// ─── PHUL PLAN ────────────────────────────────────────────────────────────────
+const PHUL = {
+  "Upper Power": {
+    type: "power", color: "#ff4d1c", icon: "⚡",
+    description: "Heavy compounds. Rest 3–5 min. Focus on bar speed.",
+    exercises: [
+      { name: "Bench Press",       day: "Upper Power", sets: 3, repRange: "3-5",  startWeight: 20,  barbell: true, note: "Arch slightly, drive feet. (plates only — add bar for total)" },
+      { name: "Incline DB Press",  day: "Upper Power", sets: 3, repRange: "6-10", startWeight: 20,  note: "2sec descent. Control. Per dumbbell." },
+      { name: "Bent Over Row",     day: "Upper Power", sets: 3, repRange: "3-5",  startWeight: 20,  barbell: true, note: "Overhand. Pull to lower chest. (plates only)" },
+      { name: "Lat Pulldown",      day: "Upper Power", sets: 3, repRange: "6-10", startWeight: 45,  note: "Full stretch at top." },
+      { name: "OHP",               day: "Upper Power", sets: 3, repRange: "3-5",  startWeight: 20,  barbell: true, note: "Brace hard. Your SBS peak was 60kg total. (plates only)" },
+      { name: "EZ Bar Curl",       day: "Upper Power", sets: 2, repRange: "6-8",  startWeight: 10,  barbell: true, note: "3sec eccentric. (plates only — EZ bar ~10kg)" },
+      { name: "Skull Crushers",    day: "Upper Power", sets: 2, repRange: "6-8",  startWeight: 10,  barbell: true, note: "Elbows tucked. (plates only)" },
+    ]
+  },
+  "Lower Power": {
+    type: "power", color: "#ff4d1c", icon: "⚡",
+    description: "Heavy lower. Rest 4–6 min on main lifts.",
+    exercises: [
+      { name: "Squat",             day: "Lower Power", sets: 3, repRange: "3-5",  startWeight: 35,  barbell: true, note: "SBS peak was 65kg total. Start conservative. (plates only)" },
+      { name: "Deadlift",          day: "Lower Power", sets: 3, repRange: "3-5",  startWeight: 37,  barbell: true, note: "Brace, push floor away. Peak 67.5kg total. (plates only)" },
+      { name: "Leg Press",         day: "Lower Power", sets: 3, repRange: "10-12",startWeight: 80,  note: "Feet shoulder-width. Full ROM." },
+      { name: "Leg Curl",          day: "Lower Power", sets: 3, repRange: "6-10", startWeight: 30,  note: "Squeeze at peak contraction." },
+      { name: "Calf Raise",        day: "Lower Power", sets: 4, repRange: "6-10", startWeight: 60,  note: "Full stretch at bottom." },
+    ]
+  },
+  "Upper Hypertrophy": {
+    type: "hypertrophy", color: "#3db8ff", icon: "🔷",
+    description: "Volume day. Rest 60–90sec. Mind-muscle connection.",
+    exercises: [
+      { name: "Incline Barbell Press", day: "Upper Hypertrophy", sets: 4, repRange: "8-12",  startWeight: 10,  barbell: true, note: "Slower tempo. Feel stretch at bottom. (plates only)" },
+      { name: "Flat DB Press",         day: "Upper Hypertrophy", sets: 4, repRange: "8-12",  startWeight: 20,  note: "Wide ROM. Full stretch each rep. Per dumbbell." },
+      { name: "Cable Fly",             day: "Upper Hypertrophy", sets: 3, repRange: "12-15", startWeight: 10,  note: "Squeeze hard at centre." },
+      { name: "Seated Cable Row",      day: "Upper Hypertrophy", sets: 4, repRange: "8-12",  startWeight: 45,  note: "Elbows tight. Squeeze shoulder blades." },
+      { name: "One Arm DB Row",        day: "Upper Hypertrophy", sets: 3, repRange: "10-12", startWeight: 20,  note: "Big stretch at bottom, row to hip. Per dumbbell." },
+      { name: "Face Pull",             day: "Upper Hypertrophy", sets: 5, repRange: "12-20", startWeight: 25,  note: "Rotate externally. Shoulder health." },
+      { name: "DB Lateral Raise",      day: "Upper Hypertrophy", sets: 4, repRange: "12-15", startWeight: 7,   note: "Lead with elbows. Per dumbbell." },
+      { name: "Incline DB Curl",       day: "Upper Hypertrophy", sets: 3, repRange: "10-15", startWeight: 9,   note: "Full stretch — great for long head. Per dumbbell." },
+      { name: "Tricep Pushdown",       day: "Upper Hypertrophy", sets: 3, repRange: "10-15", startWeight: 25,  note: "Lock elbows. Squeeze at bottom." },
+    ]
+  },
+  "Lower Hypertrophy": {
+    type: "hypertrophy", color: "#3db8ff", icon: "🔷",
+    description: "Volume lower. 90sec rest. Legs respond to volume.",
+    exercises: [
+      { name: "Front Squat",           day: "Lower Hypertrophy", sets: 4, repRange: "8-12",  startWeight: 15,  barbell: true, note: "SBS peak 40kg total. Keep elbows high. (plates only)" },
+      { name: "Hack Squat / Leg Press",day: "Lower Hypertrophy", sets: 4, repRange: "8-12",  startWeight: 80,  note: "Go deeper than you think." },
+      { name: "Leg Extension",         day: "Lower Hypertrophy", sets: 3, repRange: "10-15", startWeight: 35, note: "Pause 1sec at top." },
+      { name: "Romanian Deadlift",     day: "Lower Hypertrophy", sets: 4, repRange: "8-12",  startWeight: 15,  barbell: true, note: "Hinge, don't squat. SBS peak 40kg total. (plates only)" },
+      { name: "Leg Curl",              day: "Lower Hypertrophy", sets: 3, repRange: "10-15", startWeight: 30, note: "3sec eccentric. Hamstrings love this." },
+      { name: "Hip Thrust",            day: "Lower Hypertrophy", sets: 3, repRange: "10-15", startWeight: 40, note: "Squeeze glutes hard at top." },
+      { name: "Seated Calf Raise",     day: "Lower Hypertrophy", sets: 4, repRange: "12-20", startWeight: 30, note: "Full ROM. Feel every rep." },
+    ]
+  }
+};
+const DAYS = ["Upper Power","Lower Power","Upper Hypertrophy","Lower Hypertrophy"];
+const BULK_KCAL = 2900, CUT_KCAL = 2200, PROTEIN_G = 155;
+const INIT_STATS = { weight: 74.1, height: 180, bodyFat: 14.3, muscleMass: 63.3, visceralFat: 5, bmr: 2200, date: "2026-03-23" };
+
+// ─── SHARED UI ────────────────────────────────────────────────────────────────
+const Pill = ({ color, children }) => (
+  <span style={{ background: color+"20", color, border:`1px solid ${color}40`, borderRadius:20, padding:"2px 8px", fontSize:10, fontWeight:700, letterSpacing:1 }}>{children}</span>
+);
+const Bar = ({ value, max, color }) => (
+  <div style={{ height:3, background:"#21252e", borderRadius:2, overflow:"hidden" }}>
+    <div style={{ height:"100%", width:`${Math.min(100,(value/max)*100)}%`, background:color, borderRadius:2, transition:"width 0.5s ease" }}/>
+  </div>
+);
+
+// ─── APP ──────────────────────────────────────────────────────────────────────
+function App() {
+  const [tab, setTab]               = useState("dash");
+  const [phase, setPhase]           = useState(() => lsGet("phul_phase") || "bulk");
+  const [stats, setStats]           = useState(() => lsGet("phul_stats") || [INIT_STATS]);
+  const [workoutLogs, setWorkoutLogs] = useState(() => lsGet("phul_logs") || {});
+  const [dietLogs, setDietLogs]     = useState(() => lsGet("phul_diet") || {});
+  const [draftSession, setDraftSession] = useState(() => lsGet("phul_draft") || null);
+  const [activeSession, setActiveSession] = useState(null);
+
+  useEffect(() => { lsSet("phul_phase", phase); }, [phase]);
+  useEffect(() => { lsSet("phul_stats", stats); }, [stats]);
+  useEffect(() => { lsSet("phul_logs", workoutLogs); }, [workoutLogs]);
+  useEffect(() => { lsSet("phul_diet", dietLogs); }, [dietLogs]);
+
+  const latest = stats[stats.length - 1];
+  const kcalTarget = phase === "bulk" ? BULK_KCAL : CUT_KCAL;
+  const today = new Date().toISOString().slice(0,10);
+  const todayDiet = dietLogs[today] || { kcal:0, protein:0, notes:"" };
+
+  const saveDraft = (state) => {
+    const d = { dayName: activeSession, ...draftSession, ...state };
+    setDraftSession(d);
+    lsSet("phul_draft", d);
+  };
+
+  const clearDraft = () => { setDraftSession(null); lsSet("phul_draft", null); };
+
+  if (activeSession) return (
+    <SessionLogger
+      dayName={activeSession}
+      workoutLogs={workoutLogs}
+      savedSession={draftSession?.dayName === activeSession ? draftSession : null}
+      onSaveSession={saveDraft}
+      onFinish={(data, sessionStartedAt) => {
+        const key = today + "_" + activeSession.replace(/ /g,"_") + "_" + Date.now();
+        const durationMins = Math.round((Date.now() - (sessionStartedAt || Date.now())) / 60000);
+        setWorkoutLogs(prev => ({ ...prev, [key]: { day:activeSession, exercises:data, date:today, ts:Date.now(), durationMins } }));
+        clearDraft();
+        setActiveSession(null);
+        setTab("workout");
+      }}
+      onCancel={() => setActiveSession(null)}
+    />
+  );
+
+  const tabs = [
+    { id:"dash",    label:"DASH" },
+    { id:"workout", label:"LIFT" },
+    { id:"diet",    label:"DIET" },
+    { id:"stats",   label:"BODY" },
+  ];
+
+  return (
+    <div style={{ background:"#111318", minHeight:"100vh", maxWidth:480, margin:"0 auto", paddingBottom:90 }}>
+      {/* HEADER */}
+      <div style={{ padding:"22px 18px 0", borderBottom:"1px solid #181818", position:"sticky", top:0, background:"#111318", zIndex:20 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
+          <div>
+            <div style={{ fontSize:10, color:"#7888a0", letterSpacing:3, marginBottom:3 }}>PHUL TRACKER</div>
+            <div style={{ fontSize:20, fontWeight:700, letterSpacing:-1 }}>UNDUKE <span style={{ color:phase==="bulk"?"#ff4d1c":"#1cb8ff", fontSize:14 }}>// {phase.toUpperCase()}</span></div>
+          </div>
+          <button onClick={() => setPhase(p => p==="bulk"?"cut":"bulk")}
+            style={{ background:"none", border:`1px solid ${phase==="bulk"?"#ff4d1c":"#1cb8ff"}33`, borderRadius:8, padding:"7px 14px", color:phase==="bulk"?"#ff4d1c":"#1cb8ff", fontSize:10, fontWeight:700, cursor:"pointer", letterSpacing:2 }}>
+            {phase==="bulk"?"BULK ▴":"CUT ▾"}
+          </button>
+        </div>
+        <div style={{ display:"flex" }}>
+          {tabs.map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)} style={{
+              flex:1, background:"none", border:"none",
+              borderBottom:`2px solid ${tab===t.id?"#ff4d1c":"transparent"}`,
+              color:tab===t.id?"#fff":"#383838",
+              padding:"10px 0", fontSize:10, fontWeight:700, cursor:"pointer", letterSpacing:2
+            }}>{t.label}</button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ padding:"18px 18px 0" }}>
+        {tab==="dash"    && <Dashboard latest={latest} phase={phase} kcalTarget={kcalTarget} todayDiet={todayDiet} workoutLogs={workoutLogs} setTab={setTab} setActiveSession={setActiveSession} draftSession={draftSession} />}
+        {tab==="workout" && <WorkoutTab workoutLogs={workoutLogs} setActiveSession={setActiveSession} draftSession={draftSession} />}
+        {tab==="diet"    && <DietTab today={today} todayDiet={todayDiet} kcalTarget={kcalTarget} dietLogs={dietLogs} setDietLogs={setDietLogs} />}
+        {tab==="stats"   && <StatsTab stats={stats} setStats={setStats} />}
+      </div>
+    </div>
+  );
+}
+
+// ─── DASHBOARD ────────────────────────────────────────────────────────────────
+function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, setActiveSession, draftSession }) {
+  const recent = Object.values(workoutLogs).sort((a,b) => b.ts-a.ts);
+  const weekSessions = recent.filter(s => (Date.now()-s.ts) < 7*86400000).length;
+  const lastDay = recent[0]?.day;
+  const nextIdx = lastDay ? (DAYS.indexOf(lastDay)+1)%DAYS.length : 0;
+  const nextDay = DAYS[nextIdx];
+  const nextPlan = PHUL[nextDay];
+  const bfColor = latest.bodyFat < 15 ? "#00e87a" : latest.bodyFat < 20 ? "#ffc94d" : "#ff4d1c";
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+      {draftSession?.dayName && (
+        <div style={{ background:"#ffc94d18", border:"1px solid #ffc94d40", borderRadius:12, padding:"14px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <div>
+            <div style={{ fontSize:10, color:"#ffc94d", letterSpacing:2, marginBottom:3 }}>UNFINISHED SESSION</div>
+            <div style={{ fontSize:13, fontWeight:700 }}>{draftSession.dayName}</div>
+          </div>
+          <button onClick={() => setActiveSession(draftSession.dayName)} style={{ background:"#ffc94d", border:"none", borderRadius:8, padding:"8px 16px", color:"#000", fontWeight:700, fontSize:11, cursor:"pointer", letterSpacing:1 }}>
+            RESUME →
+          </button>
+        </div>
+      )}
+
+      <div style={{ background:`linear-gradient(135deg,${nextPlan.color}18,#0f0f0f)`, border:`1px solid ${nextPlan.color}30`, borderRadius:12, padding:18 }}>
+        <div style={{ fontSize:10, color:"#8898b0", letterSpacing:2, fontSize:12, marginBottom:10 }}>NEXT SESSION</div>
+        <div style={{ fontSize:18, fontWeight:700, marginBottom:4 }}>{nextPlan.icon} {nextDay}</div>
+        <div style={{ fontSize:11, color:"#9aaac0", marginBottom:14 }}>{nextPlan.description}</div>
+        <button onClick={() => setActiveSession(nextDay)} style={{ background:nextPlan.color, border:"none", borderRadius:8, padding:"11px 20px", color:"#fff", fontWeight:700, fontSize:12, cursor:"pointer", letterSpacing:1 }}>
+          START SESSION →
+        </button>
+      </div>
+
+      <div style={{ background:"#1a1d24", borderRadius:12, padding:16 }}>
+        <div style={{ fontSize:10, color:"#7888a0", letterSpacing:2, fontSize:12, marginBottom:14 }}>BODY / {latest.date}</div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
+          {[
+            { label:"WEIGHT", val:latest.weight+"kg", color:"#f0f0f0" },
+            { label:"BODY FAT", val:latest.bodyFat+"%", color:bfColor },
+            { label:"LEAN MASS", val:latest.muscleMass+"kg", color:"#3db8ff" },
+          ].map(s => (
+            <div key={s.label} style={{ textAlign:"center" }}>
+              <div style={{ fontSize:10, color:"#7888a0", letterSpacing:2, marginBottom:6 }}>{s.label}</div>
+              <div style={{ fontSize:20, fontWeight:700, color:s.color }}>{s.val}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div onClick={() => setTab("diet")} style={{ background:"#1a1d24", borderRadius:12, padding:16, cursor:"pointer" }}>
+        <div style={{ fontSize:10, color:"#7888a0", letterSpacing:3, marginBottom:12 }}>TODAY — NUTRITION</div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+          <div>
+            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
+              <span style={{ fontSize:11, color:"#9aaac0" }}>Calories</span>
+              <span style={{ fontSize:11, color:todayDiet.kcal>=kcalTarget?"#00e87a":"#555" }}>{todayDiet.kcal}/{kcalTarget}</span>
+            </div>
+            <Bar value={todayDiet.kcal} max={kcalTarget} color="#ff4d1c"/>
+          </div>
+          <div>
+            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
+              <span style={{ fontSize:11, color:"#9aaac0" }}>Protein</span>
+              <span style={{ fontSize:11, color:todayDiet.protein>=PROTEIN_G?"#00e87a":"#555" }}>{todayDiet.protein}g/{PROTEIN_G}g</span>
+            </div>
+            <Bar value={todayDiet.protein} max={PROTEIN_G} color="#1cb8ff"/>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ background:"#1a1d24", borderRadius:12, padding:16 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+          <div style={{ fontSize:10, color:"#7888a0", letterSpacing:3 }}>THIS WEEK</div>
+          <div style={{ fontSize:11, color:weekSessions>=4?"#00e87a":"#555" }}>{weekSessions}/4 sessions</div>
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8 }}>
+          {DAYS.map(d => {
+            const done = recent.some(s => s.day===d && (Date.now()-s.ts)<7*86400000);
+            return (
+              <div key={d} style={{ background:done?"#ff4d1c18":"#0f0f0f", border:`1px solid ${done?"#ff4d1c33":"#1a1a1a"}`, borderRadius:8, padding:"10px 6px", textAlign:"center" }}>
+                <div style={{ fontSize:14, marginBottom:4 }}>{done?"✓":PHUL[d].icon}</div>
+                <div style={{ fontSize:9, color:done?"#ff4d1c":"#333", letterSpacing:1 }}>{d.split(" ")[0].slice(0,3).toUpperCase()}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {recent.length > 0 && (
+        <div style={{ background:"#1a1d24", borderRadius:12, padding:16 }}>
+          <div style={{ fontSize:10, color:"#7888a0", letterSpacing:2, fontSize:12, marginBottom:12 }}>RECENT</div>
+          {recent.slice(0,3).map((s,i) => (
+            <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"8px 0", borderTop:i>0?"1px solid #141414":"none" }}>
+              <div style={{ fontSize:12 }}>{PHUL[s.day]?.icon} {s.day}</div>
+              <div style={{ fontSize:11, color:"#8898b0" }}>{s.date}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── SESSION LOGGER ───────────────────────────────────────────────────────────
+function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, savedSession, onSaveSession }) {
+  const plan = PHUL[dayName];
+  const [data, setData] = useState(() => {
+    if (savedSession?.data) return savedSession.data;
+    const init = {};
+    plan.exercises.forEach(ex => { init[ex.name] = Array.from({ length:ex.sets }, () => ({ weight:"", reps:"", done:false })); });
+    return init;
+  });
+  const [activeEx, setActiveEx]     = useState(() => savedSession?.activeEx || plan.exercises[0]?.name);
+  const [activeIdx, setActiveIdx]   = useState(() => savedSession?.activeIdx ?? 0);
+  const [pendingW, setPendingW]     = useState("");
+  const [pendingR, setPendingR]     = useState("");
+  const restRef    = useRef(null);
+  const isFirst    = useRef(true);
+
+  // Session start timestamp — saved once, used for duration in history
+  const sessionStartedAt = useRef(savedSession?.sessionStartedAt || Date.now());
+
+  // Restore rest timer from timestamp if app was closed mid-rest
+  const savedRestAt  = savedSession?.restStartedAt || null;
+  const savedRestDur = savedSession?.restDuration || 0;
+  const restoredLeft = savedRestAt ? Math.max(0, savedRestDur - Math.floor((Date.now() - savedRestAt) / 1000)) : 0;
+  const [phase, setPhase]           = useState(() => restoredLeft > 0 ? "resting" : "ready");
+  const [restLeft, setRestLeft]     = useState(() => restoredLeft);
+  const [restDuration, setRestDuration] = useState(() => savedRestDur || 0);
+
+  useEffect(() => {
+    if (isFirst.current) { isFirst.current = false; return; }
+    onSaveSession({ data, activeEx, activeIdx, sessionStartedAt: sessionStartedAt.current });
+  }, [data, activeEx, activeIdx]);
+
+  useEffect(() => {
+    if (phase !== "resting") return;
+    if (restLeft <= 0) {
+      setPhase("ready");
+      onSaveSession({ data, activeEx, activeIdx, sessionStartedAt: sessionStartedAt.current, restStartedAt: null, restDuration: 0 });
+      return;
+    }
+    const interval = setInterval(() => {
+      setRestLeft(r => {
+        if (r <= 1) {
+          clearInterval(interval);
+          setPhase("ready");
+          onSaveSession({ data, activeEx, activeIdx, sessionStartedAt: sessionStartedAt.current, restStartedAt: null, restDuration: 0 });
+          return 0;
+        }
+        return r - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [phase]);
+
+  const fmt = s => `${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
+  const curIdx    = plan.exercises.findIndex(e => e.name===activeEx);
+  const curEx     = plan.exercises[curIdx];
+  const sug       = curEx ? calcNextWeight(curEx, workoutLogs) : null;
+  const restTime  = curEx ? getRestSeconds(activeEx, plan.type) : 60;
+  const allDone   = plan.exercises.every(ex => data[ex.name]?.every(s => s.done));
+  const doneCount = plan.exercises.filter(ex => data[ex.name]?.every(s => s.done)).length;
+
+  const [editingSet, setEditingSet] = useState(null);
+  const [editW, setEditW] = useState("");
+  const [editR, setEditR] = useState("");
+  const [expandedEx, setExpandedEx] = useState(null);
+
+  const startSet = () => {
+    const lastDone = [...(data[activeEx]||[])].reverse().find(s => s.done);
+    setPendingW(lastDone?.weight || String(sug?.weight||""));
+    setPendingR("");
+    setPhase("doing");
+  };
+
+  const finishSet = () => {
+    if (!pendingR) return;
+    const rt = restTime;
+    const now = Date.now();
+
+    const newData = { ...data };
+    const sets = [...newData[activeEx]];
+    sets[activeIdx] = { weight:pendingW, reps:pendingR, done:true };
+    newData[activeEx] = sets;
+
+    const nextSetIdx = activeIdx + 1;
+    const totalSets = data[activeEx].length;
+    let newActiveEx = activeEx;
+    let newActiveIdx = activeIdx;
+    let hasNext = false;
+
+    if (nextSetIdx < totalSets) {
+      newActiveIdx = nextSetIdx;
+      hasNext = true;
+    } else {
+      const nextEx = plan.exercises.find((ex,i) => i > curIdx && newData[ex.name]?.some(s => !s.done));
+      if (nextEx) { newActiveEx = nextEx.name; newActiveIdx = 0; hasNext = true; }
+    }
+
+    setData(newData);
+    setActiveIdx(newActiveIdx);
+    setActiveEx(newActiveEx);
+
+    // If no more exercises/sets left, skip rest and go to done state
+    if (!hasNext) {
+      setPhase("ready");
+      setRestLeft(0);
+      onSaveSession({ data: newData, activeEx: newActiveEx, activeIdx: newActiveIdx, sessionStartedAt: sessionStartedAt.current, restStartedAt: null, restDuration: 0 });
+    } else {
+      setRestDuration(rt);
+      setPhase("resting");
+      setRestLeft(rt);
+      onSaveSession({ data: newData, activeEx: newActiveEx, activeIdx: newActiveIdx, sessionStartedAt: sessionStartedAt.current, restStartedAt: now, restDuration: rt });
+    }
+  };
+
+  const saveEdit = () => {
+    if (!editR || !editingSet) return;
+    setData(prev => {
+      const sets = [...prev[editingSet.exName]];
+      sets[editingSet.idx] = { weight: editW, reps: editR, done: true };
+      return { ...prev, [editingSet.exName]: sets };
+    });
+    setEditingSet(null);
+  };
+
+  const jumpTo = (exName, idx = null) => {
+    const fi = idx !== null ? idx : data[exName].findIndex(s => !s.done);
+    setActiveEx(exName);
+    setActiveIdx(fi >= 0 ? fi : 0);
+    setPhase("ready");
+    setExpandedEx(null);
+    clearTimeout(restRef.current);
+    setRestLeft(0);
+  };
+
+  const addSet = (exName) => {
+    const newIdx = data[exName].length;
+    setData(prev => ({ ...prev, [exName]:[...prev[exName], { weight:"", reps:"", done:false }] }));
+    setActiveEx(exName);
+    setActiveIdx(newIdx);
+    setPhase("ready");
+    setExpandedEx(null);
+    setRestLeft(0);
+  };
+
+  return (
+    <div style={{ background:"#111318", minHeight:"100vh", maxWidth:480, margin:"0 auto", paddingBottom:120 }}>
+
+      {/* ── STICKY HEADER ── */}
+      <div style={{ background:"#111318", padding:"16px 18px 12px", borderBottom:"1px solid #2e3340", position:"sticky", top:0, zIndex:10 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <div>
+            <div style={{ fontSize:11, color:plan.color, letterSpacing:2, marginBottom:2, fontWeight:700 }}>{plan.icon} {dayName.toUpperCase()}</div>
+            <div style={{ fontSize:13, color:"#a0b0c0" }}>
+              <span style={{ color:plan.color, fontWeight:700 }}>{doneCount}</span>
+              <span style={{ color:"#506070" }}>/{plan.exercises.length} exercises</span>
+            </div>
+          </div>
+          <button onClick={onCancel} style={{ background:"#1a1d24", border:"1px solid #2e3340", borderRadius:8, padding:"8px 16px", color:"#a0b0c0", fontSize:12, cursor:"pointer" }}>
+            save & exit
+          </button>
+        </div>
+        {/* progress bar */}
+        <div style={{ height:2, background:"#1a1d24", borderRadius:1, marginTop:12 }}>
+          <div style={{ height:"100%", width:`${(doneCount/plan.exercises.length)*100}%`, background:plan.color, borderRadius:1, transition:"width 0.4s ease" }}/>
+        </div>
+      </div>
+
+      <div style={{ padding:"16px 18px" }}>
+
+        {/* ── REST TIMER ── */}
+        {phase==="resting" && (
+          <div style={{ background:`linear-gradient(160deg,${plan.color}15,#1a1d24)`, border:`1px solid ${plan.color}35`, borderRadius:16, padding:"32px 20px 24px", marginBottom:16, textAlign:"center" }}>
+            <div style={{ fontSize:11, color:"#7888a0", letterSpacing:3, marginBottom:12, fontWeight:700 }}>REST</div>
+            <div style={{ fontSize:80, fontWeight:700, color:restLeft<=10?"#00e87a":plan.color, fontVariantNumeric:"tabular-nums", lineHeight:1, marginBottom:18, letterSpacing:-2 }}>{fmt(restLeft)}</div>
+            <div style={{ height:5, background:"#21252e", borderRadius:3, marginBottom:20, overflow:"hidden" }}>
+              <div style={{ height:"100%", width:`${(1-restLeft/Math.max(restDuration,1))*100}%`, background:restLeft<=10?"#00e87a":plan.color, borderRadius:3, transition:"width 1s linear" }}/>
+            </div>
+            <div style={{ fontSize:12, color:"#506070", marginBottom:20 }}>
+              up next: <span style={{ color:"#f0f0f0", fontWeight:700 }}>{activeEx}</span>
+              <span style={{ color:"#506070" }}> — set {activeIdx+1}</span>
+            </div>
+            <button onClick={() => { setRestLeft(0); setPhase("ready"); onSaveSession({ data, activeEx, activeIdx, sessionStartedAt: sessionStartedAt.current, restStartedAt: null, restDuration: 0 }); }}
+              style={{ background:"#1a1d24", border:"1px solid #2e3340", borderRadius:8, padding:"10px 28px", color:"#7888a0", fontSize:12, cursor:"pointer", letterSpacing:1 }}>
+              skip →
+            </button>
+          </div>
+        )}
+
+        {/* ── ACTIVE EXERCISE CARD ── */}
+        {curEx && phase !== "resting" && (
+          <div style={{ background:"#1a1d24", border:`1px solid ${plan.color}50`, borderRadius:16, marginBottom:16, overflow:"hidden" }}>
+
+            {/* Card header */}
+            <div style={{ background:`linear-gradient(135deg,${plan.color}20,#1a1d24)`, padding:"16px 18px 14px", borderBottom:"1px solid #252b36" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:20, fontWeight:700, color:"#f0f0f0", marginBottom:4 }}>
+                    {activeEx}
+                    {curEx.barbell && <span style={{ fontSize:11, color:plan.color, fontWeight:500, marginLeft:8, letterSpacing:1 }}>＋bar</span>}
+                  </div>
+                  <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+                    <span style={{ fontSize:12, color:"#7888a0" }}>Set</span>
+                    <span style={{ fontSize:14, fontWeight:700, color:plan.color }}>{activeIdx+1}</span>
+                    <span style={{ fontSize:12, color:"#506070" }}>of {data[activeEx].length}</span>
+                    <span style={{ fontSize:12, color:"#506070" }}>·</span>
+                    <span style={{ fontSize:12, color:"#a0b0c0" }}>{curEx.repRange} reps</span>
+                  </div>
+                </div>
+                {/* Add extra set button — top right of card */}
+                <button onClick={() => addSet(activeEx)}
+                  style={{ background:"#21252e", border:"1px solid #2e3340", borderRadius:8, padding:"6px 12px", color:"#7888a0", fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>
+                  + set
+                </button>
+              </div>
+            </div>
+
+            {/* Suggested weight — big orange hero */}
+            <div style={{ padding:"16px 18px 14px", borderBottom:"1px solid #1e2229" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <div>
+                  <div style={{ fontSize:11, color:"#506070", letterSpacing:2, marginBottom:6, fontWeight:700 }}>SUGGESTED</div>
+                  <div style={{ fontSize:42, fontWeight:700, color:plan.color, lineHeight:1 }}>
+                    {sug?.weight}<span style={{ fontSize:18, color:"#7888a0", marginLeft:4 }}>kg</span>
+                  </div>
+                  {sug && (
+                    <div style={{ fontSize:12, color:sug.status==="increase"?"#00e87a":sug.status==="deload"?"#ff6b45":"#8898b0", marginTop:6 }}>
+                      {sug.note}
+                    </div>
+                  )}
+                </div>
+                <div style={{ textAlign:"right" }}>
+                  <div style={{ fontSize:11, color:"#506070", marginBottom:4 }}>⏱ rest</div>
+                  <div style={{ fontSize:16, fontWeight:700, color:"#7888a0" }}>{fmt(restTime)}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Coach note */}
+            <div style={{ padding:"10px 18px", borderBottom:"1px solid #1e2229", background:"#161920" }}>
+              <div style={{ fontSize:12, color:"#7888a0", lineHeight:1.5 }}>💬 {curEx.note}</div>
+            </div>
+
+            {/* Action area */}
+            <div style={{ padding:"16px 18px" }}>
+              {phase==="ready" && (
+                <button onClick={startSet}
+                  style={{ width:"100%", background:plan.color, border:"none", borderRadius:12, padding:"18px", color:"#fff", fontWeight:700, fontSize:17, cursor:"pointer", letterSpacing:2 }}>
+                  START SET {activeIdx+1}
+                </button>
+              )}
+
+              {phase==="doing" && (
+                <div>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:14 }}>
+                    <div>
+                      <div style={{ fontSize:11, color:"#7888a0", marginBottom:8, letterSpacing:2, fontWeight:700 }}>WEIGHT (kg)</div>
+                      <input value={pendingW} onChange={e => setPendingW(e.target.value)}
+                        placeholder={String(sug?.weight||"")} type="number" inputMode="decimal" autoFocus
+                        style={{ width:"100%", background:"#21252e", border:`2px solid ${plan.color}60`, borderRadius:10, padding:"16px", color:"#f0f0f0", fontSize:28, textAlign:"center", fontWeight:700 }}/>
+                    </div>
+                    <div>
+                      <div style={{ fontSize:11, color:"#7888a0", marginBottom:8, letterSpacing:2, fontWeight:700 }}>REPS DONE</div>
+                      <input value={pendingR} onChange={e => setPendingR(e.target.value)}
+                        placeholder={curEx.repRange.split("-")[0]} type="number" inputMode="numeric"
+                        style={{ width:"100%", background:"#21252e", border:`2px solid ${plan.color}60`, borderRadius:10, padding:"16px", color:"#f0f0f0", fontSize:28, textAlign:"center", fontWeight:700 }}/>
+                    </div>
+                  </div>
+                  <button onClick={finishSet} disabled={!pendingR}
+                    style={{ width:"100%", background:pendingR?"#00e87a":"#21252e", border:"none", borderRadius:12, padding:"17px", color:pendingR?"#000":"#3a4455", fontWeight:700, fontSize:15, cursor:pendingR?"pointer":"default", letterSpacing:1, transition:"all 0.2s" }}>
+                    {pendingR ? "DONE — LOG SET ✓" : "enter reps to log"}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── EDIT SET MODAL ── */}
+        {editingSet && (
+          <div style={{ position:"fixed", inset:0, background:"#000b", zIndex:100, display:"flex", alignItems:"flex-end" }}>
+            <div style={{ background:"#1a1d24", borderRadius:"16px 16px 0 0", padding:24, width:"100%", boxSizing:"border-box", borderTop:`2px solid ${plan.color}` }}>
+              <div style={{ fontSize:13, color:"#a0b0c0", marginBottom:16, fontWeight:700 }}>
+                EDIT SET {editingSet.idx+1} — {editingSet.exName}
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:14 }}>
+                <div>
+                  <div style={{ fontSize:11, color:"#7888a0", marginBottom:6, letterSpacing:2 }}>WEIGHT (kg)</div>
+                  <input value={editW} onChange={e => setEditW(e.target.value)} type="number" inputMode="decimal" autoFocus
+                    style={{ width:"100%", background:"#21252e", border:`2px solid ${plan.color}60`, borderRadius:10, padding:"14px", color:"#f0f0f0", fontSize:26, textAlign:"center", fontWeight:700 }}/>
+                </div>
+                <div>
+                  <div style={{ fontSize:11, color:"#7888a0", marginBottom:6, letterSpacing:2 }}>REPS</div>
+                  <input value={editR} onChange={e => setEditR(e.target.value)} type="number" inputMode="numeric"
+                    style={{ width:"100%", background:"#21252e", border:`2px solid ${plan.color}60`, borderRadius:10, padding:"14px", color:"#f0f0f0", fontSize:26, textAlign:"center", fontWeight:700 }}/>
+                </div>
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                <button onClick={() => setEditingSet(null)}
+                  style={{ background:"#21252e", border:"1px solid #2e3340", borderRadius:10, padding:"13px", color:"#7888a0", fontWeight:700, fontSize:13, cursor:"pointer" }}>
+                  cancel
+                </button>
+                <button onClick={saveEdit} disabled={!editR}
+                  style={{ background:editR?"#00e87a":"#21252e", border:"none", borderRadius:10, padding:"13px", color:editR?"#000":"#3a4455", fontWeight:700, fontSize:13, cursor:editR?"pointer":"default" }}>
+                  SAVE ✓
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── EXERCISE LIST ── */}
+        <div style={{ fontSize:11, color:"#506070", letterSpacing:2, marginBottom:10, fontWeight:700 }}>ALL EXERCISES</div>
+        {plan.exercises.map((ex) => {
+          const exDone = data[ex.name]?.every(s => s.done);
+          const doneSets = data[ex.name]?.filter(s => s.done).length || 0;
+          const isActive = activeEx===ex.name && phase!=="resting";
+          const isExpanded = expandedEx === ex.name;
+          return (
+            <div key={ex.name} style={{
+              background: isActive ? "#21252e" : exDone ? "#161920" : "#1a1d24",
+              borderRadius:10, marginBottom:8,
+              border:`1px solid ${isActive ? plan.color+"60" : exDone ? "#00e87a20" : "#252b36"}`,
+              overflow:"hidden", transition:"all 0.15s"
+            }}>
+              {/* Row header — always tappable */}
+              <div onClick={() => {
+                if (exDone || isActive) setExpandedEx(isExpanded ? null : ex.name);
+                else if (phase !== "resting") jumpTo(ex.name);
+              }}
+                style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 16px", cursor:"pointer" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                  <div style={{ fontSize:16, color: exDone ? "#00e87a" : isActive ? plan.color : "#3a4455", width:18 }}>
+                    {exDone ? "✓" : isActive ? "▶" : "○"}
+                  </div>
+                  <div>
+                    <div style={{ fontSize:14, fontWeight: isActive ? 700 : 500, color: exDone ? "#8898b0" : isActive ? "#f0f0f0" : "#a0b0c0" }}>
+                      {ex.name} {ex.barbell && <span style={{ fontSize:10, color:plan.color }}>＋bar</span>}
+                    </div>
+                    {/* Show logged sets inline when collapsed */}
+                    {!isExpanded && data[ex.name]?.some(s => s.done) && (
+                      <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginTop:4 }}>
+                        {data[ex.name].map((s,i) => s.done ? (
+                          <span key={i} style={{ fontSize:11, color: isActive ? plan.color : "#606878", background:"#21252e", borderRadius:4, padding:"2px 6px" }}>
+                            {s.weight}×{s.reps}
+                          </span>
+                        ) : null)}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                  <div style={{ fontSize:13, fontWeight:700, color: exDone ? "#00e87a" : isActive ? plan.color : "#506070" }}>
+                    {doneSets}<span style={{ color:"#3a4455", fontWeight:400 }}>/{data[ex.name]?.length}</span>
+                  </div>
+                  {(exDone || isActive) && (
+                    <div style={{ fontSize:11, color:"#506070" }}>{isExpanded ? "▲" : "▼"}</div>
+                  )}
+                </div>
+              </div>
+
+              {/* Expanded section — edit sets + add set */}
+              {isExpanded && (
+                <div style={{ padding:"0 16px 14px", borderTop:"1px solid #252b36" }}>
+                  <div style={{ fontSize:11, color:"#506070", letterSpacing:2, margin:"10px 0 8px", fontWeight:700 }}>SETS — tap to edit</div>
+                  {data[ex.name].map((s, i) => (
+                    <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid #1e2229" }}>
+                      <div style={{ fontSize:12, color:"#7888a0" }}>Set {i+1}</div>
+                      {s.done ? (
+                        <button onClick={() => { setEditingSet({ exName: ex.name, idx: i }); setEditW(s.weight); setEditR(s.reps); }}
+                          style={{ background:"#21252e", border:`1px solid ${plan.color}40`, borderRadius:6, padding:"5px 12px", color:plan.color, fontWeight:700, fontSize:12, cursor:"pointer" }}>
+                          {s.weight}×{s.reps} ✎
+                        </button>
+                      ) : (
+                        <button onClick={() => jumpTo(ex.name, i)}
+                          style={{ background:"#21252e", border:"1px dashed #2e3340", borderRadius:6, padding:"5px 12px", color:"#506070", fontSize:12, cursor:"pointer" }}>
+                          pending → do now
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button onClick={() => addSet(ex.name)}
+                    style={{ width:"100%", background:"none", border:"1px dashed #2e3340", borderRadius:8, padding:"9px", color:"#7888a0", fontSize:12, cursor:"pointer", marginTop:10 }}>
+                    + add set
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {/* FINISH SESSION */}
+        <button onClick={() => onFinish(data, sessionStartedAt.current)} disabled={!allDone}
+          style={{ width:"100%", background:allDone?plan.color:"#1a1d24", border:`1px solid ${allDone?plan.color:"#2e3340"}`, borderRadius:12, padding:"18px", color:allDone?"#fff":"#3a4455", fontWeight:700, fontSize:15, cursor:allDone?"pointer":"default", letterSpacing:2, marginTop:8, transition:"all 0.3s" }}>
+          {allDone ? "FINISH SESSION ✓" : `${plan.exercises.length - doneCount} exercises remaining`}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── WORKOUT TAB ──────────────────────────────────────────────────────────────
+function WorkoutTab({ workoutLogs, setActiveSession, draftSession }) {
+  const [view, setView] = useState("plan");
+  const history = Object.entries(workoutLogs).sort((a,b) => b[1].ts-a[1].ts);
+  return (
+    <div>
+      {draftSession?.dayName && (
+        <div style={{ background:"#ffc94d18", border:"1px solid #ffc94d40", borderRadius:12, padding:"14px 16px", display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+          <div>
+            <div style={{ fontSize:10, color:"#ffc94d", letterSpacing:2, marginBottom:3 }}>UNFINISHED SESSION</div>
+            <div style={{ fontSize:13, fontWeight:700 }}>{draftSession.dayName}</div>
+          </div>
+          <button onClick={() => setActiveSession(draftSession.dayName)} style={{ background:"#ffc94d", border:"none", borderRadius:8, padding:"8px 16px", color:"#000", fontWeight:700, fontSize:11, cursor:"pointer", letterSpacing:1 }}>
+            RESUME →
+          </button>
+        </div>
+      )}
+      <div style={{ display:"flex", gap:8, marginBottom:18 }}>
+        {["plan","history"].map(v => (
+          <button key={v} onClick={() => setView(v)} style={{ background:view===v?"#181818":"none", border:`1px solid ${view===v?"#252525":"transparent"}`, borderRadius:8, padding:"7px 16px", color:view===v?"#fff":"#444", fontSize:10, fontWeight:700, cursor:"pointer", letterSpacing:2 }}>
+            {v.toUpperCase()}
+          </button>
+        ))}
+      </div>
+      {view==="plan" && (
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          <div style={{ fontSize:10, color:"#7888a0", letterSpacing:2, fontSize:12, marginBottom:4 }}>PHUL — 4 DAY SPLIT</div>
+          {DAYS.map(day => {
+            const p = PHUL[day];
+            return (
+              <div key={day} style={{ background:"#1a1d24", borderRadius:12, overflow:"hidden", border:"1px solid #2e3340" }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"14px 16px", borderBottom:"1px solid #2e3340" }}>
+                  <div>
+                    <div style={{ fontWeight:700, fontSize:14 }}>{p.icon} {day}</div>
+                    <Pill color={p.color}>{p.type.toUpperCase()}</Pill>
+                  </div>
+                  <button onClick={() => setActiveSession(day)} style={{ background:p.color, border:"none", borderRadius:8, padding:"8px 16px", color:"#fff", fontWeight:700, fontSize:11, cursor:"pointer", letterSpacing:1 }}>START</button>
+                </div>
+                <div style={{ padding:"12px 16px" }}>
+                  {p.exercises.map(ex => (
+                    <div key={ex.name} style={{ display:"flex", justifyContent:"space-between", padding:"5px 0", borderBottom:"1px solid #252b36" }}>
+                      <div style={{ fontSize:12 }}>{ex.name} {ex.barbell && <span style={{ fontSize:10, color:"#ff4d1c" }}>＋bar</span>}</div>
+                      <div style={{ fontSize:11, color:"#8898b0" }}>{ex.sets}×{ex.repRange}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {view==="history" && (
+        <div>
+          <div style={{ fontSize:10, color:"#7888a0", letterSpacing:3, marginBottom:14 }}>SESSION HISTORY</div>
+          {history.length===0 && <div style={{ color:"#7888a0", fontSize:13 }}>No sessions logged yet.</div>}
+          {history.map(([key,log]) => {
+            const p = PHUL[log.day];
+            const filled = Object.entries(log.exercises||{}).filter(([,sets]) => sets.some(s => s.weight||s.reps));
+            return (
+              <div key={key} style={{ background:"#1a1d24", borderRadius:12, padding:16, marginBottom:10, borderLeft:`3px solid ${p?.color||"#333"}` }}>
+                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
+                  <div style={{ fontWeight:700, fontSize:14 }}>{p?.icon} {log.day}</div>
+                  <div style={{ textAlign:"right" }}>
+                    <div style={{ fontSize:12, color:"#8898b0" }}>{log.date}</div>
+                    {log.durationMins > 0 && <div style={{ fontSize:11, color:"#7888a0" }}>{log.durationMins} min</div>}
+                  </div>
+                </div>
+                {filled.map(([name,sets]) => (
+                  <div key={name} style={{ fontSize:11, color:"#9aaac0", marginBottom:3 }}>
+                    <span style={{ color:"#aabac8" }}>{name}</span>: {sets.filter(s=>s.weight||s.reps).map(s=>`${s.weight||"?"}×${s.reps||"?"}`).join(", ")}
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── DIET TAB ─────────────────────────────────────────────────────────────────
+function DietTab({ today, todayDiet, kcalTarget, dietLogs, setDietLogs }) {
+  const [kcal,    setKcal]    = useState(String(todayDiet.kcal||""));
+  const [protein, setProtein] = useState(String(todayDiet.protein||""));
+  const [notes,   setNotes]   = useState(todayDiet.notes||"");
+  const [saved,   setSaved]   = useState(false);
+
+  const doSave = () => {
+    setDietLogs(prev => ({ ...prev, [today]:{ kcal:Number(kcal)||0, protein:Number(protein)||0, notes } }));
+    setSaved(true); setTimeout(() => setSaved(false), 2000);
+  };
+
+  const recent  = Object.entries(dietLogs).sort((a,b) => b[0].localeCompare(a[0])).slice(0,14);
+  const avgKcal = recent.length ? Math.round(recent.reduce((s,[,d]) => s+d.kcal,0)/recent.length) : 0;
+  const avgProt = recent.length ? Math.round(recent.reduce((s,[,d]) => s+d.protein,0)/recent.length) : 0;
+  const surplus = avgKcal - kcalTarget;
+  const inp = (val, set, ph, type="text") => (
+    <input value={val} onChange={e => set(e.target.value)} placeholder={ph} type={type} inputMode={type==="number"?"numeric":"text"}
+      style={{ width:"100%", background:"#21252e", border:"1px solid #2e3340", borderRadius:8, padding:"10px 12px", color:"#f0f0f0", fontSize:16 }}/>
+  );
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+      <div style={{ background:"#1a1d24", borderRadius:12, padding:16 }}>
+        <div style={{ fontSize:10, color:"#7888a0", letterSpacing:2, fontSize:12, marginBottom:14 }}>LOG — {today}</div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
+          <div><div style={{ fontSize:10, color:"#8898b0", marginBottom:6 }}>CALORIES</div>{inp(kcal, setKcal, `target ${kcalTarget}`, "number")}</div>
+          <div><div style={{ fontSize:10, color:"#8898b0", marginBottom:6 }}>PROTEIN (g)</div>{inp(protein, setProtein, `target ${PROTEIN_G}`, "number")}</div>
+        </div>
+        <div style={{ marginBottom:12 }}>
+          <div style={{ fontSize:10, color:"#8898b0", marginBottom:6 }}>NOTES</div>
+          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3}
+            style={{ width:"100%", background:"#21252e", border:"1px solid #2e3340", borderRadius:8, padding:"9px 12px", color:"#f0f0f0", fontSize:12, resize:"none" }}/>
+        </div>
+        <button onClick={doSave} style={{ width:"100%", background:saved?"#00e87a18":"#ff4d1c", border:saved?"1px solid #00e87a33":"none", borderRadius:8, padding:"13px", color:saved?"#00e87a":"#fff", fontWeight:700, fontSize:12, cursor:"pointer", letterSpacing:2 }}>
+          {saved?"SAVED ✓":"SAVE DAY"}
+        </button>
+      </div>
+      {recent.length > 0 && (
+        <div style={{ background:"#1a1d24", borderRadius:12, padding:16 }}>
+          <div style={{ fontSize:10, color:"#7888a0", letterSpacing:2, fontSize:12, marginBottom:14 }}>14-DAY AVERAGE</div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, marginBottom:14 }}>
+            <div><div style={{ fontSize:10, color:"#8898b0", marginBottom:4 }}>KCAL</div><div style={{ fontSize:18, fontWeight:700 }}>{avgKcal}</div></div>
+            <div><div style={{ fontSize:10, color:"#8898b0", marginBottom:4 }}>PROTEIN</div><div style={{ fontSize:18, fontWeight:700 }}>{avgProt}g</div></div>
+            <div><div style={{ fontSize:10, color:"#8898b0", marginBottom:4 }}>SURPLUS</div><div style={{ fontSize:18, fontWeight:700, color:surplus>0?"#ff4d1c":surplus<-200?"#1cb8ff":"#00e87a" }}>{surplus>0?"+":""}{surplus}</div></div>
+          </div>
+          {recent.map(([date,d]) => (
+            <div key={date} style={{ display:"flex", justifyContent:"space-between", padding:"7px 0", borderTop:"1px solid #252b36" }}>
+              <div style={{ fontSize:11, color:"#8898b0" }}>{date}</div>
+              <div style={{ display:"flex", gap:14 }}>
+                <span style={{ fontSize:11, color:d.kcal>=kcalTarget?"#00e87a":"#555" }}>{d.kcal} kcal</span>
+                <span style={{ fontSize:11, color:d.protein>=PROTEIN_G?"#00e87a":"#555" }}>{d.protein}g</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── STATS TAB ────────────────────────────────────────────────────────────────
+function StatsTab({ stats, setStats }) {
+  const [form, setForm] = useState({ weight:"", bodyFat:"", muscleMass:"", visceralFat:"" });
+  const [saved, setSaved] = useState(false);
+  const latest = stats[stats.length-1];
+  const first  = stats[0];
+
+  const addEntry = () => {
+    const e = {
+      date: new Date().toISOString().slice(0,10),
+      weight:     Number(form.weight)     || latest.weight,
+      bodyFat:    Number(form.bodyFat)    || latest.bodyFat,
+      muscleMass: Number(form.muscleMass) || latest.muscleMass,
+      visceralFat:Number(form.visceralFat)|| latest.visceralFat,
+      bmr: latest.bmr, height: latest.height
+    };
+    setStats(prev => [...prev, e]);
+    setForm({ weight:"", bodyFat:"", muscleMass:"", visceralFat:"" });
+    setSaved(true); setTimeout(() => setSaved(false), 2000);
+  };
+
+  const delta = (key, good) => {
+    const d = latest[key] - first[key];
+    const color = good==="pos" ? (d>0?"#00e87a":"#ff4d1c") : (d>0?"#ff4d1c":"#00e87a");
+    return <span style={{ color, fontWeight:700 }}>{d>0?"+":""}{d.toFixed(1)}</span>;
+  };
+
+  const inp = (key, label, ph) => (
+    <div key={key}>
+      <div style={{ fontSize:10, color:"#8898b0", marginBottom:6 }}>{label}</div>
+      <input value={form[key]} onChange={e => setForm(f => ({...f,[key]:e.target.value}))} placeholder={String(ph)} type="number" inputMode="decimal"
+        style={{ width:"100%", background:"#21252e", border:"1px solid #2e3340", borderRadius:8, padding:"10px 12px", color:"#f0f0f0", fontSize:14 }}/>
+    </div>
+  );
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+      <div style={{ background:"#1a1d24", borderRadius:12, padding:16 }}>
+        <div style={{ fontSize:10, color:"#7888a0", letterSpacing:2, fontSize:12, marginBottom:14 }}>PROGRESS FROM BASELINE</div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:10 }}>
+          {[
+            { label:"WEIGHT", key:"weight", unit:"kg", good:"pos" },
+            { label:"LEAN", key:"muscleMass", unit:"kg", good:"pos" },
+            { label:"FAT %", key:"bodyFat", unit:"%", good:"neg" },
+            { label:"VISC", key:"visceralFat", unit:"", good:"neg" },
+          ].map(({ label, key, unit, good }) => (
+            <div key={key} style={{ textAlign:"center" }}>
+              <div style={{ fontSize:9, color:"#7888a0", letterSpacing:2, marginBottom:6 }}>{label}</div>
+              <div style={{ fontSize:15 }}>{delta(key,good)}{unit}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ background:"#1a1d24", borderRadius:12, padding:16 }}>
+        <div style={{ fontSize:10, color:"#7888a0", letterSpacing:2, fontSize:12, marginBottom:14 }}>LOG MEASUREMENT</div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
+          {inp("weight",     "WEIGHT (kg)",    latest.weight)}
+          {inp("bodyFat",    "BODY FAT (%)",   latest.bodyFat)}
+          {inp("muscleMass", "LEAN MASS (kg)", latest.muscleMass)}
+          {inp("visceralFat","VISCERAL FAT",   latest.visceralFat)}
+        </div>
+        <button onClick={addEntry} style={{ width:"100%", background:saved?"#00e87a18":"#1cb8ff", border:saved?"1px solid #00e87a33":"none", borderRadius:8, padding:"13px", color:saved?"#00e87a":"#fff", fontWeight:700, fontSize:12, cursor:"pointer", letterSpacing:2 }}>
+          {saved?"LOGGED ✓":"LOG MEASUREMENT"}
+        </button>
+      </div>
+
+      <div style={{ background:"#1a1d24", borderRadius:12, padding:16 }}>
+        <div style={{ fontSize:12, color:"#7888a0", letterSpacing:2, marginBottom:6, fontWeight:700 }}>HISTORY</div>
+        {[...stats].reverse().map((s,i) => (
+          <div key={i} style={{ padding:"10px 0", borderTop:i>0?"1px solid #252b36":"none" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+              <div style={{ fontSize:12, fontWeight:700 }}>{s.date}</div>
+              <div style={{ fontSize:13, color:"#c0ccd8" }}>{s.weight} kg</div>
+            </div>
+            <div style={{ display:"flex", gap:14, fontSize:11, color:"#8898b0" }}>
+              <span>BF {s.bodyFat}%</span>
+              <span>Lean {s.muscleMass}kg</span>
+              <span>Visc {s.visceralFat}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <DataBackup />
+    </div>
+  );
+}
+
+// ─── DATA BACKUP ─────────────────────────────────────────────────────────────
+function DataBackup() {
+  const [status, setStatus] = useState("");
+  const keys = ["phul_phase","phul_stats","phul_logs","phul_diet","phul_draft"];
+
+  const exportData = () => {
+    const data = {};
+    keys.forEach(k => { const v = lsGet(k); if (v !== null) data[k] = v; });
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type:"application/json" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href = url;
+    a.download = `phul-backup-${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setStatus("exported ✓");
+    setTimeout(() => setStatus(""), 2000);
+  };
+
+  const importData = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        keys.forEach(k => { if (data[k] !== undefined) lsSet(k, data[k]); });
+        setStatus("imported ✓ — reload to see data");
+        setTimeout(() => window.location.reload(), 1500);
+      } catch {
+        setStatus("error — invalid file");
+        setTimeout(() => setStatus(""), 3000);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
+  return (
+    <div style={{ background:"#1a1d24", borderRadius:12, padding:16 }}>
+      <div style={{ fontSize:12, color:"#7888a0", letterSpacing:2, marginBottom:6, fontWeight:700 }}>DATA BACKUP</div>
+      <div style={{ fontSize:12, color:"#506070", marginBottom:14, lineHeight:1.6 }}>
+        Export before updating the app file. Import after to restore your data.
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+        <button onClick={exportData}
+          style={{ background:"#ff4d1c", border:"none", borderRadius:8, padding:"12px", color:"#fff", fontWeight:700, fontSize:12, cursor:"pointer", letterSpacing:1 }}>
+          EXPORT ↓
+        </button>
+        <label style={{ background:"#21252e", border:"1px solid #2e3340", borderRadius:8, padding:"12px", color:"#a0b0c0", fontWeight:700, fontSize:12, cursor:"pointer", letterSpacing:1, textAlign:"center", display:"block" }}>
+          IMPORT ↑
+          <input type="file" accept=".json" onChange={importData} style={{ display:"none" }}/>
+        </label>
+      </div>
+      {status && (
+        <div style={{ marginTop:10, fontSize:12, color:"#00e87a", textAlign:"center" }}>{status}</div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
