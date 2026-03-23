@@ -118,13 +118,17 @@ function calcNextWeight(exercise, logs) {
   }
   if (allTop) {
     const next = snap(lastWeight + inc, eq);
-    return { weight: next, status: "increase", increment: inc, eq, note: `↑ +${inc}kg — hit all reps` };
+    return { weight: next, status: "increase", increment: inc, eq, note: `↑ +${inc}kg — all sets hit ${maxR} reps last time` };
   }
   if (failed >= 2) {
     const drop = snap(lastWeight * 0.9, eq);
-    return { weight: drop, status: "deload", increment: inc, eq, note: `↓ deload — missed ${failed} sets` };
+    return { weight: drop, status: "deload", increment: inc, eq, note: `↓ deload — ${failed} sets below ${minR} reps. Reset and build back up.` };
   }
-  return { weight: lastWeight, status: "same", increment: inc, eq, note: `→ repeat ${lastWeight}kg — avg ${lastAvg?.toFixed(1)} reps, need ${maxR}` };
+  // Partial — some sets hit top, some didn't
+  const setsAtTop = filledLast.filter(s => parseInt(s.reps) >= maxR).length;
+  const totalSets = filledLast.length;
+  return { weight: lastWeight, status: "same", increment: inc, eq,
+    note: `→ repeat ${lastWeight}kg — ${setsAtTop}/${totalSets} sets hit ${maxR} reps. Hit all ${totalSets} to progress.` };
 }
 
 // ─── REST TIMES ───────────────────────────────────────────────────────────────
@@ -136,27 +140,30 @@ function getRestSeconds(exName, dayType) {
   return dayType === "power" ? 120 : 60;
 }
 
+// ─── BAR WEIGHTS ─────────────────────────────────────────────────────────────
+const BAR = { olympic: 20, ez: 10, short: 15 };
+
 // ─── PHUL PLAN ────────────────────────────────────────────────────────────────
 const PHUL = {
   "Upper Power": {
     type: "power", color: "#ff4d1c", icon: "⚡",
     description: "Heavy compounds. Rest 3–5 min. Focus on bar speed.",
     exercises: [
-      { name: "Bench Press",       day: "Upper Power", sets: 3, repRange: "3-5",  startWeight: 20,  barbell: true, note: "Arch slightly, drive feet. (plates only — add bar for total)" },
+      { name: "Bench Press",       day: "Upper Power", sets: 3, repRange: "3-5",  startWeight: 40,  barbell: true, barWeight: BAR.olympic, note: "Arch slightly, drive feet." },
       { name: "Incline DB Press",  day: "Upper Power", sets: 3, repRange: "6-10", startWeight: 20,  note: "2sec descent. Control. Per dumbbell." },
-      { name: "Bent Over Row",     day: "Upper Power", sets: 3, repRange: "3-5",  startWeight: 20,  barbell: true, note: "Overhand. Pull to lower chest. (plates only)" },
+      { name: "Bent Over Row",     day: "Upper Power", sets: 3, repRange: "3-5",  startWeight: 20,  barbell: true, barWeight: BAR.olympic, note: "Overhand. Pull to lower chest." },
       { name: "Lat Pulldown",      day: "Upper Power", sets: 3, repRange: "6-10", startWeight: 45,  note: "Full stretch at top." },
-      { name: "OHP",               day: "Upper Power", sets: 3, repRange: "3-5",  startWeight: 20,  barbell: true, note: "Brace hard. Your SBS peak was 60kg total. (plates only)" },
-      { name: "EZ Bar Curl",       day: "Upper Power", sets: 2, repRange: "6-8",  startWeight: 10,  barbell: true, note: "3sec eccentric. (plates only — EZ bar ~10kg)" },
-      { name: "Skull Crushers",    day: "Upper Power", sets: 2, repRange: "6-8",  startWeight: 10,  barbell: true, note: "Elbows tucked. (plates only)" },
+      { name: "OHP",               day: "Upper Power", sets: 3, repRange: "3-5",  startWeight: 20,  barbell: true, barWeight: BAR.olympic, note: "Brace hard." },
+      { name: "EZ Bar Curl",       day: "Upper Power", sets: 2, repRange: "6-8",  startWeight: 10,  barbell: true, barWeight: BAR.ez, note: "3sec eccentric." },
+      { name: "Skull Crushers",    day: "Upper Power", sets: 2, repRange: "6-8",  startWeight: 10,  barbell: true, barWeight: BAR.ez, note: "Elbows tucked." },
     ]
   },
   "Lower Power": {
     type: "power", color: "#ff4d1c", icon: "⚡",
     description: "Heavy lower. Rest 4–6 min on main lifts.",
     exercises: [
-      { name: "Squat",             day: "Lower Power", sets: 3, repRange: "3-5",  startWeight: 35,  barbell: true, note: "SBS peak was 65kg total. Start conservative. (plates only)" },
-      { name: "Deadlift",          day: "Lower Power", sets: 3, repRange: "3-5",  startWeight: 37,  barbell: true, note: "Brace, push floor away. Peak 67.5kg total. (plates only)" },
+      { name: "Squat",             day: "Lower Power", sets: 3, repRange: "3-5",  startWeight: 35,  barbell: true, barWeight: BAR.olympic, note: "SBS peak was 65kg plates. Start conservative." },
+      { name: "Deadlift",          day: "Lower Power", sets: 3, repRange: "3-5",  startWeight: 37,  barbell: true, barWeight: BAR.olympic, note: "Brace, push floor away. Peak 67.5kg plates." },
       { name: "Leg Press",         day: "Lower Power", sets: 3, repRange: "10-12",startWeight: 80,  note: "Feet shoulder-width. Full ROM." },
       { name: "Leg Curl",          day: "Lower Power", sets: 3, repRange: "6-10", startWeight: 30,  note: "Squeeze at peak contraction." },
       { name: "Calf Raise",        day: "Lower Power", sets: 4, repRange: "6-10", startWeight: 60,  note: "Full stretch at bottom." },
@@ -166,7 +173,7 @@ const PHUL = {
     type: "hypertrophy", color: "#3db8ff", icon: "🔷",
     description: "Volume day. Rest 60–90sec. Mind-muscle connection.",
     exercises: [
-      { name: "Incline Barbell Press", day: "Upper Hypertrophy", sets: 4, repRange: "8-12",  startWeight: 10,  barbell: true, note: "Slower tempo. Feel stretch at bottom. (plates only)" },
+      { name: "Incline Barbell Press", day: "Upper Hypertrophy", sets: 4, repRange: "8-12",  startWeight: 10,  barbell: true, barWeight: BAR.olympic, note: "Slower tempo. Feel stretch at bottom." },
       { name: "Flat DB Press",         day: "Upper Hypertrophy", sets: 4, repRange: "8-12",  startWeight: 20,  note: "Wide ROM. Full stretch each rep. Per dumbbell." },
       { name: "Cable Fly",             day: "Upper Hypertrophy", sets: 3, repRange: "12-15", startWeight: 10,  note: "Squeeze hard at centre." },
       { name: "Seated Cable Row",      day: "Upper Hypertrophy", sets: 4, repRange: "8-12",  startWeight: 45,  note: "Elbows tight. Squeeze shoulder blades." },
@@ -181,13 +188,13 @@ const PHUL = {
     type: "hypertrophy", color: "#3db8ff", icon: "🔷",
     description: "Volume lower. 90sec rest. Legs respond to volume.",
     exercises: [
-      { name: "Front Squat",           day: "Lower Hypertrophy", sets: 4, repRange: "8-12",  startWeight: 15,  barbell: true, note: "SBS peak 40kg total. Keep elbows high. (plates only)" },
+      { name: "Front Squat",           day: "Lower Hypertrophy", sets: 4, repRange: "8-12",  startWeight: 15,  barbell: true, barWeight: BAR.olympic, note: "SBS peak 40kg plates. Keep elbows high." },
       { name: "Hack Squat / Leg Press",day: "Lower Hypertrophy", sets: 4, repRange: "8-12",  startWeight: 80,  note: "Go deeper than you think." },
-      { name: "Leg Extension",         day: "Lower Hypertrophy", sets: 3, repRange: "10-15", startWeight: 35, note: "Pause 1sec at top." },
-      { name: "Romanian Deadlift",     day: "Lower Hypertrophy", sets: 4, repRange: "8-12",  startWeight: 15,  barbell: true, note: "Hinge, don't squat. SBS peak 40kg total. (plates only)" },
-      { name: "Leg Curl",              day: "Lower Hypertrophy", sets: 3, repRange: "10-15", startWeight: 30, note: "3sec eccentric. Hamstrings love this." },
-      { name: "Hip Thrust",            day: "Lower Hypertrophy", sets: 3, repRange: "10-15", startWeight: 40, note: "Squeeze glutes hard at top." },
-      { name: "Seated Calf Raise",     day: "Lower Hypertrophy", sets: 4, repRange: "12-20", startWeight: 30, note: "Full ROM. Feel every rep." },
+      { name: "Leg Extension",         day: "Lower Hypertrophy", sets: 3, repRange: "10-15", startWeight: 35,  note: "Pause 1sec at top." },
+      { name: "Romanian Deadlift",     day: "Lower Hypertrophy", sets: 4, repRange: "8-12",  startWeight: 15,  barbell: true, barWeight: BAR.olympic, note: "Hinge, don't squat. SBS peak 40kg plates." },
+      { name: "Leg Curl",              day: "Lower Hypertrophy", sets: 3, repRange: "10-15", startWeight: 30,  note: "3sec eccentric. Hamstrings love this." },
+      { name: "Hip Thrust",            day: "Lower Hypertrophy", sets: 3, repRange: "10-15", startWeight: 40,  barbell: true, barWeight: BAR.olympic, note: "Squeeze glutes hard at top." },
+      { name: "Seated Calf Raise",     day: "Lower Hypertrophy", sets: 4, repRange: "12-20", startWeight: 30,  note: "Full ROM. Feel every rep." },
     ]
   }
 };
@@ -267,7 +274,7 @@ function App() {
       <div style={{ padding:"22px 18px 0", borderBottom:"1px solid #181818", position:"sticky", top:0, background:"#111318", zIndex:20 }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
           <div>
-            <div style={{ fontSize:10, color:"#7888a0", letterSpacing:3, marginBottom:3 }}>PHUL TRACKER <span style={{ color:"#3a4455", letterSpacing:1 }}>v1.3</span></div>
+            <div style={{ fontSize:10, color:"#7888a0", letterSpacing:3, marginBottom:3 }}>PHUL TRACKER <span style={{ color:"#3a4455", letterSpacing:1 }}>v1.6</span></div>
             <div style={{ fontSize:20, fontWeight:700, letterSpacing:-1 }}>UNDUKE <span style={{ color:phase==="bulk"?"#ff4d1c":"#1cb8ff", fontSize:14 }}>// {phase.toUpperCase()}</span></div>
           </div>
           <button onClick={() => setPhase(p => p==="bulk"?"cut":"bulk")}
@@ -644,8 +651,13 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, sa
                 <div>
                   <div style={{ fontSize:11, color:"#506070", letterSpacing:2, marginBottom:6, fontWeight:700 }}>SUGGESTED</div>
                   <div style={{ fontSize:42, fontWeight:700, color:plan.color, lineHeight:1 }}>
-                    {sug?.weight}<span style={{ fontSize:18, color:"#7888a0", marginLeft:4 }}>kg</span>
+                    {sug?.weight}<span style={{ fontSize:18, color:"#7888a0", marginLeft:4 }}>kg plates</span>
                   </div>
+                  {curEx.barWeight && (
+                    <div style={{ fontSize:13, color:"#7888a0", marginTop:4 }}>
+                      = <span style={{ color:"#a0b0c0", fontWeight:700 }}>{(sug?.weight||0) + curEx.barWeight}kg</span> total <span style={{ color:"#506070" }}>({curEx.barWeight}kg bar)</span>
+                    </div>
+                  )}
                   {sug && (
                     <div style={{ fontSize:12, color:sug.status==="increase"?"#00e87a":sug.status==="deload"?"#ff6b45":"#8898b0", marginTop:6 }}>
                       {sug.note}
