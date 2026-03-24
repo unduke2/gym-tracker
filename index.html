@@ -146,6 +146,12 @@ function getRestSeconds(exName, dayType) {
 // ─── BAR WEIGHTS ─────────────────────────────────────────────────────────────
 const BAR = { olympic: 20, ez: 10, short: 15 };
 const parseNum = s => parseFloat(String(s).replace(',', '.')) || 0;
+const HYPE_MSGS = [
+  "Let's go! Give it everything.", "Focus. Breathe. Execute.",
+  "This is where progress happens.", "Stay tight. Drive hard.",
+  "You've done this before. Do it again.", "Control the weight. Own the set.",
+  "Every rep counts. Make them count.", "Brace. Push. Finish strong.",
+];
 
 // ─── PHUL PLAN ────────────────────────────────────────────────────────────────
 const PHUL = {
@@ -167,7 +173,7 @@ const PHUL = {
     description: "Heavy lower. Rest 4–6 min on main lifts.",
     exercises: [
       { name: "Squat",             day: "Lower Power", sets: 3, repRange: "3-5",  startWeight: 35,  barbell: true, barWeight: BAR.olympic, note: "SBS peak was 65kg plates. Start conservative." },
-      { name: "Deadlift",          day: "Lower Power", sets: 3, repRange: "3-5",  startWeight: 37,  barbell: true, barWeight: BAR.olympic, note: "Brace, push floor away. Peak 67.5kg plates." },
+      { name: "Deadlift",          day: "Lower Power", sets: 3, repRange: "3-5",  startWeight: 37.5,  barbell: true, barWeight: BAR.olympic, note: "Brace, push floor away. Peak 67.5kg plates." },
       { name: "Leg Press",         day: "Lower Power", sets: 3, repRange: "10-12",startWeight: 80,  note: "Feet shoulder-width. Full ROM." },
       { name: "Leg Curl",          day: "Lower Power", sets: 3, repRange: "6-10", startWeight: 30,  note: "Squeeze at peak contraction." },
       { name: "Calf Raise",        day: "Lower Power", sets: 4, repRange: "6-10", startWeight: 60,  note: "Full stretch at bottom." },
@@ -279,7 +285,7 @@ function App() {
       <div style={{ padding:"22px 18px 0", borderBottom:"1px solid #181818", position:"sticky", top:0, background:"#111318", zIndex:20 }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
           <div>
-            <div style={{ fontSize:10, color:"#7888a0", letterSpacing:3, marginBottom:3 }}>PHUL TRACKER <span style={{ color:"#3a4455", letterSpacing:1 }}>v2.3</span></div>
+            <div style={{ fontSize:10, color:"#7888a0", letterSpacing:3, marginBottom:3 }}>PHUL TRACKER <span style={{ color:"#3a4455", letterSpacing:1 }}>v2.8</span></div>
             <div style={{ fontSize:20, fontWeight:700, letterSpacing:-1 }}>UNDUKE <span style={{ color:phase==="bulk"?"#ff4d1c":"#1cb8ff", fontSize:14 }}>// {phase.toUpperCase()}</span></div>
           </div>
           <button onClick={() => setPhase(p => p==="bulk"?"cut":"bulk")}
@@ -477,7 +483,13 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, sa
   const [editR, setEditR] = useState("");
   const [expandedEx, setExpandedEx] = useState(null);
 
+  const [hypeMsg] = useState(() => HYPE_MSGS[Math.floor(Math.random()*HYPE_MSGS.length)]);
+
   const startSet = () => {
+    setPhase("active");
+  };
+
+  const openLog = () => {
     const lastDone = [...(data[activeEx]||[])].reverse().find(s => s.done);
     setPendingW(lastDone?.weight || String(sug?.weight||""));
     setPendingR("");
@@ -529,7 +541,7 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, sa
     if (!editR || !editingSet) return;
     setData(prev => {
       const sets = [...prev[editingSet.exName]];
-      sets[editingSet.idx] = { weight: editW, reps: editR, done: true };
+      sets[editingSet.idx] = { weight: String(editW).replace(",","."), reps: String(editR).replace(",","."), done: true };
       return { ...prev, [editingSet.exName]: sets };
     });
     setEditingSet(null);
@@ -623,7 +635,7 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, sa
         )}
 
         {/* ── ACTIVE EXERCISE CARD ── */}
-        {curEx && phase !== "resting" && (
+        {curEx && phase !== "resting" && !data[activeEx]?.every(s => s.done) && (
           <div style={{ background:"#1a1d24", border:`1px solid ${plan.color}50`, borderRadius:16, marginBottom:16, overflow:"hidden" }}>
 
             {/* Card header */}
@@ -660,7 +672,7 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, sa
                   </div>
                   {curEx.barWeight && (
                     <div style={{ fontSize:13, color:"#7888a0", marginTop:4 }}>
-                      = <span style={{ color:"#a0b0c0", fontWeight:700 }}>{(sug?.weight||0) + curEx.barWeight}kg</span> total <span style={{ color:"#506070" }}>({curEx.barWeight}kg bar)</span>
+                      = <span style={{ color:"#a0b0c0", fontWeight:700 }}>{parseFloat(((sug?.weight||0) + curEx.barWeight).toFixed(2))}kg</span> total <span style={{ color:"#506070" }}>({curEx.barWeight}kg bar)</span>
                     </div>
                   )}
                   {sug && (
@@ -690,25 +702,38 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, sa
                 </button>
               )}
 
+              {phase==="active" && (
+                <div>
+                  <div style={{ textAlign:"center", padding:"10px 0 18px" }}>
+                    <div style={{ fontSize:13, color:plan.color, fontWeight:700, letterSpacing:1, marginBottom:6 }}>SET {activeIdx+1} IN PROGRESS</div>
+                    <div style={{ fontSize:16, color:"#a0b0c0", fontStyle:"italic" }}>{hypeMsg}</div>
+                  </div>
+                  <button onClick={openLog}
+                    style={{ width:"100%", background:"#00e87a", border:"none", borderRadius:12, padding:"18px", color:"#000", fontWeight:700, fontSize:17, cursor:"pointer", letterSpacing:2 }}>
+                    LOG SET ✓
+                  </button>
+                </div>
+              )}
+
               {phase==="doing" && (
                 <div>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:14 }}>
                     <div>
                       <div style={{ fontSize:11, color:"#7888a0", marginBottom:8, letterSpacing:2, fontWeight:700 }}>WEIGHT (kg)</div>
                       <input value={pendingW} onChange={e => setPendingW(e.target.value)}
-                        placeholder={String(sug?.weight||"")} type="number" inputMode="decimal" autoFocus
+                        placeholder={String(sug?.weight||"")} type="text" inputMode="decimal" pattern="[0-9]*[.,]?[0-9]*" autoFocus
                         style={{ width:"100%", background:"#21252e", border:`2px solid ${plan.color}60`, borderRadius:10, padding:"16px", color:"#f0f0f0", fontSize:28, textAlign:"center", fontWeight:700 }}/>
                     </div>
                     <div>
                       <div style={{ fontSize:11, color:"#7888a0", marginBottom:8, letterSpacing:2, fontWeight:700 }}>REPS DONE</div>
                       <input value={pendingR} onChange={e => setPendingR(e.target.value)}
-                        placeholder={curEx.repRange.split("-")[0]} type="number" inputMode="numeric"
+                        placeholder={curEx.repRange.split("-")[0]} type="text" inputMode="numeric" pattern="[0-9]*"
                         style={{ width:"100%", background:"#21252e", border:`2px solid ${plan.color}60`, borderRadius:10, padding:"16px", color:"#f0f0f0", fontSize:28, textAlign:"center", fontWeight:700 }}/>
                     </div>
                   </div>
                   <button onClick={finishSet} disabled={!pendingR}
                     style={{ width:"100%", background:pendingR?"#00e87a":"#21252e", border:"none", borderRadius:12, padding:"17px", color:pendingR?"#000":"#3a4455", fontWeight:700, fontSize:15, cursor:pendingR?"pointer":"default", letterSpacing:1, transition:"all 0.2s" }}>
-                    {pendingR ? "DONE — LOG SET ✓" : "enter reps to log"}
+                    {pendingR ? "SAVE ✓" : "enter reps to save"}
                   </button>
                 </div>
               )}
@@ -726,12 +751,12 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, sa
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:14 }}>
                 <div>
                   <div style={{ fontSize:11, color:"#7888a0", marginBottom:6, letterSpacing:2 }}>WEIGHT (kg)</div>
-                  <input value={editW} onChange={e => setEditW(e.target.value)} type="number" inputMode="decimal" autoFocus
+                  <input value={editW} onChange={e => setEditW(e.target.value)} type="text" inputMode="decimal" pattern="[0-9]*[.,]?[0-9]*" autoFocus
                     style={{ width:"100%", background:"#21252e", border:`2px solid ${plan.color}60`, borderRadius:10, padding:"14px", color:"#f0f0f0", fontSize:26, textAlign:"center", fontWeight:700 }}/>
                 </div>
                 <div>
                   <div style={{ fontSize:11, color:"#7888a0", marginBottom:6, letterSpacing:2 }}>REPS</div>
-                  <input value={editR} onChange={e => setEditR(e.target.value)} type="number" inputMode="numeric"
+                  <input value={editR} onChange={e => setEditR(e.target.value)} type="text" inputMode="numeric" pattern="[0-9]*"
                     style={{ width:"100%", background:"#21252e", border:`2px solid ${plan.color}60`, borderRadius:10, padding:"14px", color:"#f0f0f0", fontSize:26, textAlign:"center", fontWeight:700 }}/>
                 </div>
               </div>
@@ -982,8 +1007,8 @@ function DietTab({ today, todayDiet, kcalTarget, dietLogs, setDietLogs, phase, s
   const [view, setView] = useState("today"); // today | library | history
   const [meals, setMeals] = useState(() => lsGet(MEAL_DB_KEY) || DEFAULT_MEALS);
   const [todayMeals, setTodayMeals] = useState(() => todayDiet.meals || []);
-  const [manualKcal, setManualKcal] = useState(String(todayDiet.manualKcal||""));
-  const [manualProt, setManualProt] = useState(String(todayDiet.manualProt||""));
+  const [manualKcal, setManualKcal] = useState({ name:"", kcal:"", prot:"" });
+  const [manualProt, setManualProt] = useState("");
   const [saved, setSaved] = useState(false);
   const [showAddMeal, setShowAddMeal] = useState(false);
   const [newMeal, setNewMeal] = useState({ name:"", cat:"snack", desc:"", baseKcal:"", baseProt:"", carbHeavy:false, tip:"" });
@@ -1000,11 +1025,13 @@ function DietTab({ today, todayDiet, kcalTarget, dietLogs, setDietLogs, phase, s
     const found = meals.find(x => x.id === m.id);
     return s + (found ? found.baseProt : 0);
   }, 0);
-  const totalKcal = mealKcal + (parseNum(manualKcal)||0);
-  const totalProt = mealProt + (parseNum(manualProt)||0);
+  const extrasKcal = (todayDiet.extras||[]).reduce((s,e)=>s+e.kcal,0);
+  const extrasProt = (todayDiet.extras||[]).reduce((s,e)=>s+e.prot,0);
+  const totalKcal = mealKcal + extrasKcal;
+  const totalProt = mealProt + extrasProt;
 
   const saveDay = () => {
-    setDietLogs(prev => ({ ...prev, [today]:{ kcal:totalKcal, protein:totalProt, meals:todayMeals, manualKcal:parseNum(manualKcal)||0, manualProt:parseNum(manualProt)||0 } }));
+    setDietLogs(prev => ({ ...prev, [today]:{ ...(prev[today]||{}), kcal:totalKcal, protein:totalProt, meals:todayMeals } }));
     setSaved(true); setTimeout(() => setSaved(false), 2000);
   };
 
@@ -1137,21 +1164,52 @@ function DietTab({ today, todayDiet, kcalTarget, dietLogs, setDietLogs, phase, s
           </div>
         </div>
 
-        {/* MANUAL EXTRA */}
+        {/* EXTRAS */}
         <div style={{ background:"#1a1d24", borderRadius:12, padding:16 }}>
-          <div style={{ fontSize:12, color:"#7888a0", letterSpacing:2, marginBottom:12, fontWeight:700 }}>EXTRAS / MANUAL</div>
-          <div style={{ fontSize:11, color:"#506070", marginBottom:10 }}>For meals outside the library or one-off adjustments</div>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
+          <div style={{ fontSize:12, color:"#7888a0", letterSpacing:2, marginBottom:12, fontWeight:700 }}>EXTRAS</div>
+          <div style={{ fontSize:11, color:"#506070", marginBottom:10 }}>Anything outside the library — stack multiple items</div>
+
+          {/* List of added extras */}
+          {(todayDiet.extras||[]).map((ex,i) => (
+            <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderTop:"1px solid #252b36" }}>
+              <div>
+                <div style={{ fontSize:13, color:"#e0e0e0" }}>{ex.name||"Extra"}</div>
+                <div style={{ fontSize:11, color:"#506070" }}>{ex.kcal} kcal · {ex.prot}g prot</div>
+              </div>
+              <button onClick={() => {
+                const updated = (todayDiet.extras||[]).filter((_,idx)=>idx!==i);
+                setDietLogs(prev => ({ ...prev, [today]:{ ...prev[today], extras:updated } }));
+              }} style={{ background:"none", border:"1px solid #2e3340", borderRadius:6, padding:"4px 10px", color:"#506070", fontSize:12, cursor:"pointer" }}>×</button>
+            </div>
+          ))}
+
+          {/* Add extra form */}
+          <div style={{ marginTop:10, display:"grid", gridTemplateColumns:"2fr 1fr 1fr auto", gap:8, alignItems:"flex-end" }}>
             <div>
-              <div style={{ fontSize:11, color:"#8898b0", marginBottom:6 }}>+ KCAL</div>
-              <input value={manualKcal} onChange={e=>setManualKcal(e.target.value)} placeholder="0" type="text" inputMode="decimal"
-                style={{ width:"100%", background:"#21252e", border:"1px solid #2e3340", borderRadius:8, padding:"10px", color:"#f0f0f0", fontSize:16, textAlign:"center" }}/>
+              <div style={{ fontSize:10, color:"#8898b0", marginBottom:4 }}>Name</div>
+              <input value={manualKcal.name||""} onChange={e=>setManualKcal(p=>({...p,name:e.target.value}))} placeholder="e.g. banana"
+                type="text" style={{ width:"100%", background:"#21252e", border:"1px solid #2e3340", borderRadius:8, padding:"9px", color:"#f0f0f0", fontSize:13 }}/>
             </div>
             <div>
-              <div style={{ fontSize:11, color:"#8898b0", marginBottom:6 }}>+ PROTEIN (g)</div>
-              <input value={manualProt} onChange={e=>setManualProt(e.target.value)} placeholder="0" type="text" inputMode="decimal"
-                style={{ width:"100%", background:"#21252e", border:"1px solid #2e3340", borderRadius:8, padding:"10px", color:"#f0f0f0", fontSize:16, textAlign:"center" }}/>
+              <div style={{ fontSize:10, color:"#8898b0", marginBottom:4 }}>Kcal</div>
+              <input value={manualKcal.kcal||""} onChange={e=>setManualKcal(p=>({...p,kcal:e.target.value}))} placeholder="100"
+                type="text" inputMode="decimal" style={{ width:"100%", background:"#21252e", border:"1px solid #2e3340", borderRadius:8, padding:"9px", color:"#f0f0f0", fontSize:13, textAlign:"center" }}/>
             </div>
+            <div>
+              <div style={{ fontSize:10, color:"#8898b0", marginBottom:4 }}>Prot (g)</div>
+              <input value={manualKcal.prot||""} onChange={e=>setManualKcal(p=>({...p,prot:e.target.value}))} placeholder="0"
+                type="text" inputMode="decimal" style={{ width:"100%", background:"#21252e", border:"1px solid #2e3340", borderRadius:8, padding:"9px", color:"#f0f0f0", fontSize:13, textAlign:"center" }}/>
+            </div>
+            <button onClick={() => {
+              const k = parseNum(manualKcal.kcal)||0;
+              if (!k) return;
+              const item = { name: manualKcal.name||"Extra", kcal:k, prot:parseNum(manualKcal.prot)||0 };
+              const updated = [...(todayDiet.extras||[]), item];
+              setDietLogs(prev => ({ ...prev, [today]:{ ...prev[today]||{}, extras:updated } }));
+              setManualKcal({ name:"", kcal:"", prot:"" });
+            }} style={{ background:"#ff4d1c", border:"none", borderRadius:8, padding:"9px 14px", color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer", marginTop:18 }}>
+              +
+            </button>
           </div>
         </div>
 
