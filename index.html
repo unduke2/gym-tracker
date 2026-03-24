@@ -279,7 +279,7 @@ function App() {
       <div style={{ padding:"22px 18px 0", borderBottom:"1px solid #181818", position:"sticky", top:0, background:"#111318", zIndex:20 }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
           <div>
-            <div style={{ fontSize:10, color:"#7888a0", letterSpacing:3, marginBottom:3 }}>PHUL TRACKER <span style={{ color:"#3a4455", letterSpacing:1 }}>v2.1</span></div>
+            <div style={{ fontSize:10, color:"#7888a0", letterSpacing:3, marginBottom:3 }}>PHUL TRACKER <span style={{ color:"#3a4455", letterSpacing:1 }}>v2.2</span></div>
             <div style={{ fontSize:20, fontWeight:700, letterSpacing:-1 }}>UNDUKE <span style={{ color:phase==="bulk"?"#ff4d1c":"#1cb8ff", fontSize:14 }}>// {phase.toUpperCase()}</span></div>
           </div>
           <button onClick={() => setPhase(p => p==="bulk"?"cut":"bulk")}
@@ -302,7 +302,7 @@ function App() {
       <div style={{ padding:"18px 18px 0" }}>
         {tab==="dash"    && <Dashboard latest={latest} phase={phase} kcalTarget={kcalTarget} todayDiet={todayDiet} workoutLogs={workoutLogs} setTab={setTab} setActiveSession={setActiveSession} draftSession={draftSession} />}
         {tab==="workout" && <WorkoutTab workoutLogs={workoutLogs} setWorkoutLogs={setWorkoutLogs} setActiveSession={setActiveSession} draftSession={draftSession} />}
-        {tab==="diet"    && <DietTab today={today} todayDiet={todayDiet} kcalTarget={kcalTarget} dietLogs={dietLogs} setDietLogs={setDietLogs} />}
+        {tab==="diet"    && <DietTab today={today} todayDiet={todayDiet} kcalTarget={kcalTarget} dietLogs={dietLogs} setDietLogs={setDietLogs} phase={phase} stats={stats} />}
         {tab==="stats"   && <StatsTab stats={stats} setStats={setStats} phase={phase} />}
       </div>
     </div>
@@ -942,61 +942,387 @@ function WorkoutTab({ workoutLogs, setWorkoutLogs, setActiveSession, draftSessio
   );
 }
 
-// ─── DIET TAB ─────────────────────────────────────────────────────────────────
-function DietTab({ today, todayDiet, kcalTarget, dietLogs, setDietLogs }) {
-  const [kcal,    setKcal]    = useState(String(todayDiet.kcal||""));
-  const [protein, setProtein] = useState(String(todayDiet.protein||""));
-  const [notes,   setNotes]   = useState(todayDiet.notes||"");
-  const [saved,   setSaved]   = useState(false);
+// ─── MEAL DATABASE ───────────────────────────────────────────────────────────
+// Phase multipliers: bulk boosts carbs, cut reduces them. Protein always stays.
+// Each meal: { id, name, category, desc, baseKcal, baseProt, carbHeavy, tip }
+// carbHeavy = true means carb portion scales with phase
+const MEAL_DB_KEY = "phul_meals";
 
-  const doSave = () => {
-    setDietLogs(prev => ({ ...prev, [today]:{ kcal:Number(kcal)||0, protein:Number(protein)||0, notes } }));
+const DEFAULT_MEALS = [
+  // ── FROM YOUR NUTRITIONIST PLAN (adjusted for bulk) ──
+  { id:"m1",  cat:"breakfast", name:"Pequeno-almoço completo",    desc:"250ml leite proteico + 1 pão 50g + 2 ovos mexidos",         baseKcal:420, baseProt:31, carbHeavy:true,  tip:"Base do plano da nutricionista. Leite proteico Mercadona." },
+  { id:"m2",  cat:"post",      name:"Whey shake",                  desc:"1 scoop whey em água ou leite",                             baseKcal:130, baseProt:25, carbHeavy:false, tip:"Beber até 30min após treino." },
+  { id:"m3",  cat:"lunch",     name:"Frango + Arroz",              desc:"Sopa + 175g frango + 140g arroz cozido + legumes",          baseKcal:510, baseProt:48, carbHeavy:true,  tip:"Aumenta para 200g arroz no bulk." },
+  { id:"m4",  cat:"lunch",     name:"Atum + Batata",               desc:"Sopa + 2 latas atum + 1 ovo + 180g batata + legumes",       baseKcal:530, baseProt:58, carbHeavy:true,  tip:"Alta proteína — bom pós-treino." },
+  { id:"m5",  cat:"snack",     name:"Lanche iogurte grego",        desc:"150g iogurte grego ligeiro + 2 col muesli 0% + 1 fruta",    baseKcal:240, baseProt:12, carbHeavy:false, tip:"Adiciona mel no bulk para +50 kcal fáceis." },
+  { id:"m6",  cat:"snack",     name:"Lanche proteico",             desc:"Iogurte líquido prot 20g + 1 fatia pão + queijinho prot",   baseKcal:290, baseProt:31, carbHeavy:false, tip:"Bom para manter proteína entre refeições." },
+  { id:"m7",  cat:"dinner",    name:"Jantar (igual almoço)",       desc:"Sopa + 175g carne/peixe + hidratos + legumes",              baseKcal:510, baseProt:48, carbHeavy:true,  tip:"Tenta variar a proteína — salmão, bacalhau, etc." },
+  // ── BULK ADDITIONS (suggested by Claude) ──
+  { id:"m8",  cat:"breakfast", name:"Pequeno-almoço bulk+",        desc:"Leite prot + 2 pães + 3 ovos + 1 col manteiga amendoim",   baseKcal:650, baseProt:42, carbHeavy:true,  tip:"+230 kcal vs plano base. Bom para dias de treino." },
+  { id:"m9",  cat:"post",      name:"Whey shake bulk",             desc:"1 scoop whey + 50g aveia + 1 banana",                      baseKcal:430, baseProt:32, carbHeavy:true,  tip:"Ideal pós-treino no bulk — repõe glicogénio rápido." },
+  { id:"m10", cat:"snack",     name:"Snack rápido bulk",           desc:"2 col manteiga amendoim + 1 pão",                          baseKcal:280, baseProt:8,  carbHeavy:false, tip:"200+ kcal em 30 segundos. Bom para fechar défice." },
+  { id:"m11", cat:"lunch",     name:"Salmão + Massa",              desc:"Sopa + 175g salmão + 140g massa cozida + legumes",         baseKcal:560, baseProt:44, carbHeavy:true,  tip:"Rico em ómega-3. Boa troca para o frango." },
+  { id:"m12", cat:"snack",     name:"Queijo cottage + fruta",      desc:"200g queijo cottage + 1 peça fruta",                       baseKcal:180, baseProt:22, carbHeavy:false, tip:"Alta proteína, baixo custo calórico." },
+  { id:"m13", cat:"dinner",    name:"Ovo scramble + batata doce",  desc:"3 ovos mexidos + 150g batata doce + legumes",              baseKcal:420, baseProt:22, carbHeavy:true,  tip:"Jantar rápido quando não há tempo para cozinhar." },
+];
+
+// Phase calorie multiplier for carb-heavy meals
+function getMealKcal(meal, phase) {
+  if (!meal.carbHeavy) return meal.baseKcal;
+  return phase === "bulk"
+    ? Math.round(meal.baseKcal * 1.15)   // +15% on carb meals for bulk
+    : Math.round(meal.baseKcal * 0.85);  // -15% on carb meals for cut
+}
+
+const CAT_LABELS = { breakfast:"☀️ Pequeno-almoço", post:"💪 Pós-treino", lunch:"🍽 Almoço", snack:"🥜 Lanche", dinner:"🌙 Jantar" };
+const CAT_ORDER  = ["breakfast","post","lunch","snack","dinner"];
+
+// ─── DIET TAB ─────────────────────────────────────────────────────────────────
+function DietTab({ today, todayDiet, kcalTarget, dietLogs, setDietLogs, phase, stats }) {
+  const [view, setView] = useState("today"); // today | library | history
+  const [meals, setMeals] = useState(() => lsGet(MEAL_DB_KEY) || DEFAULT_MEALS);
+  const [todayMeals, setTodayMeals] = useState(() => todayDiet.meals || []);
+  const [manualKcal, setManualKcal] = useState(String(todayDiet.manualKcal||""));
+  const [manualProt, setManualProt] = useState(String(todayDiet.manualProt||""));
+  const [saved, setSaved] = useState(false);
+  const [showAddMeal, setShowAddMeal] = useState(false);
+  const [newMeal, setNewMeal] = useState({ name:"", cat:"snack", desc:"", baseKcal:"", baseProt:"", carbHeavy:false, tip:"" });
+
+  useEffect(() => { lsSet(MEAL_DB_KEY, meals); }, [meals]);
+
+  // Compute today totals
+  const mealKcal = todayMeals.reduce((s,m) => {
+    const found = meals.find(x => x.id === m.id);
+    return s + (found ? getMealKcal(found, phase) : 0);
+  }, 0);
+  const mealProt = todayMeals.reduce((s,m) => {
+    const found = meals.find(x => x.id === m.id);
+    return s + (found ? found.baseProt : 0);
+  }, 0);
+  const totalKcal = mealKcal + (parseNum(manualKcal)||0);
+  const totalProt = mealProt + (parseNum(manualProt)||0);
+
+  const saveDay = () => {
+    setDietLogs(prev => ({ ...prev, [today]:{ kcal:totalKcal, protein:totalProt, meals:todayMeals, manualKcal:parseNum(manualKcal)||0, manualProt:parseNum(manualProt)||0 } }));
     setSaved(true); setTimeout(() => setSaved(false), 2000);
   };
 
-  const recent  = Object.entries(dietLogs).sort((a,b) => b[0].localeCompare(a[0])).slice(0,14);
-  const avgKcal = recent.length ? Math.round(recent.reduce((s,[,d]) => s+d.kcal,0)/recent.length) : 0;
-  const avgProt = recent.length ? Math.round(recent.reduce((s,[,d]) => s+d.protein,0)/recent.length) : 0;
+  const addMealToday = (meal) => {
+    setTodayMeals(prev => [...prev, { id:meal.id, ts:Date.now() }]);
+  };
+  const removeMealFromToday = (idx) => {
+    setTodayMeals(prev => prev.filter((_,i) => i!==idx));
+  };
+
+  // Streak — consecutive days hitting protein target
+  const sortedDays = Object.entries(dietLogs).sort((a,b) => b[0].localeCompare(a[0]));
+  let streak = 0;
+  for (const [,d] of sortedDays) {
+    if (d.protein >= PROTEIN_G) streak++; else break;
+  }
+
+  // 7-day grid
+  const last7 = Array.from({length:7}, (_,i) => {
+    const d = new Date(); d.setDate(d.getDate()-i);
+    const key = d.toISOString().slice(0,10);
+    const log = dietLogs[key];
+    return { key, log, isToday: key===today };
+  }).reverse();
+
+  // 14-day averages
+  const recent14 = Object.entries(dietLogs).sort((a,b)=>b[0].localeCompare(a[0])).slice(0,14);
+  const avgKcal = recent14.length ? Math.round(recent14.reduce((s,[,d])=>s+d.kcal,0)/recent14.length) : 0;
+  const avgProt = recent14.length ? Math.round(recent14.reduce((s,[,d])=>s+d.protein,0)/recent14.length) : 0;
   const surplus = avgKcal - kcalTarget;
-  const inp = (val, set, ph, type="text") => (
-    <input value={val} onChange={e => set(e.target.value)} placeholder={ph} type={type} inputMode={type==="number"?"numeric":"text"}
-      style={{ width:"100%", background:"#21252e", border:"1px solid #2e3340", borderRadius:8, padding:"10px 12px", color:"#f0f0f0", fontSize:16 }}/>
-  );
+
+  const kcalPct = Math.min(100, (totalKcal/kcalTarget)*100);
+  const protPct = Math.min(100, (totalProt/PROTEIN_G)*100);
+  const kcalColor = totalKcal >= kcalTarget ? "#00e87a" : totalKcal >= kcalTarget*0.8 ? "#ffc94d" : "#ff4d1c";
+  const protColor = totalProt >= PROTEIN_G ? "#00e87a" : totalProt >= PROTEIN_G*0.8 ? "#ffc94d" : "#ff4d1c";
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-      <div style={{ background:"#1a1d24", borderRadius:12, padding:16 }}>
-        <div style={{ fontSize:10, color:"#7888a0", letterSpacing:2, fontSize:12, marginBottom:14 }}>LOG — {today}</div>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
-          <div><div style={{ fontSize:10, color:"#8898b0", marginBottom:6 }}>CALORIES</div>{inp(kcal, setKcal, `target ${kcalTarget}`, "number")}</div>
-          <div><div style={{ fontSize:10, color:"#8898b0", marginBottom:6 }}>PROTEIN (g)</div>{inp(protein, setProtein, `target ${PROTEIN_G}`, "number")}</div>
+
+      {/* ── NAV ── */}
+      <div style={{ display:"flex", gap:8 }}>
+        {["today","library","history"].map(v => (
+          <button key={v} onClick={() => setView(v)} style={{ flex:1, background:view===v?"#21252e":"none", border:`1px solid ${view===v?"#2e3340":"transparent"}`, borderRadius:8, padding:"7px 0", color:view===v?"#f0f0f0":"#506070", fontSize:11, fontWeight:700, cursor:"pointer", letterSpacing:1 }}>
+            {v==="today"?"TODAY":v==="library"?"MEALS":"HISTORY"}
+          </button>
+        ))}
+      </div>
+
+      {/* ══ TODAY VIEW ══ */}
+      {view==="today" && (<>
+
+        {/* STREAK + TARGETS */}
+        <div style={{ background:"#1a1d24", borderRadius:12, padding:16 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+            <div>
+              <div style={{ fontSize:11, color:"#506070", letterSpacing:2, marginBottom:4 }}>TODAY — {today}</div>
+              <div style={{ fontSize:11, color:"#7888a0" }}>{phase==="bulk"?"🔺 BULK":"🔻 CUT"} · target {kcalTarget} kcal</div>
+            </div>
+            {streak > 0 && (
+              <div style={{ textAlign:"center", background:"#ff4d1c18", borderRadius:10, padding:"8px 14px" }}>
+                <div style={{ fontSize:20 }}>🔥</div>
+                <div style={{ fontSize:13, fontWeight:700, color:"#ff4d1c" }}>{streak}</div>
+                <div style={{ fontSize:9, color:"#7888a0" }}>day streak</div>
+              </div>
+            )}
+          </div>
+
+          {/* KCAL BAR */}
+          <div style={{ marginBottom:12 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
+              <span style={{ fontSize:12, color:"#8898b0" }}>Calories</span>
+              <span style={{ fontSize:13, fontWeight:700, color:kcalColor }}>{totalKcal} <span style={{ color:"#506070", fontWeight:400 }}>/ {kcalTarget}</span></span>
+            </div>
+            <div style={{ height:8, background:"#21252e", borderRadius:4, overflow:"hidden" }}>
+              <div style={{ height:"100%", width:`${kcalPct}%`, background:kcalColor, borderRadius:4, transition:"width 0.4s ease" }}/>
+            </div>
+            {totalKcal > kcalTarget && <div style={{ fontSize:11, color:"#ffc94d", marginTop:4 }}>+{totalKcal-kcalTarget} kcal over target</div>}
+          </div>
+
+          {/* PROTEIN BAR */}
+          <div>
+            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
+              <span style={{ fontSize:12, color:"#8898b0" }}>Protein</span>
+              <span style={{ fontSize:13, fontWeight:700, color:protColor }}>{totalProt}g <span style={{ color:"#506070", fontWeight:400 }}>/ {PROTEIN_G}g</span></span>
+            </div>
+            <div style={{ height:8, background:"#21252e", borderRadius:4, overflow:"hidden" }}>
+              <div style={{ height:"100%", width:`${protPct}%`, background:protColor, borderRadius:4, transition:"width 0.4s ease" }}/>
+            </div>
+            <div style={{ fontSize:11, color:"#506070", marginTop:4 }}>
+              {(totalProt / (stats[stats.length-1]?.weight||74)).toFixed(1)}g/kg bodyweight
+              {totalProt >= PROTEIN_G ? " ✓" : ` — need ${PROTEIN_G-totalProt}g more`}
+            </div>
+          </div>
         </div>
-        <div style={{ marginBottom:12 }}>
-          <div style={{ fontSize:10, color:"#8898b0", marginBottom:6 }}>NOTES</div>
-          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3}
-            style={{ width:"100%", background:"#21252e", border:"1px solid #2e3340", borderRadius:8, padding:"9px 12px", color:"#f0f0f0", fontSize:12, resize:"none" }}/>
+
+        {/* TODAY'S MEALS */}
+        <div style={{ background:"#1a1d24", borderRadius:12, padding:16 }}>
+          <div style={{ fontSize:12, color:"#7888a0", letterSpacing:2, marginBottom:12, fontWeight:700 }}>REFEIÇÕES DE HOJE</div>
+          {todayMeals.length === 0 && (
+            <div style={{ fontSize:13, color:"#3a4455", textAlign:"center", padding:"16px 0" }}>Nenhuma refeição adicionada.<br/>Vai a MEALS para adicionar.</div>
+          )}
+          {todayMeals.map((tm, i) => {
+            const m = meals.find(x => x.id===tm.id);
+            if (!m) return null;
+            return (
+              <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 0", borderTop:i>0?"1px solid #252b36":"none" }}>
+                <div>
+                  <div style={{ fontSize:13, fontWeight:600, color:"#e0e0e0" }}>{m.name}</div>
+                  <div style={{ fontSize:11, color:"#506070" }}>{getMealKcal(m,phase)} kcal · {m.baseProt}g prot</div>
+                </div>
+                <button onClick={() => removeMealFromToday(i)} style={{ background:"none", border:"1px solid #2e3340", borderRadius:6, padding:"4px 10px", color:"#506070", fontSize:12, cursor:"pointer" }}>×</button>
+              </div>
+            );
+          })}
+
+          {/* QUICK ADD FROM LIBRARY */}
+          <div style={{ marginTop:12, borderTop:"1px solid #252b36", paddingTop:12 }}>
+            <div style={{ fontSize:11, color:"#506070", marginBottom:8, letterSpacing:1 }}>ADICIONAR REFEIÇÃO</div>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+              {CAT_ORDER.flatMap(cat => meals.filter(m => m.cat===cat)).slice(0,6).map(m => (
+                <button key={m.id} onClick={() => addMealToday(m)}
+                  style={{ background:"#21252e", border:"1px solid #2e3340", borderRadius:8, padding:"6px 12px", color:"#a0b0c0", fontSize:11, cursor:"pointer", textAlign:"left" }}>
+                  + {m.name}
+                </button>
+              ))}
+              <button onClick={() => setView("library")} style={{ background:"none", border:"1px dashed #2e3340", borderRadius:8, padding:"6px 12px", color:"#506070", fontSize:11, cursor:"pointer" }}>
+                ver todas →
+              </button>
+            </div>
+          </div>
         </div>
-        <button onClick={doSave} style={{ width:"100%", background:saved?"#00e87a18":"#ff4d1c", border:saved?"1px solid #00e87a33":"none", borderRadius:8, padding:"13px", color:saved?"#00e87a":"#fff", fontWeight:700, fontSize:12, cursor:"pointer", letterSpacing:2 }}>
+
+        {/* MANUAL EXTRA */}
+        <div style={{ background:"#1a1d24", borderRadius:12, padding:16 }}>
+          <div style={{ fontSize:12, color:"#7888a0", letterSpacing:2, marginBottom:12, fontWeight:700 }}>EXTRAS / MANUAL</div>
+          <div style={{ fontSize:11, color:"#506070", marginBottom:10 }}>Para refeições fora da biblioteca ou ajustes pontuais</div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
+            <div>
+              <div style={{ fontSize:11, color:"#8898b0", marginBottom:6 }}>+ KCAL</div>
+              <input value={manualKcal} onChange={e=>setManualKcal(e.target.value)} placeholder="0" type="text" inputMode="decimal"
+                style={{ width:"100%", background:"#21252e", border:"1px solid #2e3340", borderRadius:8, padding:"10px", color:"#f0f0f0", fontSize:16, textAlign:"center" }}/>
+            </div>
+            <div>
+              <div style={{ fontSize:11, color:"#8898b0", marginBottom:6 }}>+ PROTEIN (g)</div>
+              <input value={manualProt} onChange={e=>setManualProt(e.target.value)} placeholder="0" type="text" inputMode="decimal"
+                style={{ width:"100%", background:"#21252e", border:"1px solid #2e3340", borderRadius:8, padding:"10px", color:"#f0f0f0", fontSize:16, textAlign:"center" }}/>
+            </div>
+          </div>
+        </div>
+
+        {/* SAVE */}
+        <button onClick={saveDay} style={{ width:"100%", background:saved?"#00e87a18":"#ff4d1c", border:saved?"1px solid #00e87a33":"none", borderRadius:12, padding:"16px", color:saved?"#00e87a":"#fff", fontWeight:700, fontSize:14, cursor:"pointer", letterSpacing:2, transition:"all 0.2s" }}>
           {saved?"SAVED ✓":"SAVE DAY"}
         </button>
-      </div>
-      {recent.length > 0 && (
+
+        {/* 7-DAY GRID */}
         <div style={{ background:"#1a1d24", borderRadius:12, padding:16 }}>
-          <div style={{ fontSize:10, color:"#7888a0", letterSpacing:2, fontSize:12, marginBottom:14 }}>14-DAY AVERAGE</div>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, marginBottom:14 }}>
-            <div><div style={{ fontSize:10, color:"#8898b0", marginBottom:4 }}>KCAL</div><div style={{ fontSize:18, fontWeight:700 }}>{avgKcal}</div></div>
-            <div><div style={{ fontSize:10, color:"#8898b0", marginBottom:4 }}>PROTEIN</div><div style={{ fontSize:18, fontWeight:700 }}>{avgProt}g</div></div>
-            <div><div style={{ fontSize:10, color:"#8898b0", marginBottom:4 }}>SURPLUS</div><div style={{ fontSize:18, fontWeight:700, color:surplus>0?"#ff4d1c":surplus<-200?"#1cb8ff":"#00e87a" }}>{surplus>0?"+":""}{surplus}</div></div>
+          <div style={{ fontSize:12, color:"#7888a0", letterSpacing:2, marginBottom:12, fontWeight:700 }}>LAST 7 DAYS</div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:6 }}>
+            {last7.map(({key,log,isToday}) => {
+              const hitKcal = log && log.kcal >= kcalTarget;
+              const hitProt = log && log.protein >= PROTEIN_G;
+              const bg = !log ? "#21252e" : hitKcal && hitProt ? "#00e87a22" : hitProt ? "#ffc94d22" : "#ff4d1c22";
+              const dot = !log ? "#3a4455" : hitKcal && hitProt ? "#00e87a" : hitProt ? "#ffc94d" : "#ff4d1c";
+              const day = new Date(key).toLocaleDateString("pt-PT",{weekday:"short"}).slice(0,1).toUpperCase();
+              return (
+                <div key={key} style={{ background:bg, borderRadius:8, padding:"8px 4px", textAlign:"center", border:isToday?`1px solid ${dot}`:"1px solid transparent" }}>
+                  <div style={{ fontSize:9, color:"#506070", marginBottom:4 }}>{day}</div>
+                  <div style={{ width:8, height:8, background:dot, borderRadius:"50%", margin:"0 auto", marginBottom:4 }}/>
+                  {log && <div style={{ fontSize:9, color:dot }}>{Math.round(log.protein)}g</div>}
+                </div>
+              );
+            })}
           </div>
-          {recent.map(([date,d]) => (
-            <div key={date} style={{ display:"flex", justifyContent:"space-between", padding:"7px 0", borderTop:"1px solid #252b36" }}>
-              <div style={{ fontSize:11, color:"#8898b0" }}>{date}</div>
-              <div style={{ display:"flex", gap:14 }}>
-                <span style={{ fontSize:11, color:d.kcal>=kcalTarget?"#00e87a":"#555" }}>{d.kcal} kcal</span>
-                <span style={{ fontSize:11, color:d.protein>=PROTEIN_G?"#00e87a":"#555" }}>{d.protein}g</span>
+          <div style={{ display:"flex", gap:12, marginTop:10, fontSize:10, color:"#506070" }}>
+            <span>🟢 both targets</span><span>🟡 protein only</span><span>🔴 missed</span>
+          </div>
+        </div>
+
+        {/* 14-DAY SUMMARY + PHASE INSIGHT */}
+        {recent14.length > 0 && (
+          <div style={{ background:"#1a1d24", borderRadius:12, padding:16 }}>
+            <div style={{ fontSize:12, color:"#7888a0", letterSpacing:2, marginBottom:12, fontWeight:700 }}>14-DAY AVERAGE</div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, marginBottom:14 }}>
+              <div style={{ textAlign:"center" }}><div style={{ fontSize:10, color:"#506070", marginBottom:4 }}>KCAL</div><div style={{ fontSize:20, fontWeight:700, color:avgKcal>=kcalTarget?"#00e87a":"#ffc94d" }}>{avgKcal}</div></div>
+              <div style={{ textAlign:"center" }}><div style={{ fontSize:10, color:"#506070", marginBottom:4 }}>PROTEIN</div><div style={{ fontSize:20, fontWeight:700, color:avgProt>=PROTEIN_G?"#00e87a":"#ffc94d" }}>{avgProt}g</div></div>
+              <div style={{ textAlign:"center" }}><div style={{ fontSize:10, color:"#506070", marginBottom:4 }}>SURPLUS</div><div style={{ fontSize:20, fontWeight:700, color:surplus>0?"#ff4d1c":surplus<-200?"#3db8ff":"#00e87a" }}>{surplus>0?"+":""}{surplus}</div></div>
+            </div>
+            {avgKcal < kcalTarget - 200 && (
+              <div style={{ background:"#ffc94d15", borderRadius:8, padding:"10px 12px", fontSize:12, color:"#ffc94d", borderLeft:"3px solid #ffc94d" }}>
+                ⚠️ Média {kcalTarget-avgKcal} kcal abaixo do objetivo. {phase==="bulk"?"Isto explica a perda de massa magra.":"Verifica se o défice não é demasiado agressivo."}
+              </div>
+            )}
+            {avgKcal >= kcalTarget && avgProt >= PROTEIN_G && (
+              <div style={{ background:"#00e87a15", borderRadius:8, padding:"10px 12px", fontSize:12, color:"#00e87a", borderLeft:"3px solid #00e87a" }}>
+                ✅ A bater os objetivos consistentemente. Continua assim.
+              </div>
+            )}
+          </div>
+        )}
+      </>)}
+
+      {/* ══ MEAL LIBRARY VIEW ══ */}
+      {view==="library" && (<>
+        <div style={{ background:"#1a1d24", borderRadius:12, padding:16 }}>
+          <div style={{ fontSize:12, color:"#7888a0", letterSpacing:2, marginBottom:4, fontWeight:700 }}>MEAL LIBRARY</div>
+          <div style={{ fontSize:11, color:"#506070", marginBottom:14 }}>Tap a meal to add to today. Portions auto-adjust for {phase}.</div>
+          {CAT_ORDER.map(cat => {
+            const catMeals = meals.filter(m => m.cat===cat);
+            if (!catMeals.length) return null;
+            return (
+              <div key={cat} style={{ marginBottom:20 }}>
+                <div style={{ fontSize:11, color:"#ff4d1c", letterSpacing:2, fontWeight:700, marginBottom:10 }}>{CAT_LABELS[cat]}</div>
+                {catMeals.map(m => (
+                  <div key={m.id} style={{ background:"#21252e", borderRadius:10, padding:14, marginBottom:8, border:"1px solid #2e3340" }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:6 }}>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontSize:13, fontWeight:700, color:"#f0f0f0", marginBottom:3 }}>{m.name}</div>
+                        <div style={{ fontSize:11, color:"#7888a0", lineHeight:1.5 }}>{m.desc}</div>
+                        {m.tip && <div style={{ fontSize:11, color:"#506070", marginTop:4, fontStyle:"italic" }}>💡 {m.tip}</div>}
+                      </div>
+                      <button onClick={() => { addMealToday(m); setView("today"); }}
+                        style={{ background:"#ff4d1c", border:"none", borderRadius:8, padding:"8px 14px", color:"#fff", fontWeight:700, fontSize:12, cursor:"pointer", marginLeft:10, whiteSpace:"nowrap" }}>
+                        + add
+                      </button>
+                    </div>
+                    <div style={{ display:"flex", gap:12, marginTop:8 }}>
+                      <span style={{ fontSize:12, color:"#ff4d1c", fontWeight:700 }}>{getMealKcal(m,phase)} kcal</span>
+                      <span style={{ fontSize:12, color:"#3db8ff", fontWeight:700 }}>{m.baseProt}g prot</span>
+                      {m.carbHeavy && <span style={{ fontSize:10, color:"#506070" }}>{phase==="bulk"?"↑ carbs bulk":"↓ carbs cut"}</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+
+          {/* ADD NEW MEAL */}
+          {!showAddMeal ? (
+            <button onClick={() => setShowAddMeal(true)} style={{ width:"100%", background:"none", border:"1px dashed #2e3340", borderRadius:10, padding:"12px", color:"#506070", fontSize:12, cursor:"pointer" }}>
+              + add new meal to library
+            </button>
+          ) : (
+            <div style={{ background:"#1a1d24", borderRadius:10, padding:14, border:"1px solid #2e3340" }}>
+              <div style={{ fontSize:12, color:"#7888a0", marginBottom:12, fontWeight:700, letterSpacing:2 }}>NEW MEAL</div>
+              {[
+                { label:"Name", key:"name", ph:"Ex: Frango + quinoa" },
+                { label:"Description", key:"desc", ph:"Ingredientes e quantidades" },
+                { label:"Tip (optional)", key:"tip", ph:"Dica ou contexto" },
+              ].map(f => (
+                <div key={f.key} style={{ marginBottom:10 }}>
+                  <div style={{ fontSize:11, color:"#8898b0", marginBottom:4 }}>{f.label}</div>
+                  <input value={newMeal[f.key]} onChange={e => setNewMeal(p=>({...p,[f.key]:e.target.value}))} placeholder={f.ph}
+                    type="text" style={{ width:"100%", background:"#21252e", border:"1px solid #2e3340", borderRadius:8, padding:"9px 12px", color:"#f0f0f0", fontSize:13 }}/>
+                </div>
+              ))}
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:10 }}>
+                <div>
+                  <div style={{ fontSize:11, color:"#8898b0", marginBottom:4 }}>Kcal</div>
+                  <input value={newMeal.baseKcal} onChange={e => setNewMeal(p=>({...p,baseKcal:e.target.value}))} placeholder="500" type="text" inputMode="decimal"
+                    style={{ width:"100%", background:"#21252e", border:"1px solid #2e3340", borderRadius:8, padding:"9px", color:"#f0f0f0", fontSize:14, textAlign:"center" }}/>
+                </div>
+                <div>
+                  <div style={{ fontSize:11, color:"#8898b0", marginBottom:4 }}>Protein (g)</div>
+                  <input value={newMeal.baseProt} onChange={e => setNewMeal(p=>({...p,baseProt:e.target.value}))} placeholder="40" type="text" inputMode="decimal"
+                    style={{ width:"100%", background:"#21252e", border:"1px solid #2e3340", borderRadius:8, padding:"9px", color:"#f0f0f0", fontSize:14, textAlign:"center" }}/>
+                </div>
+                <div>
+                  <div style={{ fontSize:11, color:"#8898b0", marginBottom:4 }}>Category</div>
+                  <select value={newMeal.cat} onChange={e => setNewMeal(p=>({...p,cat:e.target.value}))}
+                    style={{ width:"100%", background:"#21252e", border:"1px solid #2e3340", borderRadius:8, padding:"9px", color:"#f0f0f0", fontSize:12 }}>
+                    {CAT_ORDER.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
+                <input type="checkbox" checked={newMeal.carbHeavy} onChange={e => setNewMeal(p=>({...p,carbHeavy:e.target.checked}))} id="carbHeavy"/>
+                <label htmlFor="carbHeavy" style={{ fontSize:12, color:"#8898b0" }}>Carb-heavy (adjust portions per phase)</label>
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                <button onClick={() => { setShowAddMeal(false); setNewMeal({ name:"", cat:"snack", desc:"", baseKcal:"", baseProt:"", carbHeavy:false, tip:"" }); }}
+                  style={{ background:"#21252e", border:"1px solid #2e3340", borderRadius:8, padding:"10px", color:"#7888a0", fontSize:12, cursor:"pointer" }}>cancel</button>
+                <button onClick={() => {
+                  if (!newMeal.name || !newMeal.baseKcal || !newMeal.baseProt) return;
+                  const m = { ...newMeal, id:"m"+Date.now(), baseKcal:parseNum(newMeal.baseKcal), baseProt:parseNum(newMeal.baseProt) };
+                  setMeals(prev => [...prev, m]);
+                  setNewMeal({ name:"", cat:"snack", desc:"", baseKcal:"", baseProt:"", carbHeavy:false, tip:"" });
+                  setShowAddMeal(false);
+                }} style={{ background:"#ff4d1c", border:"none", borderRadius:8, padding:"10px", color:"#fff", fontWeight:700, fontSize:12, cursor:"pointer" }}>
+                  SAVE MEAL
+                </button>
               </div>
             </div>
-          ))}
+          )}
+        </div>
+      </>)}
+
+      {/* ══ HISTORY VIEW ══ */}
+      {view==="history" && (
+        <div style={{ background:"#1a1d24", borderRadius:12, padding:16 }}>
+          <div style={{ fontSize:12, color:"#7888a0", letterSpacing:2, marginBottom:12, fontWeight:700 }}>HISTORY</div>
+          {Object.entries(dietLogs).sort((a,b)=>b[0].localeCompare(a[0])).slice(0,30).map(([date,d]) => {
+            const hitBoth = d.kcal>=kcalTarget && d.protein>=PROTEIN_G;
+            const hitProt = d.protein>=PROTEIN_G;
+            const dot = hitBoth?"#00e87a":hitProt?"#ffc94d":"#ff4d1c";
+            return (
+              <div key={date} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderTop:"1px solid #252b36" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                  <div style={{ width:8, height:8, background:dot, borderRadius:"50%" }}/>
+                  <div style={{ fontSize:12, color:"#a0b0c0" }}>{date}</div>
+                </div>
+                <div style={{ display:"flex", gap:14 }}>
+                  <span style={{ fontSize:12, color:d.kcal>=kcalTarget?"#00e87a":"#7888a0" }}>{d.kcal} kcal</span>
+                  <span style={{ fontSize:12, color:d.protein>=PROTEIN_G?"#00e87a":"#7888a0" }}>{d.protein}g</span>
+                </div>
+              </div>
+            );
+          })}
+          {Object.keys(dietLogs).length === 0 && <div style={{ color:"#3a4455", fontSize:13 }}>No diet history yet.</div>}
         </div>
       )}
     </div>
