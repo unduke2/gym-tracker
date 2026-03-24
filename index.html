@@ -279,7 +279,7 @@ function App() {
       <div style={{ padding:"22px 18px 0", borderBottom:"1px solid #181818", position:"sticky", top:0, background:"#111318", zIndex:20 }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
           <div>
-            <div style={{ fontSize:10, color:"#7888a0", letterSpacing:3, marginBottom:3 }}>PHUL TRACKER <span style={{ color:"#3a4455", letterSpacing:1 }}>v2.2</span></div>
+            <div style={{ fontSize:10, color:"#7888a0", letterSpacing:3, marginBottom:3 }}>PHUL TRACKER <span style={{ color:"#3a4455", letterSpacing:1 }}>v2.3</span></div>
             <div style={{ fontSize:20, fontWeight:700, letterSpacing:-1 }}>UNDUKE <span style={{ color:phase==="bulk"?"#ff4d1c":"#1cb8ff", fontSize:14 }}>// {phase.toUpperCase()}</span></div>
           </div>
           <button onClick={() => setPhase(p => p==="bulk"?"cut":"bulk")}
@@ -950,20 +950,20 @@ const MEAL_DB_KEY = "phul_meals";
 
 const DEFAULT_MEALS = [
   // ── FROM YOUR NUTRITIONIST PLAN (adjusted for bulk) ──
-  { id:"m1",  cat:"breakfast", name:"Pequeno-almoço completo",    desc:"250ml leite proteico + 1 pão 50g + 2 ovos mexidos",         baseKcal:420, baseProt:31, carbHeavy:true,  tip:"Base do plano da nutricionista. Leite proteico Mercadona." },
-  { id:"m2",  cat:"post",      name:"Whey shake",                  desc:"1 scoop whey em água ou leite",                             baseKcal:130, baseProt:25, carbHeavy:false, tip:"Beber até 30min após treino." },
-  { id:"m3",  cat:"lunch",     name:"Frango + Arroz",              desc:"Sopa + 175g frango + 140g arroz cozido + legumes",          baseKcal:510, baseProt:48, carbHeavy:true,  tip:"Aumenta para 200g arroz no bulk." },
-  { id:"m4",  cat:"lunch",     name:"Atum + Batata",               desc:"Sopa + 2 latas atum + 1 ovo + 180g batata + legumes",       baseKcal:530, baseProt:58, carbHeavy:true,  tip:"Alta proteína — bom pós-treino." },
-  { id:"m5",  cat:"snack",     name:"Lanche iogurte grego",        desc:"150g iogurte grego ligeiro + 2 col muesli 0% + 1 fruta",    baseKcal:240, baseProt:12, carbHeavy:false, tip:"Adiciona mel no bulk para +50 kcal fáceis." },
-  { id:"m6",  cat:"snack",     name:"Lanche proteico",             desc:"Iogurte líquido prot 20g + 1 fatia pão + queijinho prot",   baseKcal:290, baseProt:31, carbHeavy:false, tip:"Bom para manter proteína entre refeições." },
-  { id:"m7",  cat:"dinner",    name:"Jantar (igual almoço)",       desc:"Sopa + 175g carne/peixe + hidratos + legumes",              baseKcal:510, baseProt:48, carbHeavy:true,  tip:"Tenta variar a proteína — salmão, bacalhau, etc." },
+  { id:"m1",  cat:"breakfast", name:"Full Breakfast",    desc:"250ml protein milk + 1 bread 50g + 2 scrambled eggs",         baseKcal:420, baseProt:31, carbHeavy:true,  tip:"Base from your nutritionist plan. Protein milk from Mercadona." },
+  { id:"m2",  cat:"post",      name:"Whey Shake",                  desc:"1 scoop whey in water or milk",                             baseKcal:130, baseProt:25, carbHeavy:false, tip:"Drink within 30min post-workout." },
+  { id:"m3",  cat:"lunch",     name:"Chicken + Rice",              desc:"Soup + 175g chicken + 140g cooked rice + vegetables",          baseKcal:510, baseProt:48, carbHeavy:true,  tip:"Increase to 200g rice during bulk." },
+  { id:"m4",  cat:"lunch",     name:"Tuna + Potato",               desc:"Soup + 2 tuna cans + 1 egg + 180g potato + vegetables",       baseKcal:530, baseProt:58, carbHeavy:true,  tip:"High protein — great post-workout option." },
+  { id:"m5",  cat:"snack",     name:"Greek Yogurt Snack",        desc:"150g light greek yogurt + 2 tbsp muesli 0% + 1 fruit",    baseKcal:240, baseProt:12, carbHeavy:false, tip:"Add honey during bulk for easy +50 kcal." },
+  { id:"m6",  cat:"snack",     name:"Protein Snack",             desc:"Liquid protein yogurt 20g + 1 bread slice + protein fresh cheese",   baseKcal:290, baseProt:31, carbHeavy:false, tip:"Good for keeping protein up between meals." },
+  { id:"m7",  cat:"dinner",    name:"Dinner (same as lunch)",       desc:"Soup + 175g meat/fish + carbs + vegetables",              baseKcal:510, baseProt:48, carbHeavy:true,  tip:"Try varying the protein — salmon, cod, etc." },
   // ── BULK ADDITIONS (suggested by Claude) ──
-  { id:"m8",  cat:"breakfast", name:"Pequeno-almoço bulk+",        desc:"Leite prot + 2 pães + 3 ovos + 1 col manteiga amendoim",   baseKcal:650, baseProt:42, carbHeavy:true,  tip:"+230 kcal vs plano base. Bom para dias de treino." },
-  { id:"m9",  cat:"post",      name:"Whey shake bulk",             desc:"1 scoop whey + 50g aveia + 1 banana",                      baseKcal:430, baseProt:32, carbHeavy:true,  tip:"Ideal pós-treino no bulk — repõe glicogénio rápido." },
-  { id:"m10", cat:"snack",     name:"Snack rápido bulk",           desc:"2 col manteiga amendoim + 1 pão",                          baseKcal:280, baseProt:8,  carbHeavy:false, tip:"200+ kcal em 30 segundos. Bom para fechar défice." },
-  { id:"m11", cat:"lunch",     name:"Salmão + Massa",              desc:"Sopa + 175g salmão + 140g massa cozida + legumes",         baseKcal:560, baseProt:44, carbHeavy:true,  tip:"Rico em ómega-3. Boa troca para o frango." },
-  { id:"m12", cat:"snack",     name:"Queijo cottage + fruta",      desc:"200g queijo cottage + 1 peça fruta",                       baseKcal:180, baseProt:22, carbHeavy:false, tip:"Alta proteína, baixo custo calórico." },
-  { id:"m13", cat:"dinner",    name:"Ovo scramble + batata doce",  desc:"3 ovos mexidos + 150g batata doce + legumes",              baseKcal:420, baseProt:22, carbHeavy:true,  tip:"Jantar rápido quando não há tempo para cozinhar." },
+  { id:"m8",  cat:"breakfast", name:"Bulk Breakfast+",        desc:"Protein milk + 2 breads + 3 eggs + 1 tbsp peanut butter",   baseKcal:650, baseProt:42, carbHeavy:true,  tip:"+230 kcal vs base plan. Good for training days." },
+  { id:"m9",  cat:"post",      name:"Whey Shake bulk",             desc:"1 scoop whey + 50g oats + 1 banana",                      baseKcal:430, baseProt:32, carbHeavy:true,  tip:"Ideal post-workout bulk shake — replenishes glycogen fast." },
+  { id:"m10", cat:"snack",     name:"Quick Bulk Snack",           desc:"2 tbsp peanut butter + 1 bread",                          baseKcal:280, baseProt:8,  carbHeavy:false, tip:"200+ kcal in 30 seconds. Good for closing a calorie gap." },
+  { id:"m11", cat:"lunch",     name:"Salmon + Pasta",              desc:"Soup + 175g salmon + 140g cooked pasta + vegetables",         baseKcal:560, baseProt:44, carbHeavy:true,  tip:"Rich in omega-3. Good swap for chicken." },
+  { id:"m12", cat:"snack",     name:"Cottage Cheese + Fruit",      desc:"200g cottage cheese + 1 fruit",                       baseKcal:180, baseProt:22, carbHeavy:false, tip:"High protein, low calorie cost." },
+  { id:"m13", cat:"dinner",    name:"Scrambled Eggs + Sweet Potato",  desc:"3 scrambled eggs + 150g sweet potato + vegetables",              baseKcal:420, baseProt:22, carbHeavy:true,  tip:"Quick dinner when there's no time to cook." },
 ];
 
 // Phase calorie multiplier for carb-heavy meals
@@ -974,7 +974,7 @@ function getMealKcal(meal, phase) {
     : Math.round(meal.baseKcal * 0.85);  // -15% on carb meals for cut
 }
 
-const CAT_LABELS = { breakfast:"☀️ Pequeno-almoço", post:"💪 Pós-treino", lunch:"🍽 Almoço", snack:"🥜 Lanche", dinner:"🌙 Jantar" };
+const CAT_LABELS = { breakfast:"☀️ Breakfast", post:"💪 Post-Workout", lunch:"🍽 Lunch", snack:"🥜 Snack", dinner:"🌙 Dinner" };
 const CAT_ORDER  = ["breakfast","post","lunch","snack","dinner"];
 
 // ─── DIET TAB ─────────────────────────────────────────────────────────────────
@@ -987,6 +987,7 @@ function DietTab({ today, todayDiet, kcalTarget, dietLogs, setDietLogs, phase, s
   const [saved, setSaved] = useState(false);
   const [showAddMeal, setShowAddMeal] = useState(false);
   const [newMeal, setNewMeal] = useState({ name:"", cat:"snack", desc:"", baseKcal:"", baseProt:"", carbHeavy:false, tip:"" });
+  const [confirmDelDiet, setConfirmDelDiet] = useState(null);
 
   useEffect(() => { lsSet(MEAL_DB_KEY, meals); }, [meals]);
 
@@ -1101,9 +1102,9 @@ function DietTab({ today, todayDiet, kcalTarget, dietLogs, setDietLogs, phase, s
 
         {/* TODAY'S MEALS */}
         <div style={{ background:"#1a1d24", borderRadius:12, padding:16 }}>
-          <div style={{ fontSize:12, color:"#7888a0", letterSpacing:2, marginBottom:12, fontWeight:700 }}>REFEIÇÕES DE HOJE</div>
+          <div style={{ fontSize:12, color:"#7888a0", letterSpacing:2, marginBottom:12, fontWeight:700 }}>TODAY'S MEALS</div>
           {todayMeals.length === 0 && (
-            <div style={{ fontSize:13, color:"#3a4455", textAlign:"center", padding:"16px 0" }}>Nenhuma refeição adicionada.<br/>Vai a MEALS para adicionar.</div>
+            <div style={{ fontSize:13, color:"#3a4455", textAlign:"center", padding:"16px 0" }}>No meals added yet.<br/>Go to MEALS to add.</div>
           )}
           {todayMeals.map((tm, i) => {
             const m = meals.find(x => x.id===tm.id);
@@ -1121,7 +1122,7 @@ function DietTab({ today, todayDiet, kcalTarget, dietLogs, setDietLogs, phase, s
 
           {/* QUICK ADD FROM LIBRARY */}
           <div style={{ marginTop:12, borderTop:"1px solid #252b36", paddingTop:12 }}>
-            <div style={{ fontSize:11, color:"#506070", marginBottom:8, letterSpacing:1 }}>ADICIONAR REFEIÇÃO</div>
+            <div style={{ fontSize:11, color:"#506070", marginBottom:8, letterSpacing:1 }}>QUICK ADD</div>
             <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
               {CAT_ORDER.flatMap(cat => meals.filter(m => m.cat===cat)).slice(0,6).map(m => (
                 <button key={m.id} onClick={() => addMealToday(m)}
@@ -1130,7 +1131,7 @@ function DietTab({ today, todayDiet, kcalTarget, dietLogs, setDietLogs, phase, s
                 </button>
               ))}
               <button onClick={() => setView("library")} style={{ background:"none", border:"1px dashed #2e3340", borderRadius:8, padding:"6px 12px", color:"#506070", fontSize:11, cursor:"pointer" }}>
-                ver todas →
+                see all →
               </button>
             </div>
           </div>
@@ -1139,7 +1140,7 @@ function DietTab({ today, todayDiet, kcalTarget, dietLogs, setDietLogs, phase, s
         {/* MANUAL EXTRA */}
         <div style={{ background:"#1a1d24", borderRadius:12, padding:16 }}>
           <div style={{ fontSize:12, color:"#7888a0", letterSpacing:2, marginBottom:12, fontWeight:700 }}>EXTRAS / MANUAL</div>
-          <div style={{ fontSize:11, color:"#506070", marginBottom:10 }}>Para refeições fora da biblioteca ou ajustes pontuais</div>
+          <div style={{ fontSize:11, color:"#506070", marginBottom:10 }}>For meals outside the library or one-off adjustments</div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
             <div>
               <div style={{ fontSize:11, color:"#8898b0", marginBottom:6 }}>+ KCAL</div>
@@ -1194,12 +1195,12 @@ function DietTab({ today, todayDiet, kcalTarget, dietLogs, setDietLogs, phase, s
             </div>
             {avgKcal < kcalTarget - 200 && (
               <div style={{ background:"#ffc94d15", borderRadius:8, padding:"10px 12px", fontSize:12, color:"#ffc94d", borderLeft:"3px solid #ffc94d" }}>
-                ⚠️ Média {kcalTarget-avgKcal} kcal abaixo do objetivo. {phase==="bulk"?"Isto explica a perda de massa magra.":"Verifica se o défice não é demasiado agressivo."}
+                ⚠️ Average {kcalTarget-avgKcal} kcal below target. {phase==="bulk"?"This explains the lean mass loss.":"Check your deficit isn't too aggressive."}
               </div>
             )}
             {avgKcal >= kcalTarget && avgProt >= PROTEIN_G && (
               <div style={{ background:"#00e87a15", borderRadius:8, padding:"10px 12px", fontSize:12, color:"#00e87a", borderLeft:"3px solid #00e87a" }}>
-                ✅ A bater os objetivos consistentemente. Continua assim.
+                ✅ Consistently hitting targets. Keep it up.
               </div>
             )}
           </div>
@@ -1210,7 +1211,7 @@ function DietTab({ today, todayDiet, kcalTarget, dietLogs, setDietLogs, phase, s
       {view==="library" && (<>
         <div style={{ background:"#1a1d24", borderRadius:12, padding:16 }}>
           <div style={{ fontSize:12, color:"#7888a0", letterSpacing:2, marginBottom:4, fontWeight:700 }}>MEAL LIBRARY</div>
-          <div style={{ fontSize:11, color:"#506070", marginBottom:14 }}>Tap a meal to add to today. Portions auto-adjust for {phase}.</div>
+          <div style={{ fontSize:11, color:"#506070", marginBottom:14 }}>Tap to add to today. Carbs auto-adjust for {phase}.</div>
           {CAT_ORDER.map(cat => {
             const catMeals = meals.filter(m => m.cat===cat);
             if (!catMeals.length) return null;
@@ -1250,9 +1251,9 @@ function DietTab({ today, todayDiet, kcalTarget, dietLogs, setDietLogs, phase, s
             <div style={{ background:"#1a1d24", borderRadius:10, padding:14, border:"1px solid #2e3340" }}>
               <div style={{ fontSize:12, color:"#7888a0", marginBottom:12, fontWeight:700, letterSpacing:2 }}>NEW MEAL</div>
               {[
-                { label:"Name", key:"name", ph:"Ex: Frango + quinoa" },
-                { label:"Description", key:"desc", ph:"Ingredientes e quantidades" },
-                { label:"Tip (optional)", key:"tip", ph:"Dica ou contexto" },
+                { label:"Name", key:"name", ph:"E.g. Chicken + quinoa" },
+                { label:"Description", key:"desc", ph:"Ingredients and quantities" },
+                { label:"Tip (optional)", key:"tip", ph:"Tip or context" },
               ].map(f => (
                 <div key={f.key} style={{ marginBottom:10 }}>
                   <div style={{ fontSize:11, color:"#8898b0", marginBottom:4 }}>{f.label}</div>
@@ -1301,10 +1302,10 @@ function DietTab({ today, todayDiet, kcalTarget, dietLogs, setDietLogs, phase, s
         </div>
       </>)}
 
-      {/* ══ HISTORY VIEW ══ */}
       {view==="history" && (
         <div style={{ background:"#1a1d24", borderRadius:12, padding:16 }}>
           <div style={{ fontSize:12, color:"#7888a0", letterSpacing:2, marginBottom:12, fontWeight:700 }}>HISTORY</div>
+          {Object.keys(dietLogs).length === 0 && <div style={{ color:"#3a4455", fontSize:13 }}>No diet history yet.</div>}
           {Object.entries(dietLogs).sort((a,b)=>b[0].localeCompare(a[0])).slice(0,30).map(([date,d]) => {
             const hitBoth = d.kcal>=kcalTarget && d.protein>=PROTEIN_G;
             const hitProt = d.protein>=PROTEIN_G;
@@ -1312,17 +1313,27 @@ function DietTab({ today, todayDiet, kcalTarget, dietLogs, setDietLogs, phase, s
             return (
               <div key={date} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderTop:"1px solid #252b36" }}>
                 <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                  <div style={{ width:8, height:8, background:dot, borderRadius:"50%" }}/>
-                  <div style={{ fontSize:12, color:"#a0b0c0" }}>{date}</div>
+                  <div style={{ width:8, height:8, background:dot, borderRadius:"50%", flexShrink:0 }}/>
+                  <div>
+                    <div style={{ fontSize:12, color:"#a0b0c0" }}>{date}</div>
+                    <div style={{ display:"flex", gap:10, marginTop:2 }}>
+                      <span style={{ fontSize:11, color:d.kcal>=kcalTarget?"#00e87a":"#7888a0" }}>{d.kcal} kcal</span>
+                      <span style={{ fontSize:11, color:d.protein>=PROTEIN_G?"#00e87a":"#7888a0" }}>{d.protein}g prot</span>
+                    </div>
+                  </div>
                 </div>
-                <div style={{ display:"flex", gap:14 }}>
-                  <span style={{ fontSize:12, color:d.kcal>=kcalTarget?"#00e87a":"#7888a0" }}>{d.kcal} kcal</span>
-                  <span style={{ fontSize:12, color:d.protein>=PROTEIN_G?"#00e87a":"#7888a0" }}>{d.protein}g</span>
-                </div>
+                {confirmDelDiet===date ? (
+                  <div style={{ display:"flex", gap:6 }}>
+                    <button onClick={() => setConfirmDelDiet(null)} style={{ background:"#21252e", border:"1px solid #2e3340", borderRadius:6, padding:"5px 10px", color:"#7888a0", fontSize:11, cursor:"pointer" }}>no</button>
+                    <button onClick={() => { setDietLogs(prev => { const n={...prev}; delete n[date]; return n; }); setConfirmDelDiet(null); }}
+                      style={{ background:"#ff4d1c", border:"none", borderRadius:6, padding:"5px 10px", color:"#fff", fontWeight:700, fontSize:11, cursor:"pointer" }}>delete</button>
+                  </div>
+                ) : (
+                  <button onClick={() => setConfirmDelDiet(date)} style={{ background:"none", border:"1px solid #2e3340", borderRadius:6, padding:"5px 10px", color:"#506070", fontSize:11, cursor:"pointer" }}>🗑</button>
+                )}
               </div>
             );
           })}
-          {Object.keys(dietLogs).length === 0 && <div style={{ color:"#3a4455", fontSize:13 }}>No diet history yet.</div>}
         </div>
       )}
     </div>
