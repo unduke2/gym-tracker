@@ -145,6 +145,7 @@ function getRestSeconds(exName, dayType) {
 
 // ─── BAR WEIGHTS ─────────────────────────────────────────────────────────────
 const BAR = { olympic: 20, ez: 10, short: 15 };
+const parseNum = s => parseFloat(String(s).replace(',', '.')) || 0;
 
 // ─── PHUL PLAN ────────────────────────────────────────────────────────────────
 const PHUL = {
@@ -278,7 +279,7 @@ function App() {
       <div style={{ padding:"22px 18px 0", borderBottom:"1px solid #181818", position:"sticky", top:0, background:"#111318", zIndex:20 }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
           <div>
-            <div style={{ fontSize:10, color:"#7888a0", letterSpacing:3, marginBottom:3 }}>PHUL TRACKER <span style={{ color:"#3a4455", letterSpacing:1 }}>v1.9</span></div>
+            <div style={{ fontSize:10, color:"#7888a0", letterSpacing:3, marginBottom:3 }}>PHUL TRACKER <span style={{ color:"#3a4455", letterSpacing:1 }}>v2.1</span></div>
             <div style={{ fontSize:20, fontWeight:700, letterSpacing:-1 }}>UNDUKE <span style={{ color:phase==="bulk"?"#ff4d1c":"#1cb8ff", fontSize:14 }}>// {phase.toUpperCase()}</span></div>
           </div>
           <button onClick={() => setPhase(p => p==="bulk"?"cut":"bulk")}
@@ -1078,8 +1079,8 @@ function StatsTab({ stats, setStats, phase }) {
 
   const addEntry = () => {
     if (!form.weight || !form.bodyFat) return;
-    const w  = Number(form.weight);
-    const bf = Number(form.bodyFat);
+    const w  = parseNum(form.weight);
+    const bf = parseNum(form.bodyFat);
     const e = {
       date: new Date().toISOString().slice(0,10),
       weight: w,
@@ -1192,21 +1193,23 @@ function StatsTab({ stats, setStats, phase }) {
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
           <div>
             <div style={{ fontSize:11, color:"#8898b0", marginBottom:6 }}>WEIGHT (kg)</div>
-            <input value={form.weight} onChange={e => setForm(f=>({...f,weight:e.target.value}))} placeholder={String(latest.weight)} type="number" inputMode="decimal"
+            <input value={form.weight} onChange={e => setForm(f=>({...f,weight:e.target.value}))} placeholder={String(latest.weight)}
+              type="text" inputMode="decimal" pattern="[0-9]*\.?[0-9]*"
               style={{ width:"100%", background:"#21252e", border:"1px solid #2e3340", borderRadius:8, padding:"12px", color:"#f0f0f0", fontSize:18, textAlign:"center" }}/>
           </div>
           <div>
             <div style={{ fontSize:11, color:"#8898b0", marginBottom:6 }}>BODY FAT (%)</div>
-            <input value={form.bodyFat} onChange={e => setForm(f=>({...f,bodyFat:e.target.value}))} placeholder={String(latest.bodyFat)} type="number" inputMode="decimal"
+            <input value={form.bodyFat} onChange={e => setForm(f=>({...f,bodyFat:e.target.value}))} placeholder={String(latest.bodyFat)}
+              type="text" inputMode="decimal" pattern="[0-9]*\.?[0-9]*"
               style={{ width:"100%", background:"#21252e", border:"1px solid #2e3340", borderRadius:8, padding:"12px", color:"#f0f0f0", fontSize:18, textAlign:"center" }}/>
           </div>
         </div>
         {form.weight && form.bodyFat && (
           <div style={{ fontSize:12, color:"#506070", marginBottom:10, textAlign:"center" }}>
-            lean mass: <span style={{ color:"#3db8ff", fontWeight:700 }}>{(Number(form.weight)*(1-Number(form.bodyFat)/100)).toFixed(1)}kg</span> (auto-calculated)
+            lean mass: <span style={{ color:"#3db8ff", fontWeight:700 }}>{(parseNum(form.weight)*(1-parseNum(form.bodyFat)/100)).toFixed(1)}kg</span> (auto-calculated)
           </div>
         )}
-        <button onClick={addEntry} disabled={!form.weight||!form.bodyFat}
+        <button onClick={addEntry} disabled={!form.weight||!form.bodyFat||isNaN(parseNum(form.weight))||isNaN(parseNum(form.bodyFat))}
           style={{ width:"100%", background:saved?"#00e87a18":(!form.weight||!form.bodyFat)?"#1a1d24":"#3db8ff", border:saved?"1px solid #00e87a33":"none", borderRadius:8, padding:"13px", color:saved?"#00e87a":(!form.weight||!form.bodyFat)?"#3a4455":"#fff", fontWeight:700, fontSize:12, cursor:(!form.weight||!form.bodyFat)?"default":"pointer", letterSpacing:2 }}>
           {saved?"LOGGED ✓":"LOG MEASUREMENT"}
         </button>
@@ -1215,18 +1218,29 @@ function StatsTab({ stats, setStats, phase }) {
       {/* HISTORY */}
       <div style={{ background:"#1a1d24", borderRadius:12, padding:16 }}>
         <div style={{ fontSize:12, color:"#7888a0", letterSpacing:2, marginBottom:12, fontWeight:700 }}>HISTORY</div>
-        {[...stats].reverse().map((s,i) => {
+        {[...stats].reverse().map((s, ri) => {
+          const i = stats.length - 1 - ri; // real index in stats array
           const lean = (s.weight * (1 - s.bodyFat/100)).toFixed(1);
+          const isFirst = i === 0;
           return (
-            <div key={i} style={{ padding:"10px 0", borderTop:i>0?"1px solid #252b36":"none" }}>
-              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-                <div style={{ fontSize:12, fontWeight:700 }}>{s.date}</div>
-                <div style={{ fontSize:13, color:"#c0ccd8", fontWeight:700 }}>{s.weight}kg</div>
+            <div key={i} style={{ padding:"10px 0", borderTop:ri>0?"1px solid #252b36":"none", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <div>
+                <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:4 }}>
+                  <div style={{ fontSize:12, fontWeight:700 }}>{s.date}</div>
+                  <div style={{ fontSize:13, color:"#c0ccd8", fontWeight:700 }}>{s.weight}kg</div>
+                </div>
+                <div style={{ display:"flex", gap:16, fontSize:11, color:"#8898b0" }}>
+                  <span>BF <span style={{ color:"#ffc94d" }}>{s.bodyFat}%</span></span>
+                  <span>Lean <span style={{ color:"#3db8ff" }}>{lean}kg</span></span>
+                </div>
               </div>
-              <div style={{ display:"flex", gap:16, fontSize:11, color:"#8898b0" }}>
-                <span>BF <span style={{ color:"#ffc94d" }}>{s.bodyFat}%</span></span>
-                <span>Lean <span style={{ color:"#3db8ff" }}>{lean}kg</span></span>
-              </div>
+              {!isFirst && (
+                <button onClick={() => setStats(prev => prev.filter((_,idx) => idx !== i))}
+                  style={{ background:"none", border:"1px solid #2e3340", borderRadius:6, padding:"5px 10px", color:"#506070", fontSize:11, cursor:"pointer" }}>
+                  🗑
+                </button>
+              )}
+              {isFirst && <span style={{ fontSize:10, color:"#3a4455" }}>baseline</span>}
             </div>
           );
         })}
