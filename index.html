@@ -136,11 +136,18 @@ function calcNextWeight(exercise, logs) {
 
 // ─── REST TIMES ───────────────────────────────────────────────────────────────
 function getRestSeconds(exName, dayType) {
+  // Between sets of the same exercise
   const heavy = ["Bench Press","OHP","Squat","Deadlift","Bent Over Row","Incline Barbell Press","Front Squat","Romanian Deadlift"];
   const med   = ["Incline DB Press","Flat DB Press","Seated Cable Row","One Arm DB Row","Lat Pulldown","Leg Press","Hip Thrust","Hack Squat / Leg Press"];
-  if (heavy.includes(exName)) return dayType === "power" ? 240 : 90;
+  if (heavy.includes(exName)) return dayType === "power" ? 240 : 120;
   if (med.includes(exName))   return dayType === "power" ? 180 : 90;
   return dayType === "power" ? 120 : 60;
+}
+
+function getBetweenExerciseRest(dayType) {
+  // Longer than between-set rest — you've finished ALL sets of an exercise
+  // Need more recovery before stimulating a fresh muscle group properly
+  return dayType === "power" ? 180 : 120;
 }
 
 // ─── BAR WEIGHTS ─────────────────────────────────────────────────────────────
@@ -160,10 +167,10 @@ const PHUL = {
     description: "Heavy compounds. Rest 3–5 min. Focus on bar speed.",
     exercises: [
       { name: "Bench Press",       day: "Upper Power", sets: 3, repRange: "3-5",  startWeight: 40,  barbell: true, barWeight: BAR.olympic, note: "Arch slightly, drive feet." },
-      { name: "Incline DB Press",  day: "Upper Power", sets: 3, repRange: "6-10", startWeight: 20,  note: "2sec descent. Control. Per dumbbell." },
+      { name: "OHP",               day: "Upper Power", sets: 3, repRange: "3-5",  startWeight: 20,  barbell: true, barWeight: BAR.olympic, note: "Brace hard. Do this fresh — both compounds before accessories." },
       { name: "Bent Over Row",     day: "Upper Power", sets: 3, repRange: "3-5",  startWeight: 20,  barbell: true, barWeight: BAR.olympic, note: "Overhand. Pull to lower chest." },
       { name: "Lat Pulldown",      day: "Upper Power", sets: 3, repRange: "6-10", startWeight: 45,  note: "Full stretch at top." },
-      { name: "OHP",               day: "Upper Power", sets: 3, repRange: "3-5",  startWeight: 20,  barbell: true, barWeight: BAR.olympic, note: "Brace hard." },
+      { name: "Incline DB Press",  day: "Upper Power", sets: 3, repRange: "6-10", startWeight: 20,  note: "2sec descent. Control. Per dumbbell." },
       { name: "EZ Bar Curl",       day: "Upper Power", sets: 2, repRange: "6-8",  startWeight: 10,  barbell: true, barWeight: BAR.ez, note: "3sec eccentric." },
       { name: "Skull Crushers",    day: "Upper Power", sets: 2, repRange: "6-8",  startWeight: 10,  barbell: true, barWeight: BAR.ez, note: "Elbows tucked." },
     ]
@@ -188,8 +195,8 @@ const PHUL = {
       { name: "Cable Fly",             day: "Upper Hypertrophy", sets: 3, repRange: "12-15", startWeight: 10,  note: "Squeeze hard at centre." },
       { name: "Seated Cable Row",      day: "Upper Hypertrophy", sets: 4, repRange: "8-12",  startWeight: 45,  note: "Elbows tight. Squeeze shoulder blades." },
       { name: "One Arm DB Row",        day: "Upper Hypertrophy", sets: 3, repRange: "10-12", startWeight: 20,  note: "Big stretch at bottom, row to hip. Per dumbbell." },
-      { name: "Face Pull",             day: "Upper Hypertrophy", sets: 5, repRange: "12-20", startWeight: 25,  note: "Rotate externally. Shoulder health." },
       { name: "DB Lateral Raise",      day: "Upper Hypertrophy", sets: 4, repRange: "12-15", startWeight: 7,   note: "Lead with elbows. Per dumbbell." },
+      { name: "Face Pull",             day: "Upper Hypertrophy", sets: 5, repRange: "12-20", startWeight: 25,  note: "Rotate externally. Shoulder health. Good finisher." },
       { name: "Incline DB Curl",       day: "Upper Hypertrophy", sets: 3, repRange: "10-15", startWeight: 9,   note: "Full stretch — great for long head. Per dumbbell." },
       { name: "Tricep Pushdown",       day: "Upper Hypertrophy", sets: 3, repRange: "10-15", startWeight: 25,  note: "Lock elbows. Squeeze at bottom." },
     ]
@@ -285,7 +292,7 @@ function App() {
       <div style={{ padding:"22px 18px 0", borderBottom:"1px solid #181818", position:"sticky", top:0, background:"#111318", zIndex:20 }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
           <div>
-            <div style={{ fontSize:10, color:"#7888a0", letterSpacing:3, marginBottom:3 }}>PHUL TRACKER <span style={{ color:"#3a4455", letterSpacing:1 }}>v2.8</span></div>
+            <div style={{ fontSize:10, color:"#7888a0", letterSpacing:3, marginBottom:3 }}>PHUL TRACKER <span style={{ color:"#3a4455", letterSpacing:1 }}>v3.2</span></div>
             <div style={{ fontSize:20, fontWeight:700, letterSpacing:-1 }}>UNDUKE <span style={{ color:phase==="bulk"?"#ff4d1c":"#1cb8ff", fontSize:14 }}>// {phase.toUpperCase()}</span></div>
           </div>
           <button onClick={() => setPhase(p => p==="bulk"?"cut":"bulk")}
@@ -443,6 +450,7 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, sa
   const [phase, setPhase]           = useState(() => restoredLeft > 0 ? "resting" : "ready");
   const [restLeft, setRestLeft]     = useState(() => restoredLeft);
   const [restDuration, setRestDuration] = useState(() => savedRestDur || 0);
+  const [restType, setRestType]     = useState("set"); // "set" | "exercise"
 
   useEffect(() => {
     if (isFirst.current) { isFirst.current = false; return; }
@@ -498,12 +506,11 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, sa
 
   const finishSet = () => {
     if (!pendingR) return;
-    const rt = restTime;
     const now = Date.now();
 
     const newData = { ...data };
     const sets = [...newData[activeEx]];
-    sets[activeIdx] = { weight:pendingW, reps:pendingR, done:true };
+    sets[activeIdx] = { weight:String(pendingW).replace(",","."), reps:String(pendingR).replace(",","."), done:true };
     newData[activeEx] = sets;
 
     const nextSetIdx = activeIdx + 1;
@@ -511,25 +518,30 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, sa
     let newActiveEx = activeEx;
     let newActiveIdx = activeIdx;
     let hasNext = false;
+    let changingExercise = false;
 
     if (nextSetIdx < totalSets) {
       newActiveIdx = nextSetIdx;
       hasNext = true;
+      changingExercise = false;
     } else {
       const nextEx = plan.exercises.find((ex,i) => i > curIdx && newData[ex.name]?.some(s => !s.done));
-      if (nextEx) { newActiveEx = nextEx.name; newActiveIdx = 0; hasNext = true; }
+      if (nextEx) { newActiveEx = nextEx.name; newActiveIdx = 0; hasNext = true; changingExercise = true; }
     }
 
     setData(newData);
     setActiveIdx(newActiveIdx);
     setActiveEx(newActiveEx);
 
-    // If no more exercises/sets left, skip rest and go to done state
     if (!hasNext) {
       setPhase("ready");
       setRestLeft(0);
       onSaveSession({ data: newData, activeEx: newActiveEx, activeIdx: newActiveIdx, sessionStartedAt: sessionStartedAt.current, restStartedAt: null, restDuration: 0 });
     } else {
+      const rt = changingExercise
+        ? getBetweenExerciseRest(plan.type)
+        : getRestSeconds(activeEx, plan.type);
+      setRestType(changingExercise ? "exercise" : "set");
       setRestDuration(rt);
       setPhase("resting");
       setRestLeft(rt);
@@ -618,15 +630,22 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, sa
         {/* ── REST TIMER ── */}
         {phase==="resting" && (
           <div style={{ background:`linear-gradient(160deg,${plan.color}15,#1a1d24)`, border:`1px solid ${plan.color}35`, borderRadius:16, padding:"32px 20px 24px", marginBottom:16, textAlign:"center" }}>
-            <div style={{ fontSize:11, color:"#7888a0", letterSpacing:3, marginBottom:12, fontWeight:700 }}>REST</div>
+            <div style={{ fontSize:11, color:"#7888a0", letterSpacing:3, marginBottom:4, fontWeight:700 }}>
+              {restType==="exercise" ? "BETWEEN EXERCISES" : "REST"}
+            </div>
+            {restType==="exercise" && (
+              <div style={{ fontSize:11, color:"#506070", marginBottom:12 }}>next up: <span style={{ color:plan.color, fontWeight:700 }}>{activeEx}</span></div>
+            )}
             <div style={{ fontSize:80, fontWeight:700, color:restLeft<=10?"#00e87a":plan.color, fontVariantNumeric:"tabular-nums", lineHeight:1, marginBottom:18, letterSpacing:-2 }}>{fmt(restLeft)}</div>
             <div style={{ height:5, background:"#21252e", borderRadius:3, marginBottom:20, overflow:"hidden" }}>
               <div style={{ height:"100%", width:`${(1-restLeft/Math.max(restDuration,1))*100}%`, background:restLeft<=10?"#00e87a":plan.color, borderRadius:3, transition:"width 1s linear" }}/>
             </div>
-            <div style={{ fontSize:12, color:"#506070", marginBottom:20 }}>
-              up next: <span style={{ color:"#f0f0f0", fontWeight:700 }}>{activeEx}</span>
-              <span style={{ color:"#506070" }}> — set {activeIdx+1}</span>
-            </div>
+            {restType==="set" && (
+              <div style={{ fontSize:12, color:"#506070", marginBottom:20 }}>
+                up next: <span style={{ color:"#f0f0f0", fontWeight:700 }}>{activeEx}</span>
+                <span style={{ color:"#506070" }}> — set {activeIdx+1}</span>
+              </div>
+            )}
             <button onClick={() => { setRestLeft(0); setPhase("ready"); onSaveSession({ data, activeEx, activeIdx, sessionStartedAt: sessionStartedAt.current, restStartedAt: null, restDuration: 0 }); }}
               style={{ background:"#1a1d24", border:"1px solid #2e3340", borderRadius:8, padding:"10px 28px", color:"#7888a0", fontSize:12, cursor:"pointer", letterSpacing:1 }}>
               skip →
@@ -668,7 +687,7 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, sa
                 <div>
                   <div style={{ fontSize:11, color:"#506070", letterSpacing:2, marginBottom:6, fontWeight:700 }}>SUGGESTED</div>
                   <div style={{ fontSize:42, fontWeight:700, color:plan.color, lineHeight:1 }}>
-                    {sug?.weight}<span style={{ fontSize:18, color:"#7888a0", marginLeft:4 }}>kg plates</span>
+                    {sug?.weight}<span style={{ fontSize:18, color:"#7888a0", marginLeft:4 }}>{curEx.barbell ? "kg plates" : "kg"}</span>
                   </div>
                   {curEx.barWeight && (
                     <div style={{ fontSize:13, color:"#7888a0", marginTop:4 }}>
