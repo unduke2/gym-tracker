@@ -55,7 +55,7 @@ function lsSet(key, val) {
 function getEquipmentType(exName) {
   const barbell = ["Bench Press","OHP","Bent Over Row","Squat","Deadlift","Incline Barbell Press","Skull Crushers","EZ Bar Curl","Romanian Deadlift","Front Squat"];
   const machine  = ["Leg Press","Lat Pulldown","Seated Cable Row","Leg Curl","Leg Extension","Calf Raise","Cable Fly","Face Pull","Tricep Pushdown","Hip Thrust","Hack Squat / Leg Press","Seated Calf Raise"];
-  const dbLight  = ["DB Lateral Raise","Incline DB Curl","Rear Delt Fly","Hammer Curl"];
+  const dbLight  = ["DB Lateral Raise","Incline DB Curl","Rear Delt Fly","Hammer Curl","DB Curl"];
   if (barbell.includes(exName)) return "barbell";
   if (machine.includes(exName)) return "machine";
   if (dbLight.includes(exName)) return "dumbbell_light";
@@ -89,70 +89,201 @@ function calcNextWeight(exercise, logs) {
   const eq = getEquipmentType(exercise.name);
   const baseInc = getBaseIncrement(eq);
   const [minR, maxR] = exercise.repRange.split("-").map(Number);
+
+  // ─── Pull last 3 same-day sessions (only those with actual logged data for this exercise) ──
   const history = [];
   for (const [, session] of Object.entries(logs).sort((a,b) => b[1].ts - a[1].ts)) {
     if (session.day === exercise.day) {
       const sets = session.exercises?.[exercise.name];
-      if (sets?.length > 0) history.push(sets);
+      if (sets?.length > 0 && sets.some(s => s.weight && s.reps)) {
+        history.push(sets);
+      }
       if (history.length >= 3) break;
     }
   }
-  if (!history.length) return { weight: exercise.startWeight, status: "start", increment: baseInc, eq, note: `Start: ${exercise.startWeight}kg` };
-  const lastSets = history[0];
-  const prevSets = history[1] || null;
-  const filledLast = lastSets.filter(s => s.weight && s.reps);
-  if (!filledLast.length) return { weight: exercise.startWeight, status: "start", increment: baseInc, eq, note: "No data yet" };
-  const lastWeight = parseFloat(filledLast[0].weight);
-  const lastAvg = avgReps(filledLast);
-  const allTop = filledLast.every(s => parseInt(s.reps) >= maxR);
-  const failed = filledLast.filter(s => parseInt(s.reps) < minR).length;
-  let inc = baseInc;
-  if (eq === "dumbbell_heavy" || eq === "dumbbell_light") inc = dbIncrement(lastWeight);
-  if (prevSets) {
-    const fp = prevSets.filter(s => s.weight && s.reps);
-    const prevW = parseFloat(fp[0]?.weight || lastWeight);
-    const prevAvg = avgReps(fp);
-    const wDelta = lastWeight - prevW;
-    if (wDelta > 0 && prevAvg !== null && lastAvg !== null) {
-      const drop = prevAvg - lastAvg;
-      const range = maxR - minR + 1;
-      if (drop > range) inc = Math.max(snap(baseInc / 2, eq), getBaseIncrement(eq === "machine" ? "dumbbell_heavy" : "dumbbell_light"));
-    }
+
+  if (!history.length) {
+    return { weight: exercise.startWeight, status: "start", increment: baseInc, eq, note: `Start: ${exercise.startWeight}kg` };
   }
+
+  const lastSets    = history[0];
+  const filledLast  = lastSets.filter(s => s.weight && s.reps);
+  if (!filledLast.length) {
+    return { weight: exercise.startWeight, status: "start", increment: baseInc, eq, note: "No data yet" };
+  }
+
+  const lastWeight  = parseFloat(filledLast[0].weight);
+  const reps        = filledLast.map(s => parseInt(s.reps));
+  const setCount    = filledLast.length;
+
+  // ─── Performance metrics ───────────────────────────────────────────────
+  const totalReps        = reps.reduce((a, b) => a + b, 0);
+  const targetReps       = maxR * setCount;    // ideal: all sets at top
+  const minTotalReps     = minR * setCount;    // floor: all sets at bottom
+  const span             = Math.max(1, targetReps - minTotalReps);
+  const perf             = (totalReps - minTotalReps) / span; // 1.0 = all top, 0 = all bottom, <0 = fails
+  const worstReps        = Math.min(...reps);
+  const worstDeficit     = Math.max(0, minR - worstReps);
+  const failedSets       = reps.filter(r => r < minR).length;
+  const allTop           = reps.every(r => r >= maxR);
+  const totalOverTop     = reps.reduce((sum, r) => sum + Math.max(0, r - maxR), 0);
+
+  // ─── Stall counter: consecutive sessions at same weight without hitting top ──
+  let stallCount = 0;
+  for (const sessionSets of history) {
+    const sFilled = sessionSets.filter(s => s.weight && s.reps);
+    if (!sFilled.length) break;
+    if (parseFloat(sFilled[0].weight) !== lastWeight) break;
+    const sReps = sFilled.map(s => parseInt(s.reps));
+    if (sReps.every(r => r >= maxR)) break; // crushed it — not a stall
+    stallCount++;
+  }
+
+  // ─── Pct helper ────────────────────────────────────────────────────────
+  const pct = (p) => snap(lastWeight * p, eq);
+
+  // ─── DECISION TREE (priority order, first match wins) ──────────────────
+
+  // 1. CRUSH — all sets ≥ maxR AND cumulative excess ≥ setCount (~1 extra rep per set)
+  if (allTop && totalOverTop >= setCount) {
+    const next = snap(lastWeight + baseInc * 2, eq);
+    return {
+      weight: next, status: "crush", increment: baseInc * 2, eq,
+      note: `↑↑ +${baseInc*2}kg — crushed it (+${totalOverTop} reps over top). Big jump.`
+    };
+  }
+
+  // 2. PROGRESS — all sets hit top
   if (allTop) {
-    const next = snap(lastWeight + inc, eq);
-    return { weight: next, status: "increase", increment: inc, eq, note: `↑ +${inc}kg — all sets hit ${maxR} reps last time` };
+    const next = snap(lastWeight + baseInc, eq);
+    return {
+      weight: next, status: "increase", increment: baseInc, eq,
+      note: `↑ +${baseInc}kg — all sets hit ${maxR} reps.`
+    };
   }
-  if (failed >= 2) {
-    const drop = snap(lastWeight * 0.9, eq);
-    return { weight: drop, status: "deload", increment: inc, eq, note: `↓ deload — ${failed} sets below ${minR} reps. Reset and build back up.` };
+
+  // 3. HARD DELOAD — 2+ fails with significant deficit
+  if (failedSets >= 2 && worstDeficit >= 2) {
+    const drop = pct(0.85);
+    return {
+      weight: drop, status: "deload", increment: baseInc, eq,
+      note: `↓↓ -15% deload — ${failedSets} sets well below ${minR}. Full reset.`
+    };
   }
-  // Partial — some sets hit top, some didn't
-  const setsAtTop = filledLast.filter(s => parseInt(s.reps) >= maxR).length;
-  const totalSets = filledLast.length;
-  return { weight: lastWeight, status: "same", increment: inc, eq,
-    note: `→ repeat ${lastWeight}kg — ${setsAtTop}/${totalSets} sets hit ${maxR} reps. Hit all ${totalSets} to progress.` };
+
+  // 4. DELOAD — 2+ fails, mild
+  if (failedSets >= 2) {
+    const drop = pct(0.90);
+    return {
+      weight: drop, status: "deload", increment: baseInc, eq,
+      note: `↓ -10% deload — ${failedSets} sets below ${minR}. Rebuild.`
+    };
+  }
+
+  // 5. STEP DOWN — 1 fail, deficit ≥2 reps (weight was too heavy on one set)
+  if (failedSets === 1 && worstDeficit >= 2) {
+    const drop = snap(lastWeight - baseInc, eq);
+    return {
+      weight: drop, status: "step-down", increment: baseInc, eq,
+      note: `↓ -${baseInc}kg — one set hit ${worstReps} (${worstDeficit} below min). Small step back.`
+    };
+  }
+
+  // 6. STALL RESET — held same weight for 2+ sessions without hitting top
+  if (stallCount >= 2) {
+    const drop = pct(0.93);
+    return {
+      weight: drop, status: "stall-reset", increment: baseInc, eq,
+      note: `↓ -7% stall reset — same weight for ${stallCount+1} sessions. Reset to build back stronger.`
+    };
+  }
+
+  // 7. GRIND HOLD — 1 fail but deficit is just 1 rep (grind through next time)
+  if (failedSets === 1 && worstDeficit === 1) {
+    return {
+      weight: lastWeight, status: "grind", increment: baseInc, eq,
+      note: `→ hold ${lastWeight}kg — one set hit ${worstReps}. Grind through it.`
+    };
+  }
+
+  // 8. STRONG HOLD — no fails, close to top. Try micro-progression on DB_light
+  if (perf >= 0.75) {
+    if (eq === "dumbbell_light") {
+      const microInc = dbIncrement(lastWeight);
+      const next = snap(lastWeight + microInc, eq);
+      if (next > lastWeight) {
+        return {
+          weight: next, status: "micro-up", increment: microInc, eq,
+          note: `↑ +${microInc}kg — strong session (${Math.round(perf*100)}% of target).`
+        };
+      }
+    }
+    return {
+      weight: lastWeight, status: "same", increment: baseInc, eq,
+      note: `→ hold ${lastWeight}kg — ${Math.round(perf*100)}% of target. Push for top.`
+    };
+  }
+
+  // 9. HOLD — catchall for "not all top, but no failures"
+  return {
+    weight: lastWeight, status: "same", increment: baseInc, eq,
+    note: `→ hold ${lastWeight}kg — ${Math.round(perf*100)}% of target.`
+  };
 }
 
 // ─── REST TIMES ───────────────────────────────────────────────────────────────
+// Defaults based on 2024 Schoenfeld et al. Bayesian meta-analysis on inter-set
+// rest duration — sub-60s diminishes hypertrophy; 90–150s is the sweet spot.
+// Power day compounds still get 3–5 min for ATP replenishment.
 function getRestSeconds(exName, dayType) {
   // Between sets of the same exercise
   const heavy = ["Bench Press","OHP","Squat","Deadlift","Bent Over Row","Incline Barbell Press","Front Squat","Romanian Deadlift"];
   const med   = ["Incline DB Press","Flat DB Press","Seated Cable Row","One Arm DB Row","Lat Pulldown","Leg Press","Hip Thrust","Hack Squat / Leg Press"];
-  if (heavy.includes(exName)) return dayType === "power" ? 240 : 120;
-  if (med.includes(exName))   return dayType === "power" ? 180 : 90;
-  return dayType === "power" ? 120 : 60;
+  if (heavy.includes(exName)) return dayType === "power" ? 240 : 150;
+  if (med.includes(exName))   return dayType === "power" ? 180 : 120;
+  return dayType === "power" ? 150 : 90; // isolations — still ≥ 90s for effective hypertrophy
 }
 
-function getBetweenExerciseRest(dayType) {
-  // Longer than between-set rest — you've finished ALL sets of an exercise
-  // Need more recovery before stimulating a fresh muscle group properly
-  return dayType === "power" ? 180 : 120;
+function getBetweenExerciseRest(previousExName, dayType) {
+  // Between-exercise rest scales with the fatigue of what you JUST finished,
+  // plus a small buffer for walking to the next station and setting up.
+  // After a heavy compound you're CNS-hammered — need at least as much rest
+  // as you'd take between sets of that compound.
+  const setRest = getRestSeconds(previousExName, dayType);
+  const floor = dayType === "power" ? 180 : 120;
+  return Math.max(floor, setRest + 15);
 }
 
 // ─── BAR WEIGHTS ─────────────────────────────────────────────────────────────
 const BAR = { olympic: 20, ez: 10, short: 15 };
 const parseNum = s => parseFloat(String(s).replace(',', '.')) || 0;
+
+// ─── PLATE CALCULATOR ─────────────────────────────────────────────────────────
+// Computes plates per side given total plate weight (not including bar).
+// Uses standard metric gym plate sizes, greedy allocation.
+const PLATE_SET = [25, 20, 15, 10, 5, 2.5, 1.25];
+function platesPerSide(totalPlateWeight) {
+  const perSide = totalPlateWeight / 2;
+  const breakdown = [];
+  let remaining = perSide;
+  for (const p of PLATE_SET) {
+    const count = Math.floor(remaining / p + 1e-9); // float safety
+    if (count > 0) {
+      breakdown.push({ plate: p, count });
+      remaining -= count * p;
+      remaining = Math.round(remaining * 100) / 100;
+    }
+  }
+  return { perSide, breakdown, leftover: remaining > 0.01 ? remaining : 0 };
+}
+function formatPlateBreakdown(totalPlateWeight) {
+  if (totalPlateWeight <= 0) return "bar only";
+  const { breakdown, leftover } = platesPerSide(totalPlateWeight);
+  if (!breakdown.length) return "bar only";
+  const parts = breakdown.map(b => `${b.count}×${b.plate}`);
+  return parts.join(" + ") + (leftover > 0 ? ` + ${leftover}kg ?` : "");
+}
+
 const HYPE_MSGS = [
   "Let's go! Give it everything.", "Focus. Breathe. Execute.",
   "This is where progress happens.", "Stay tight. Drive hard.",
@@ -166,52 +297,65 @@ const PHUL = {
     type: "power", color: "#ff4d1c", icon: "⚡",
     description: "Heavy compounds. Rest 3–5 min. Focus on bar speed.",
     exercises: [
-      { name: "Bench Press",       day: "Upper Power", sets: 3, repRange: "3-5",  startWeight: 40,  barbell: true, barWeight: BAR.olympic, note: "Arch slightly, drive feet." },
-      { name: "OHP",               day: "Upper Power", sets: 3, repRange: "3-5",  startWeight: 20,  barbell: true, barWeight: BAR.olympic, note: "Brace hard. Do this fresh — both compounds before accessories." },
-      { name: "Bent Over Row",     day: "Upper Power", sets: 3, repRange: "3-5",  startWeight: 20,  barbell: true, barWeight: BAR.olympic, note: "Overhand. Pull to lower chest." },
-      { name: "Lat Pulldown",      day: "Upper Power", sets: 3, repRange: "6-10", startWeight: 45,  note: "Full stretch at top." },
-      { name: "Incline DB Press",  day: "Upper Power", sets: 3, repRange: "6-10", startWeight: 20,  note: "2sec descent. Control. Per dumbbell." },
-      { name: "EZ Bar Curl",       day: "Upper Power", sets: 2, repRange: "6-8",  startWeight: 10,  barbell: true, barWeight: BAR.ez, note: "3sec eccentric." },
-      { name: "Skull Crushers",    day: "Upper Power", sets: 2, repRange: "6-8",  startWeight: 10,  barbell: true, barWeight: BAR.ez, note: "Elbows tucked." },
+      // Tier 1 — heavy compounds, push/pull alternated for shoulder recovery
+      { name: "Bench Press",       day: "Upper Power", tier: 1, sets: 3, repRange: "3-5",  startWeight: 40,  barbell: true, barWeight: BAR.olympic, note: "Arch slightly, drive feet." },
+      { name: "Bent Over Row",     day: "Upper Power", tier: 1, sets: 3, repRange: "3-5",  startWeight: 20,  barbell: true, barWeight: BAR.olympic, note: "Overhand. Pull to lower chest." },
+      { name: "OHP",               day: "Upper Power", tier: 1, sets: 3, repRange: "3-5",  startWeight: 20,  barbell: true, barWeight: BAR.olympic, note: "Brace hard. Shoulders fresher after Row." },
+      // Tier 2 — accessory compounds
+      { name: "Lat Pulldown",      day: "Upper Power", tier: 2, sets: 3, repRange: "6-10", startWeight: 45,  note: "Full stretch at top." },
+      { name: "Incline DB Press",  day: "Upper Power", tier: 2, sets: 3, repRange: "6-10", startWeight: 20,  note: "2sec descent. Control. Per dumbbell." },
+      // Tier 3 — isolations
+      { name: "EZ Bar Curl",       day: "Upper Power", tier: 3, sets: 2, repRange: "6-8",  startWeight: 10,  barbell: true, barWeight: BAR.ez, note: "3sec eccentric." },
+      { name: "Skull Crushers",    day: "Upper Power", tier: 3, sets: 2, repRange: "6-8",  startWeight: 10,  barbell: true, barWeight: BAR.ez, note: "Elbows tucked." },
     ]
   },
   "Lower Power": {
     type: "power", color: "#ff4d1c", icon: "⚡",
     description: "Heavy lower. Rest 4–6 min on main lifts.",
     exercises: [
-      { name: "Squat",             day: "Lower Power", sets: 3, repRange: "3-5",  startWeight: 35,  barbell: true, barWeight: BAR.olympic, note: "SBS peak was 65kg plates. Start conservative." },
-      { name: "Deadlift",          day: "Lower Power", sets: 3, repRange: "3-5",  startWeight: 37.5,  barbell: true, barWeight: BAR.olympic, note: "Brace, push floor away. Peak 67.5kg plates." },
-      { name: "Leg Press",         day: "Lower Power", sets: 3, repRange: "10-12",startWeight: 80,  note: "Feet shoulder-width. Full ROM." },
-      { name: "Leg Curl",          day: "Lower Power", sets: 3, repRange: "6-10", startWeight: 30,  note: "Squeeze at peak contraction." },
-      { name: "Calf Raise",        day: "Lower Power", sets: 4, repRange: "6-10", startWeight: 60,  note: "Full stretch at bottom." },
+      // Tier 1 — heavy compounds
+      { name: "Squat",             day: "Lower Power", tier: 1, sets: 3, repRange: "3-5",  startWeight: 35,  barbell: true, barWeight: BAR.olympic, note: "SBS peak was 65kg plates. Start conservative." },
+      { name: "Deadlift",          day: "Lower Power", tier: 1, sets: 3, repRange: "3-5",  startWeight: 37.5,  barbell: true, barWeight: BAR.olympic, note: "Brace, push floor away. Peak 67.5kg plates." },
+      // Tier 2 — accessory compounds
+      { name: "Leg Press",         day: "Lower Power", tier: 2, sets: 3, repRange: "10-12",startWeight: 80,  note: "Feet shoulder-width. Full ROM." },
+      { name: "Leg Curl",          day: "Lower Power", tier: 2, sets: 3, repRange: "6-10", startWeight: 30,  note: "Squeeze at peak contraction." },
+      // Tier 3 — isolation
+      { name: "Calf Raise",        day: "Lower Power", tier: 3, sets: 4, repRange: "6-10", startWeight: 60,  note: "Standing — targets gastrocnemius (fast-twitch). Full stretch." },
     ]
   },
   "Upper Hypertrophy": {
     type: "hypertrophy", color: "#3db8ff", icon: "🔷",
-    description: "Volume day. Rest 60–90sec. Mind-muscle connection.",
+    description: "Volume day. Rest 90–150sec. Mind-muscle connection.",
     exercises: [
-      { name: "Incline Barbell Press", day: "Upper Hypertrophy", sets: 4, repRange: "8-12",  startWeight: 10,  barbell: true, barWeight: BAR.olympic, note: "Slower tempo. Feel stretch at bottom." },
-      { name: "Flat DB Press",         day: "Upper Hypertrophy", sets: 4, repRange: "8-12",  startWeight: 20,  note: "Wide ROM. Full stretch each rep. Per dumbbell." },
-      { name: "Cable Fly",             day: "Upper Hypertrophy", sets: 3, repRange: "12-15", startWeight: 10,  note: "Squeeze hard at centre." },
-      { name: "Seated Cable Row",      day: "Upper Hypertrophy", sets: 4, repRange: "8-12",  startWeight: 45,  note: "Elbows tight. Squeeze shoulder blades." },
-      { name: "One Arm DB Row",        day: "Upper Hypertrophy", sets: 3, repRange: "10-12", startWeight: 20,  note: "Big stretch at bottom, row to hip. Per dumbbell." },
-      { name: "DB Lateral Raise",      day: "Upper Hypertrophy", sets: 4, repRange: "12-15", startWeight: 7,   note: "Lead with elbows. Per dumbbell." },
-      { name: "Face Pull",             day: "Upper Hypertrophy", sets: 5, repRange: "12-20", startWeight: 25,  note: "Rotate externally. Shoulder health. Good finisher." },
-      { name: "Incline DB Curl",       day: "Upper Hypertrophy", sets: 3, repRange: "10-15", startWeight: 9,   note: "Full stretch — great for long head. Per dumbbell." },
-      { name: "Tricep Pushdown",       day: "Upper Hypertrophy", sets: 3, repRange: "10-15", startWeight: 25,  note: "Lock elbows. Squeeze at bottom." },
+      // Tier 1 — main compounds
+      { name: "Incline Barbell Press", day: "Upper Hypertrophy", tier: 1, sets: 4, repRange: "8-12",  startWeight: 10,  barbell: true, barWeight: BAR.olympic, note: "Slower tempo. Feel stretch at bottom." },
+      { name: "Seated Cable Row",      day: "Upper Hypertrophy", tier: 1, sets: 4, repRange: "8-12",  startWeight: 45,  note: "Elbows tight. Squeeze shoulder blades." },
+      // Tier 2 — accessory compounds
+      { name: "Flat DB Press",         day: "Upper Hypertrophy", tier: 2, sets: 4, repRange: "8-12",  startWeight: 20,  note: "Wide ROM. Full stretch each rep. Per dumbbell." },
+      { name: "One Arm DB Row",        day: "Upper Hypertrophy", tier: 2, sets: 3, repRange: "10-12", startWeight: 20,  note: "Big stretch at bottom, row to hip. Per dumbbell." },
+      { name: "Cable Fly",             day: "Upper Hypertrophy", tier: 2, sets: 3, repRange: "12-15", startWeight: 10,  note: "Squeeze hard at centre." },
+      // Tier 3 — isolations
+      { name: "DB Lateral Raise",      day: "Upper Hypertrophy", tier: 3, sets: 4, repRange: "12-15", startWeight: 7,   note: "Lead with elbows. Per dumbbell." },
+      { name: "Face Pull",             day: "Upper Hypertrophy", tier: 3, sets: 5, repRange: "12-20", startWeight: 25,  note: "Rotate externally. Shoulder health." },
+      { name: "Incline DB Curl",       day: "Upper Hypertrophy", tier: 3, sets: 4, repRange: "10-15", startWeight: 9,   note: "Full stretch — great for long head. Per dumbbell." },
+      { name: "Hammer Curl",           day: "Upper Hypertrophy", tier: 3, sets: 3, repRange: "10-15", startWeight: 9,   note: "Neutral grip — brachialis & brachioradialis. Builds arm thickness. Per dumbbell." },
+      { name: "Tricep Pushdown",       day: "Upper Hypertrophy", tier: 3, sets: 3, repRange: "10-15", startWeight: 25,  note: "Lock elbows. Squeeze at bottom." },
     ]
   },
   "Lower Hypertrophy": {
     type: "hypertrophy", color: "#3db8ff", icon: "🔷",
-    description: "Volume lower. 90sec rest. Legs respond to volume.",
+    description: "Volume lower. 120sec rest. Legs respond to volume.",
     exercises: [
-      { name: "Front Squat",           day: "Lower Hypertrophy", sets: 4, repRange: "8-12",  startWeight: 15,  barbell: true, barWeight: BAR.olympic, note: "SBS peak 40kg plates. Keep elbows high." },
-      { name: "Hack Squat / Leg Press",day: "Lower Hypertrophy", sets: 4, repRange: "8-12",  startWeight: 80,  note: "Go deeper than you think." },
-      { name: "Leg Extension",         day: "Lower Hypertrophy", sets: 3, repRange: "10-15", startWeight: 35,  note: "Pause 1sec at top." },
-      { name: "Romanian Deadlift",     day: "Lower Hypertrophy", sets: 4, repRange: "8-12",  startWeight: 15,  barbell: true, barWeight: BAR.olympic, note: "Hinge, don't squat. SBS peak 40kg plates." },
-      { name: "Leg Curl",              day: "Lower Hypertrophy", sets: 3, repRange: "10-15", startWeight: 30,  note: "3sec eccentric. Hamstrings love this." },
-      { name: "Hip Thrust",            day: "Lower Hypertrophy", sets: 3, repRange: "10-15", startWeight: 40,  barbell: true, barWeight: BAR.olympic, note: "Squeeze glutes hard at top." },
-      { name: "Seated Calf Raise",     day: "Lower Hypertrophy", sets: 4, repRange: "12-20", startWeight: 30,  note: "Full ROM. Feel every rep." },
+      // Tier 1 — main compounds
+      { name: "Front Squat",           day: "Lower Hypertrophy", tier: 1, sets: 4, repRange: "8-12",  startWeight: 15,  barbell: true, barWeight: BAR.olympic, note: "SBS peak 40kg plates. Keep elbows high." },
+      { name: "Romanian Deadlift",     day: "Lower Hypertrophy", tier: 1, sets: 4, repRange: "8-12",  startWeight: 15,  barbell: true, barWeight: BAR.olympic, note: "Hinge, don't squat. SBS peak 40kg plates." },
+      // Tier 2 — accessory compounds
+      { name: "Hack Squat / Leg Press",day: "Lower Hypertrophy", tier: 2, sets: 4, repRange: "8-12",  startWeight: 80,  note: "Go deeper than you think." },
+      { name: "Hip Thrust",            day: "Lower Hypertrophy", tier: 2, sets: 3, repRange: "10-15", startWeight: 40,  barbell: true, barWeight: BAR.olympic, note: "Squeeze glutes hard at top." },
+      // Tier 3 — isolations (seated calf complements standing from power day — targets soleus)
+      { name: "Leg Extension",         day: "Lower Hypertrophy", tier: 3, sets: 3, repRange: "10-15", startWeight: 35,  note: "Pause 1sec at top." },
+      { name: "Leg Curl",              day: "Lower Hypertrophy", tier: 3, sets: 3, repRange: "10-15", startWeight: 30,  note: "3sec eccentric. Hamstrings love this." },
+      { name: "Seated Calf Raise",     day: "Lower Hypertrophy", tier: 3, sets: 4, repRange: "12-20", startWeight: 30,  note: "Seated — targets soleus (slow-twitch, loves volume)." },
     ]
   }
 };
@@ -263,10 +407,10 @@ function App() {
       workoutLogs={workoutLogs}
       savedSession={draftSession?.dayName === activeSession ? draftSession : null}
       onSaveSession={saveDraft}
-      onFinish={(data, sessionStartedAt) => {
+      onFinish={(data, sessionStartedAt, abandoned) => {
         const key = today + "_" + activeSession.replace(/ /g,"_") + "_" + Date.now();
         const durationMins = Math.round((Date.now() - (sessionStartedAt || Date.now())) / 60000);
-        setWorkoutLogs(prev => ({ ...prev, [key]: { day:activeSession, exercises:data, date:today, ts:Date.now(), durationMins } }));
+        setWorkoutLogs(prev => ({ ...prev, [key]: { day:activeSession, exercises:data, date:today, ts:Date.now(), durationMins, abandoned: abandoned || [] } }));
         clearDraft();
         setActiveSession(null);
         setTab("workout");
@@ -292,7 +436,7 @@ function App() {
       <div style={{ padding:"22px 18px 0", borderBottom:"1px solid #181818", position:"sticky", top:0, background:"#111318", zIndex:20 }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
           <div>
-            <div style={{ fontSize:10, color:"#7888a0", letterSpacing:3, marginBottom:3 }}>PHUL TRACKER <span style={{ color:"#3a4455", letterSpacing:1 }}>v3.2</span></div>
+            <div style={{ fontSize:10, color:"#7888a0", letterSpacing:3, marginBottom:3 }}>PHUL TRACKER <span style={{ color:"#3a4455", letterSpacing:1 }}>v4.0</span></div>
             <div style={{ fontSize:20, fontWeight:700, letterSpacing:-1 }}>UNDUKE <span style={{ color:phase==="bulk"?"#ff4d1c":"#1cb8ff", fontSize:14 }}>// {phase.toUpperCase()}</span></div>
           </div>
           <button onClick={() => setPhase(p => p==="bulk"?"cut":"bulk")}
@@ -430,15 +574,47 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, sa
   const [data, setData] = useState(() => {
     if (savedSession?.data) return savedSession.data;
     const init = {};
-    plan.exercises.forEach(ex => { init[ex.name] = Array.from({ length:ex.sets }, () => ({ weight:"", reps:"", done:false })); });
+    plan.exercises.forEach(ex => { init[ex.name] = Array.from({ length:ex.sets }, () => ({ weight:"", reps:"", rpe:null, done:false })); });
     return init;
   });
   const [activeEx, setActiveEx]     = useState(() => savedSession?.activeEx || plan.exercises[0]?.name);
   const [activeIdx, setActiveIdx]   = useState(() => savedSession?.activeIdx ?? 0);
   const [pendingW, setPendingW]     = useState("");
   const [pendingR, setPendingR]     = useState("");
+  const [pendingRpe, setPendingRpe] = useState(null);
   const restRef    = useRef(null);
   const isFirst    = useRef(true);
+
+  // ─── HOLD / TIER STATE ─────────────────────────────────────────────────
+  // exerciseHolds: { [exName]: { skippedAt: number, abandoned: boolean } }
+  const [exerciseHolds, setExerciseHolds] = useState(() => savedSession?.exerciseHolds || {});
+  const [tierGuardModal, setTierGuardModal] = useState(null); // holds pending ex if user tries to skip past T1
+  const [confirmAbandon, setConfirmAbandon] = useState(null);
+
+  // Helpers
+  const isExDone      = (exName) => data[exName]?.every(s => s.done);
+  const isExHeld      = (exName) => !!exerciseHolds[exName] && !exerciseHolds[exName].abandoned;
+  const isExAbandoned = (exName) => !!exerciseHolds[exName]?.abandoned;
+  const isExResolved  = (exName) => isExDone(exName) || isExAbandoned(exName);
+
+  // Find the next exercise to do, respecting tier priority and hold status.
+  // Priority: lowest tier with work remaining, prefer not-held within tier.
+  const findNextExercise = (exclude = null) => {
+    const tiers = [1, 2, 3];
+    for (const tier of tiers) {
+      const tierExs = plan.exercises.filter(e => e.tier === tier && e.name !== exclude);
+      // Tier is still open if any exercise is not resolved
+      const anyPending = tierExs.some(e => !isExResolved(e.name));
+      if (!anyPending) continue;
+      // Prefer an exercise that is not held (fresh/next in order)
+      const fresh = tierExs.find(e => !isExResolved(e.name) && !isExHeld(e.name));
+      if (fresh) return fresh.name;
+      // Otherwise, offer a held exercise from this tier to retry
+      const held = tierExs.find(e => !isExResolved(e.name) && isExHeld(e.name));
+      if (held) return held.name;
+    }
+    return null;
+  };
 
   // Session start timestamp — saved once, used for duration in history
   const sessionStartedAt = useRef(savedSession?.sessionStartedAt || Date.now());
@@ -451,17 +627,22 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, sa
   const [restLeft, setRestLeft]     = useState(() => restoredLeft);
   const [restDuration, setRestDuration] = useState(() => savedRestDur || 0);
   const [restType, setRestType]     = useState("set"); // "set" | "exercise"
+  // Ref holding the wall-clock timestamp when the current rest began.
+  // Used by the Page Visibility handler to recompute remaining time after
+  // the screen was off / tab backgrounded (setInterval gets throttled).
+  const restStartedAtRef            = useRef(savedRestAt || 0);
 
   useEffect(() => {
     if (isFirst.current) { isFirst.current = false; return; }
-    onSaveSession({ data, activeEx, activeIdx, sessionStartedAt: sessionStartedAt.current });
-  }, [data, activeEx, activeIdx]);
+    onSaveSession({ data, activeEx, activeIdx, exerciseHolds, sessionStartedAt: sessionStartedAt.current });
+  }, [data, activeEx, activeIdx, exerciseHolds]);
 
   useEffect(() => {
     if (phase !== "resting") return;
     if (restLeft <= 0) {
       setPhase("ready");
-      onSaveSession({ data, activeEx, activeIdx, sessionStartedAt: sessionStartedAt.current, restStartedAt: null, restDuration: 0 });
+      restStartedAtRef.current = 0;
+      onSaveSession({ data, activeEx, activeIdx, exerciseHolds, sessionStartedAt: sessionStartedAt.current, restStartedAt: null, restDuration: 0 });
       return;
     }
     const interval = setInterval(() => {
@@ -469,7 +650,8 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, sa
         if (r <= 1) {
           clearInterval(interval);
           setPhase("ready");
-          onSaveSession({ data, activeEx, activeIdx, sessionStartedAt: sessionStartedAt.current, restStartedAt: null, restDuration: 0 });
+          restStartedAtRef.current = 0;
+          onSaveSession({ data, activeEx, activeIdx, exerciseHolds, sessionStartedAt: sessionStartedAt.current, restStartedAt: null, restDuration: 0 });
           return 0;
         }
         return r - 1;
@@ -478,13 +660,47 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, sa
     return () => clearInterval(interval);
   }, [phase]);
 
+  // ─── PAGE VISIBILITY — recompute rest timer when screen/tab comes back ──
+  // Mobile browsers throttle or pause setInterval when the screen is off,
+  // so the countdown can drift or freeze. When visibility returns, we
+  // recompute remaining time from the start timestamp.
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState !== "visible") return;
+      if (phase !== "resting") return;
+      const startedAt = restStartedAtRef.current;
+      if (!startedAt || !restDuration) return;
+      const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+      const newLeft = Math.max(0, restDuration - elapsed);
+      setRestLeft(newLeft);
+      if (newLeft === 0) {
+        setPhase("ready");
+        restStartedAtRef.current = 0;
+        onSaveSession({ data, activeEx, activeIdx, exerciseHolds, sessionStartedAt: sessionStartedAt.current, restStartedAt: null, restDuration: 0 });
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    // Also listen for pageshow (iOS back-from-home-screen edge case)
+    window.addEventListener("pageshow", onVis);
+    window.addEventListener("focus", onVis);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("pageshow", onVis);
+      window.removeEventListener("focus", onVis);
+    };
+  }, [phase, restDuration, data, activeEx, activeIdx, exerciseHolds]);
+
   const fmt = s => `${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
   const curIdx    = plan.exercises.findIndex(e => e.name===activeEx);
   const curEx     = plan.exercises[curIdx];
   const sug       = curEx ? calcNextWeight(curEx, workoutLogs) : null;
   const restTime  = curEx ? getRestSeconds(activeEx, plan.type) : 60;
-  const allDone   = plan.exercises.every(ex => data[ex.name]?.every(s => s.done));
-  const doneCount = plan.exercises.filter(ex => data[ex.name]?.every(s => s.done)).length;
+  // "Resolved" = done OR abandoned. Held exercises still block finishing.
+  const allResolved = plan.exercises.every(ex => isExDone(ex.name) || isExAbandoned(ex.name));
+  const allDone     = allResolved;
+  const doneCount   = plan.exercises.filter(ex => isExDone(ex.name)).length;
+  const heldList    = plan.exercises.filter(ex => isExHeld(ex.name));
+  const abandonedList = plan.exercises.filter(ex => isExAbandoned(ex.name));
 
   const [editingSet, setEditingSet] = useState(null);
   const [editW, setEditW] = useState("");
@@ -510,7 +726,12 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, sa
 
     const newData = { ...data };
     const sets = [...newData[activeEx]];
-    sets[activeIdx] = { weight:String(pendingW).replace(",","."), reps:String(pendingR).replace(",","."), done:true };
+    sets[activeIdx] = {
+      weight: String(pendingW).replace(",","."),
+      reps: String(pendingR).replace(",","."),
+      rpe: pendingRpe,
+      done: true
+    };
     newData[activeEx] = sets;
 
     const nextSetIdx = activeIdx + 1;
@@ -525,35 +746,118 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, sa
       hasNext = true;
       changingExercise = false;
     } else {
-      const nextEx = plan.exercises.find((ex,i) => i > curIdx && newData[ex.name]?.some(s => !s.done));
-      if (nextEx) { newActiveEx = nextEx.name; newActiveIdx = 0; hasNext = true; changingExercise = true; }
+      // Current exercise done — find next using tier-aware navigation.
+      // Helper inline because we need updated data context for isExDone check.
+      const isDoneWith = (exName) => newData[exName]?.every(s => s.done);
+      const findNext = () => {
+        for (const tier of [1, 2, 3]) {
+          const tierExs = plan.exercises.filter(e => e.tier === tier);
+          const anyPending = tierExs.some(e =>
+            !isDoneWith(e.name) && !isExAbandoned(e.name)
+          );
+          if (!anyPending) continue;
+          // Prefer fresh (not held) within tier
+          const fresh = tierExs.find(e =>
+            !isDoneWith(e.name) && !isExHeld(e.name) && !isExAbandoned(e.name)
+          );
+          if (fresh) return fresh.name;
+          // Then offer a held one from this tier
+          const held = tierExs.find(e =>
+            !isDoneWith(e.name) && isExHeld(e.name)
+          );
+          if (held) return held.name;
+        }
+        return null;
+      };
+      const nextName = findNext();
+      if (nextName) { newActiveEx = nextName; newActiveIdx = 0; hasNext = true; changingExercise = true; }
     }
 
     setData(newData);
     setActiveIdx(newActiveIdx);
     setActiveEx(newActiveEx);
+    setPendingRpe(null);
 
     if (!hasNext) {
       setPhase("ready");
       setRestLeft(0);
-      onSaveSession({ data: newData, activeEx: newActiveEx, activeIdx: newActiveIdx, sessionStartedAt: sessionStartedAt.current, restStartedAt: null, restDuration: 0 });
+      onSaveSession({ data: newData, activeEx: newActiveEx, activeIdx: newActiveIdx, exerciseHolds, sessionStartedAt: sessionStartedAt.current, restStartedAt: null, restDuration: 0 });
     } else {
       const rt = changingExercise
-        ? getBetweenExerciseRest(plan.type)
+        ? getBetweenExerciseRest(activeEx, plan.type)
         : getRestSeconds(activeEx, plan.type);
       setRestType(changingExercise ? "exercise" : "set");
       setRestDuration(rt);
       setPhase("resting");
       setRestLeft(rt);
-      onSaveSession({ data: newData, activeEx: newActiveEx, activeIdx: newActiveIdx, sessionStartedAt: sessionStartedAt.current, restStartedAt: now, restDuration: rt });
+      restStartedAtRef.current = now;
+      onSaveSession({ data: newData, activeEx: newActiveEx, activeIdx: newActiveIdx, exerciseHolds, sessionStartedAt: sessionStartedAt.current, restStartedAt: now, restDuration: rt });
     }
+  };
+
+  // ─── HOLD / RESUME ACTIONS ─────────────────────────────────────────────
+  const markTaken = () => {
+    const newHolds = { ...exerciseHolds, [activeEx]: { skippedAt: Date.now(), abandoned: false } };
+    setExerciseHolds(newHolds);
+    const next = findNextExerciseWith(newHolds, activeEx);
+    if (next) {
+      setActiveEx(next);
+      setActiveIdx(data[next].findIndex(s => !s.done));
+      setPhase("ready");
+    } else {
+      setPhase("ready");
+    }
+  };
+
+  const resumeHeld = (exName) => {
+    const newHolds = { ...exerciseHolds };
+    delete newHolds[exName];
+    setExerciseHolds(newHolds);
+    setActiveEx(exName);
+    setActiveIdx(data[exName].findIndex(s => !s.done));
+    setPhase("ready");
+    setExpandedEx(null);
+  };
+
+  const abandonHeld = (exName) => {
+    setExerciseHolds(prev => ({ ...prev, [exName]: { ...prev[exName], abandoned: true } }));
+    setConfirmAbandon(null);
+    // If it was the active one, move on
+    if (activeEx === exName) {
+      const newHolds = { ...exerciseHolds, [exName]: { ...exerciseHolds[exName], abandoned: true } };
+      const next = findNextExerciseWith(newHolds, exName);
+      if (next) {
+        setActiveEx(next);
+        setActiveIdx(data[next].findIndex(s => !s.done));
+        setPhase("ready");
+      }
+    }
+  };
+
+  // Variant of findNextExercise that takes a specific holds object (for fresh-state lookups)
+  const findNextExerciseWith = (holds, exclude = null) => {
+    const held   = (n) => !!holds[n] && !holds[n].abandoned;
+    const abandoned = (n) => !!holds[n]?.abandoned;
+    const done   = (n) => data[n]?.every(s => s.done);
+    const resolved = (n) => done(n) || abandoned(n);
+    for (const tier of [1, 2, 3]) {
+      const tierExs = plan.exercises.filter(e => e.tier === tier && e.name !== exclude);
+      const anyPending = tierExs.some(e => !resolved(e.name));
+      if (!anyPending) continue;
+      const fresh = tierExs.find(e => !resolved(e.name) && !held(e.name));
+      if (fresh) return fresh.name;
+      const held2 = tierExs.find(e => !resolved(e.name) && held(e.name));
+      if (held2) return held2.name;
+    }
+    return null;
   };
 
   const saveEdit = () => {
     if (!editR || !editingSet) return;
     setData(prev => {
       const sets = [...prev[editingSet.exName]];
-      sets[editingSet.idx] = { weight: String(editW).replace(",","."), reps: String(editR).replace(",","."), done: true };
+      const existing = sets[editingSet.idx] || {};
+      sets[editingSet.idx] = { weight: String(editW).replace(",","."), reps: String(editR).replace(",","."), rpe: existing.rpe ?? null, done: true };
       return { ...prev, [editingSet.exName]: sets };
     });
     setEditingSet(null);
@@ -567,11 +871,12 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, sa
     setExpandedEx(null);
     clearTimeout(restRef.current);
     setRestLeft(0);
+    restStartedAtRef.current = 0;
   };
 
   const addSet = (exName) => {
     const newIdx = data[exName].length;
-    setData(prev => ({ ...prev, [exName]:[...prev[exName], { weight:"", reps:"", done:false }] }));
+    setData(prev => ({ ...prev, [exName]:[...prev[exName], { weight:"", reps:"", rpe:null, done:false }] }));
     setActiveEx(exName);
     setActiveIdx(newIdx);
     setPhase("ready");
@@ -646,15 +951,56 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, sa
                 <span style={{ color:"#506070" }}> — set {activeIdx+1}</span>
               </div>
             )}
-            <button onClick={() => { setRestLeft(0); setPhase("ready"); onSaveSession({ data, activeEx, activeIdx, sessionStartedAt: sessionStartedAt.current, restStartedAt: null, restDuration: 0 }); }}
+            <button onClick={() => { setRestLeft(0); setPhase("ready"); restStartedAtRef.current = 0; onSaveSession({ data, activeEx, activeIdx, exerciseHolds, sessionStartedAt: sessionStartedAt.current, restStartedAt: null, restDuration: 0 }); }}
               style={{ background:"#1a1d24", border:"1px solid #2e3340", borderRadius:8, padding:"10px 28px", color:"#7888a0", fontSize:12, cursor:"pointer", letterSpacing:1 }}>
               skip →
             </button>
           </div>
         )}
 
+        {/* ── HOLD CHIPS ── held exercises waiting to be retried or abandoned */}
+        {heldList.length > 0 && phase !== "resting" && (
+          <div style={{ marginBottom:12 }}>
+            <div style={{ fontSize:10, color:"#ffc94d", letterSpacing:2, marginBottom:6, fontWeight:700 }}>⏸ ON HOLD — {heldList.length}</div>
+            {heldList.map(ex => {
+              const waitMins = Math.floor((Date.now() - (exerciseHolds[ex.name]?.skippedAt || Date.now())) / 60000);
+              return (
+                <div key={ex.name} style={{ background:"#1a1d24", border:"1px solid #ffc94d33", borderRadius:10, padding:"10px 14px", display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:13, fontWeight:700, color:"#ffc94d", marginBottom:2 }}>{ex.name}</div>
+                    <div style={{ fontSize:11, color:"#506070" }}>T{ex.tier} · taken {waitMins}m ago</div>
+                  </div>
+                  {confirmAbandon === ex.name ? (
+                    <div style={{ display:"flex", gap:6 }}>
+                      <button onClick={() => setConfirmAbandon(null)}
+                        style={{ background:"#21252e", border:"1px solid #2e3340", borderRadius:6, padding:"5px 10px", color:"#7888a0", fontSize:11, cursor:"pointer" }}>
+                        cancel
+                      </button>
+                      <button onClick={() => abandonHeld(ex.name)}
+                        style={{ background:"#ff4d1c", border:"none", borderRadius:6, padding:"5px 10px", color:"#fff", fontWeight:700, fontSize:11, cursor:"pointer" }}>
+                        skip today
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ display:"flex", gap:6 }}>
+                      <button onClick={() => setConfirmAbandon(ex.name)}
+                        style={{ background:"none", border:"1px solid #2e3340", borderRadius:6, padding:"5px 10px", color:"#506070", fontSize:11, cursor:"pointer" }}>
+                        ✗
+                      </button>
+                      <button onClick={() => resumeHeld(ex.name)}
+                        style={{ background:"#ffc94d", border:"none", borderRadius:6, padding:"5px 12px", color:"#000", fontWeight:700, fontSize:11, cursor:"pointer" }}>
+                        retry →
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {/* ── ACTIVE EXERCISE CARD ── */}
-        {curEx && phase !== "resting" && !data[activeEx]?.every(s => s.done) && (
+        {curEx && phase !== "resting" && !data[activeEx]?.every(s => s.done) && !isExHeld(activeEx) && (
           <div style={{ background:"#1a1d24", border:`1px solid ${plan.color}50`, borderRadius:16, marginBottom:16, overflow:"hidden" }}>
 
             {/* Card header */}
@@ -665,7 +1011,8 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, sa
                     {activeEx}
                     {curEx.barbell && <span style={{ fontSize:11, color:plan.color, fontWeight:500, marginLeft:8, letterSpacing:1 }}>＋bar</span>}
                   </div>
-                  <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+                  <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
+                    <span style={{ fontSize:10, color:"#506070", background:"#21252e", padding:"2px 7px", borderRadius:4, letterSpacing:1, fontWeight:700 }}>T{curEx.tier}</span>
                     <span style={{ fontSize:12, color:"#7888a0" }}>Set</span>
                     <span style={{ fontSize:14, fontWeight:700, color:plan.color }}>{activeIdx+1}</span>
                     <span style={{ fontSize:12, color:"#506070" }}>of {data[activeEx].length}</span>
@@ -673,11 +1020,16 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, sa
                     <span style={{ fontSize:12, color:"#a0b0c0" }}>{curEx.repRange} reps</span>
                   </div>
                 </div>
-                {/* Add extra set button — top right of card */}
-                <button onClick={() => addSet(activeEx)}
-                  style={{ background:"#21252e", border:"1px solid #2e3340", borderRadius:8, padding:"6px 12px", color:"#7888a0", fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>
-                  + set
-                </button>
+                <div style={{ display:"flex", gap:6, flexDirection:"column" }}>
+                  <button onClick={markTaken}
+                    style={{ background:"#1a1d24", border:"1px solid #ffc94d40", borderRadius:8, padding:"6px 10px", color:"#ffc94d", fontSize:11, cursor:"pointer", whiteSpace:"nowrap", fontWeight:700 }}>
+                    ⏸ taken
+                  </button>
+                  <button onClick={() => addSet(activeEx)}
+                    style={{ background:"#21252e", border:"1px solid #2e3340", borderRadius:8, padding:"6px 10px", color:"#7888a0", fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>
+                    + set
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -692,6 +1044,11 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, sa
                   {curEx.barWeight && (
                     <div style={{ fontSize:13, color:"#7888a0", marginTop:4 }}>
                       = <span style={{ color:"#a0b0c0", fontWeight:700 }}>{parseFloat(((sug?.weight||0) + curEx.barWeight).toFixed(2))}kg</span> total <span style={{ color:"#506070" }}>({curEx.barWeight}kg bar)</span>
+                    </div>
+                  )}
+                  {curEx.barWeight && sug?.weight > 0 && (
+                    <div style={{ fontSize:11, color:"#506070", marginTop:4, fontFamily:"'Courier New',monospace" }}>
+                      🏋 per side: <span style={{ color:"#8898b0" }}>{formatPlateBreakdown(sug.weight)}</span>
                     </div>
                   )}
                   {sug && (
@@ -750,6 +1107,31 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, sa
                         style={{ width:"100%", background:"#21252e", border:`2px solid ${plan.color}60`, borderRadius:10, padding:"16px", color:"#f0f0f0", fontSize:28, textAlign:"center", fontWeight:700 }}/>
                     </div>
                   </div>
+
+                  {/* Optional RPE (how hard was it? — 1=easy, 10=maximal effort) */}
+                  <div style={{ marginBottom:14 }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                      <span style={{ fontSize:11, color:"#7888a0", letterSpacing:2, fontWeight:700 }}>RPE <span style={{ color:"#3a4455", fontWeight:400, letterSpacing:0 }}>(optional)</span></span>
+                      <span style={{ fontSize:11, color:pendingRpe ? "#ffc94d" : "#3a4455" }}>
+                        {pendingRpe ? `${pendingRpe}/10 — ${pendingRpe<=6?"easy":pendingRpe<=8?"hard":pendingRpe===9?"1 rep left":"maximal"}` : "how hard?"}
+                      </span>
+                    </div>
+                    <div style={{ display:"grid", gridTemplateColumns:"repeat(10,1fr)", gap:4 }}>
+                      {[1,2,3,4,5,6,7,8,9,10].map(n => (
+                        <button key={n} onClick={() => setPendingRpe(pendingRpe===n?null:n)}
+                          style={{
+                            background: pendingRpe===n ? "#ffc94d" : "#21252e",
+                            border: `1px solid ${pendingRpe===n?"#ffc94d":"#2e3340"}`,
+                            borderRadius: 6, padding:"8px 0",
+                            color: pendingRpe===n ? "#000" : n>=9?"#ff6b45":n>=7?"#ffc94d":"#506070",
+                            fontSize: 12, fontWeight:700, cursor:"pointer", transition:"all 0.1s"
+                          }}>
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   <button onClick={finishSet} disabled={!pendingR}
                     style={{ width:"100%", background:pendingR?"#00e87a":"#21252e", border:"none", borderRadius:12, padding:"17px", color:pendingR?"#000":"#3a4455", fontWeight:700, fontSize:15, cursor:pendingR?"pointer":"default", letterSpacing:1, transition:"all 0.2s" }}>
                     {pendingR ? "SAVE ✓" : "enter reps to save"}
@@ -793,90 +1175,137 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, sa
           </div>
         )}
 
-        {/* ── EXERCISE LIST ── */}
+        {/* ── EXERCISE LIST — grouped by tier ── */}
         <div style={{ fontSize:11, color:"#506070", letterSpacing:2, marginBottom:10, fontWeight:700 }}>ALL EXERCISES</div>
-        {plan.exercises.map((ex) => {
-          const exDone = data[ex.name]?.every(s => s.done);
-          const doneSets = data[ex.name]?.filter(s => s.done).length || 0;
-          const isActive = activeEx===ex.name && phase!=="resting";
-          const isExpanded = expandedEx === ex.name;
+        {[1,2,3].map(tier => {
+          const tierExs = plan.exercises.filter(e => e.tier === tier);
+          if (!tierExs.length) return null;
+          const tierLabel = tier===1 ? "T1 · HEAVY COMPOUNDS" : tier===2 ? "T2 · ACCESSORIES" : "T3 · ISOLATIONS";
+          const tierDone = tierExs.every(e => isExDone(e.name) || isExAbandoned(e.name));
           return (
-            <div key={ex.name} style={{
-              background: isActive ? "#21252e" : exDone ? "#161920" : "#1a1d24",
-              borderRadius:10, marginBottom:8,
-              border:`1px solid ${isActive ? plan.color+"60" : exDone ? "#00e87a20" : "#252b36"}`,
-              overflow:"hidden", transition:"all 0.15s"
-            }}>
-              {/* Row header — always tappable */}
-              <div onClick={() => {
-                if (exDone || isActive) setExpandedEx(isExpanded ? null : ex.name);
-                else if (phase !== "resting") jumpTo(ex.name);
-              }}
-                style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 16px", cursor:"pointer" }}>
-                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                  <div style={{ fontSize:16, color: exDone ? "#00e87a" : isActive ? plan.color : "#3a4455", width:18 }}>
-                    {exDone ? "✓" : isActive ? "▶" : "○"}
-                  </div>
-                  <div>
-                    <div style={{ fontSize:14, fontWeight: isActive ? 700 : 500, color: exDone ? "#8898b0" : isActive ? "#f0f0f0" : "#a0b0c0" }}>
-                      {ex.name} {ex.barbell && <span style={{ fontSize:10, color:plan.color }}>＋bar</span>}
+            <div key={tier} style={{ marginBottom:14 }}>
+              <div style={{ fontSize:9, color:tierDone?"#00e87a66":"#3a4455", letterSpacing:2, margin:"4px 0 6px 2px", fontWeight:700 }}>
+                {tierLabel} {tierDone && "✓"}
+              </div>
+              {tierExs.map((ex) => {
+                const exDone      = isExDone(ex.name);
+                const exHeld      = isExHeld(ex.name);
+                const exAbandoned = isExAbandoned(ex.name);
+                const doneSets    = data[ex.name]?.filter(s => s.done).length || 0;
+                const isActive    = activeEx===ex.name && phase!=="resting";
+                const isExpanded  = expandedEx === ex.name;
+                // Status-driven styling
+                const borderColor = isActive ? plan.color+"60"
+                                  : exDone ? "#00e87a20"
+                                  : exHeld ? "#ffc94d40"
+                                  : exAbandoned ? "#ff4d1c25"
+                                  : "#252b36";
+                const bgColor     = isActive ? "#21252e"
+                                  : exDone ? "#161920"
+                                  : exAbandoned ? "#18131a"
+                                  : "#1a1d24";
+                const statusIcon  = exDone ? "✓"
+                                  : exHeld ? "⏸"
+                                  : exAbandoned ? "✗"
+                                  : isActive ? "▶"
+                                  : "○";
+                const statusColor = exDone ? "#00e87a"
+                                  : exHeld ? "#ffc94d"
+                                  : exAbandoned ? "#ff6b45"
+                                  : isActive ? plan.color
+                                  : "#3a4455";
+
+                return (
+                  <div key={ex.name} style={{
+                    background: bgColor, borderRadius:10, marginBottom:6,
+                    border:`1px solid ${borderColor}`,
+                    opacity: exAbandoned ? 0.55 : 1,
+                    overflow:"hidden", transition:"all 0.15s"
+                  }}>
+                    <div onClick={() => {
+                      if (exAbandoned) return;
+                      if (exHeld) { resumeHeld(ex.name); return; }
+                      if (exDone || isActive) setExpandedEx(isExpanded ? null : ex.name);
+                      else if (phase !== "resting") jumpTo(ex.name);
+                    }}
+                      style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 16px", cursor: exAbandoned ? "default" : "pointer" }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:10, flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:16, color:statusColor, width:18 }}>
+                          {statusIcon}
+                        </div>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:14, fontWeight: isActive ? 700 : 500, color: exAbandoned ? "#606878" : exDone ? "#8898b0" : isActive ? "#f0f0f0" : exHeld ? "#ffc94d" : "#a0b0c0", textDecoration: exAbandoned ? "line-through" : "none" }}>
+                            {ex.name} {ex.barbell && <span style={{ fontSize:10, color:plan.color }}>＋bar</span>}
+                          </div>
+                          {!isExpanded && data[ex.name]?.some(s => s.done) && (
+                            <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginTop:4 }}>
+                              {data[ex.name].map((s,i) => s.done ? (
+                                <span key={i} style={{ fontSize:11, color: isActive ? plan.color : "#606878", background:"#21252e", borderRadius:4, padding:"2px 6px" }}>
+                                  {s.weight}×{s.reps}{s.rpe?<span style={{ color:"#ffc94d", marginLeft:4 }}>@{s.rpe}</span>:null}
+                                </span>
+                              ) : null)}
+                            </div>
+                          )}
+                          {exHeld && !isExpanded && (
+                            <div style={{ fontSize:11, color:"#ffc94d99", marginTop:3 }}>tap to retry</div>
+                          )}
+                          {exAbandoned && (
+                            <div style={{ fontSize:11, color:"#606878", marginTop:3 }}>skipped today</div>
+                          )}
+                        </div>
+                      </div>
+                      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                        <div style={{ fontSize:13, fontWeight:700, color: statusColor }}>
+                          {doneSets}<span style={{ color:"#3a4455", fontWeight:400 }}>/{data[ex.name]?.length}</span>
+                        </div>
+                        {(exDone || isActive) && !exHeld && (
+                          <div style={{ fontSize:11, color:"#506070" }}>{isExpanded ? "▲" : "▼"}</div>
+                        )}
+                      </div>
                     </div>
-                    {/* Show logged sets inline when collapsed */}
-                    {!isExpanded && data[ex.name]?.some(s => s.done) && (
-                      <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginTop:4 }}>
-                        {data[ex.name].map((s,i) => s.done ? (
-                          <span key={i} style={{ fontSize:11, color: isActive ? plan.color : "#606878", background:"#21252e", borderRadius:4, padding:"2px 6px" }}>
-                            {s.weight}×{s.reps}
-                          </span>
-                        ) : null)}
+
+                    {isExpanded && !exHeld && !exAbandoned && (
+                      <div style={{ padding:"0 16px 14px", borderTop:"1px solid #252b36" }}>
+                        <div style={{ fontSize:11, color:"#506070", letterSpacing:2, margin:"10px 0 8px", fontWeight:700 }}>SETS — tap to edit</div>
+                        {data[ex.name].map((s, i) => (
+                          <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid #1e2229" }}>
+                            <div style={{ fontSize:12, color:"#7888a0" }}>Set {i+1}</div>
+                            {s.done ? (
+                              <button onClick={() => { setEditingSet({ exName: ex.name, idx: i }); setEditW(s.weight); setEditR(s.reps); }}
+                                style={{ background:"#21252e", border:`1px solid ${plan.color}40`, borderRadius:6, padding:"5px 12px", color:plan.color, fontWeight:700, fontSize:12, cursor:"pointer" }}>
+                                {s.weight}×{s.reps}{s.rpe?<span style={{ color:"#ffc94d", marginLeft:4 }}>@{s.rpe}</span>:null} ✎
+                              </button>
+                            ) : (
+                              <button onClick={() => jumpTo(ex.name, i)}
+                                style={{ background:"#21252e", border:"1px dashed #2e3340", borderRadius:6, padding:"5px 12px", color:"#506070", fontSize:12, cursor:"pointer" }}>
+                                pending → do now
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                        <button onClick={() => addSet(ex.name)}
+                          style={{ width:"100%", background:"none", border:"1px dashed #2e3340", borderRadius:8, padding:"9px", color:"#7888a0", fontSize:12, cursor:"pointer", marginTop:10 }}>
+                          + add set
+                        </button>
                       </div>
                     )}
                   </div>
-                </div>
-                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                  <div style={{ fontSize:13, fontWeight:700, color: exDone ? "#00e87a" : isActive ? plan.color : "#506070" }}>
-                    {doneSets}<span style={{ color:"#3a4455", fontWeight:400 }}>/{data[ex.name]?.length}</span>
-                  </div>
-                  {(exDone || isActive) && (
-                    <div style={{ fontSize:11, color:"#506070" }}>{isExpanded ? "▲" : "▼"}</div>
-                  )}
-                </div>
-              </div>
-
-              {/* Expanded section — edit sets + add set */}
-              {isExpanded && (
-                <div style={{ padding:"0 16px 14px", borderTop:"1px solid #252b36" }}>
-                  <div style={{ fontSize:11, color:"#506070", letterSpacing:2, margin:"10px 0 8px", fontWeight:700 }}>SETS — tap to edit</div>
-                  {data[ex.name].map((s, i) => (
-                    <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid #1e2229" }}>
-                      <div style={{ fontSize:12, color:"#7888a0" }}>Set {i+1}</div>
-                      {s.done ? (
-                        <button onClick={() => { setEditingSet({ exName: ex.name, idx: i }); setEditW(s.weight); setEditR(s.reps); }}
-                          style={{ background:"#21252e", border:`1px solid ${plan.color}40`, borderRadius:6, padding:"5px 12px", color:plan.color, fontWeight:700, fontSize:12, cursor:"pointer" }}>
-                          {s.weight}×{s.reps} ✎
-                        </button>
-                      ) : (
-                        <button onClick={() => jumpTo(ex.name, i)}
-                          style={{ background:"#21252e", border:"1px dashed #2e3340", borderRadius:6, padding:"5px 12px", color:"#506070", fontSize:12, cursor:"pointer" }}>
-                          pending → do now
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                  <button onClick={() => addSet(ex.name)}
-                    style={{ width:"100%", background:"none", border:"1px dashed #2e3340", borderRadius:8, padding:"9px", color:"#7888a0", fontSize:12, cursor:"pointer", marginTop:10 }}>
-                    + add set
-                  </button>
-                </div>
-              )}
+                );
+              })}
             </div>
           );
         })}
 
         {/* FINISH SESSION */}
-        <button onClick={() => onFinish(data, sessionStartedAt.current)} disabled={!allDone}
+        <button onClick={() => onFinish(data, sessionStartedAt.current, abandonedList.map(e => e.name))} disabled={!allDone}
           style={{ width:"100%", background:allDone?plan.color:"#1a1d24", border:`1px solid ${allDone?plan.color:"#2e3340"}`, borderRadius:12, padding:"18px", color:allDone?"#fff":"#3a4455", fontWeight:700, fontSize:15, cursor:allDone?"pointer":"default", letterSpacing:2, marginTop:8, transition:"all 0.3s" }}>
-          {allDone ? "FINISH SESSION ✓" : `${plan.exercises.length - doneCount} exercises remaining`}
+          {allDone
+            ? (abandonedList.length > 0
+                ? `FINISH SESSION ✓  (${abandonedList.length} skipped)`
+                : "FINISH SESSION ✓")
+            : heldList.length > 0
+                ? `${heldList.length} on hold — retry or skip`
+                : `${plan.exercises.length - doneCount - abandonedList.length} exercises remaining`}
         </button>
       </div>
     </div>
