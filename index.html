@@ -1234,6 +1234,29 @@ button { cursor: pointer; }
   text-transform: uppercase;
 }
 
+/* Superset hint — shown when gym close is tight and a T3 pair has work left */
+.superset-hint {
+  background: color-mix(in oklab, var(--warn) 12%, var(--card));
+  border: 1px solid color-mix(in oklab, var(--warn) 45%, transparent);
+  border-radius: var(--r-md);
+  padding: 12px 14px;
+}
+.superset-hint-k {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  font-weight: 800;
+  color: var(--warn);
+  text-transform: uppercase;
+  margin-bottom: 5px;
+}
+.superset-hint-v {
+  font-size: 12.5px;
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+.superset-hint-v strong { color: var(--ink); font-weight: 800; }
+
 /* Held chips */
 .hold-list { display: flex; flex-direction: column; gap: 6px; }
 .hold-head {
@@ -2808,9 +2831,9 @@ const PHUL = {
       // Tier 2 — accessory compounds
       { name: "Lat Pulldown",      day: "Upper Power", tier: 2, sets: 3, repRange: "6-10", startWeight: 45,  note: "Full stretch at top." },
       { name: "Incline DB Press",  day: "Upper Power", tier: 2, sets: 3, repRange: "6-10", startWeight: 20,  note: "2sec descent. Control. Per dumbbell." },
-      // Tier 3 — isolations
-      { name: "EZ Bar Curl",       day: "Upper Power", tier: 3, sets: 2, repRange: "6-8",  startWeight: 10,  barbell: true, barWeight: BAR.ez, note: "3sec eccentric." },
-      { name: "Skull Crushers",    day: "Upper Power", tier: 3, sets: 2, repRange: "6-8",  startWeight: 10,  barbell: true, barWeight: BAR.ez, note: "Elbows tucked." },
+      // Tier 3 — isolations (bi/tri antagonist pair — natural superset)
+      { name: "EZ Bar Curl",       day: "Upper Power", tier: 3, sets: 2, repRange: "6-8",  startWeight: 10,  barbell: true, barWeight: BAR.ez, supersetWith: "Skull Crushers", note: "3sec eccentric." },
+      { name: "Skull Crushers",    day: "Upper Power", tier: 3, sets: 2, repRange: "6-8",  startWeight: 10,  barbell: true, barWeight: BAR.ez, supersetWith: "EZ Bar Curl",    note: "Elbows tucked." },
     ]
   },
   "Lower Power": {
@@ -2841,9 +2864,9 @@ const PHUL = {
       // Tier 3 — isolations
       { name: "DB Lateral Raise",      day: "Upper Hypertrophy", tier: 3, sets: 4, repRange: "12-15", startWeight: 7,   note: "Lead with elbows. Per dumbbell." },
       { name: "Face Pull",             day: "Upper Hypertrophy", tier: 3, sets: 5, repRange: "12-20", startWeight: 25,  note: "Rotate externally. Shoulder health." },
-      { name: "Incline DB Curl",       day: "Upper Hypertrophy", tier: 3, sets: 4, repRange: "10-15", startWeight: 9,   note: "Full stretch — great for long head. Per dumbbell." },
+      { name: "Incline DB Curl",       day: "Upper Hypertrophy", tier: 3, sets: 4, repRange: "10-15", startWeight: 9,   supersetWith: "Tricep Pushdown", note: "Full stretch — great for long head. Per dumbbell." },
       { name: "Hammer Curl",           day: "Upper Hypertrophy", tier: 3, sets: 3, repRange: "10-15", startWeight: 9,   note: "Neutral grip — brachialis & brachioradialis. Builds arm thickness. Per dumbbell." },
-      { name: "Tricep Pushdown",       day: "Upper Hypertrophy", tier: 3, sets: 3, repRange: "10-15", startWeight: 25,  note: "Lock elbows. Squeeze at bottom." },
+      { name: "Tricep Pushdown",       day: "Upper Hypertrophy", tier: 3, sets: 3, repRange: "10-15", startWeight: 25,  supersetWith: "Incline DB Curl", note: "Lock elbows. Squeeze at bottom." },
     ]
   },
   "Lower Hypertrophy": {
@@ -2856,9 +2879,9 @@ const PHUL = {
       // Tier 2 — accessory compounds
       { name: "Hack Squat / Leg Press",day: "Lower Hypertrophy", tier: 2, sets: 4, repRange: "8-12",  startWeight: 80,  note: "Go deeper than you think." },
       { name: "Hip Thrust",            day: "Lower Hypertrophy", tier: 2, sets: 3, repRange: "10-15", startWeight: 40,  barbell: true, barWeight: BAR.olympic, note: "Squeeze glutes hard at top." },
-      // Tier 3 — isolations (seated calf complements standing from power day — targets soleus)
-      { name: "Leg Extension",         day: "Lower Hypertrophy", tier: 3, sets: 3, repRange: "10-15", startWeight: 35,  note: "Pause 1sec at top." },
-      { name: "Leg Curl",              day: "Lower Hypertrophy", tier: 3, sets: 3, repRange: "10-15", startWeight: 30,  note: "3sec eccentric. Hamstrings love this." },
+      // Tier 3 — isolations (quad/ham antagonist pair — natural superset)
+      { name: "Leg Extension",         day: "Lower Hypertrophy", tier: 3, sets: 3, repRange: "10-15", startWeight: 35,  supersetWith: "Leg Curl", note: "Pause 1sec at top." },
+      { name: "Leg Curl",              day: "Lower Hypertrophy", tier: 3, sets: 3, repRange: "10-15", startWeight: 30,  supersetWith: "Leg Extension", note: "3sec eccentric. Hamstrings love this." },
       { name: "Seated Calf Raise",     day: "Lower Hypertrophy", tier: 3, sets: 4, repRange: "12-20", startWeight: 30,  note: "Seated — targets soleus (slow-twitch, loves volume)." },
     ]
   }
@@ -3558,6 +3581,35 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, sa
     return { state: "", label: "" };
   })();
 
+  // ─── T3 SUPERSET HINT ──────────────────────────────────────────────────
+  // Surface an antagonist-pair suggestion ONLY when close-time is at risk.
+  // Finds the first valid pair in the remaining T3 work where both exercises
+  // have pending sets. Estimated savings assume you alternate sets instead
+  // of resting — the longer of the two between-set rests dominates, × the
+  // number of paired sets minus one.
+  const supersetHint = (() => {
+    if (!closeInfo.state) return null;
+    const t3 = plan.exercises.filter(e => e.tier === 3 && e.supersetWith);
+    for (const ex of t3) {
+      if (isExAbandoned(ex.name)) continue;
+      const exRem = (data[ex.name] || []).filter(s => !s.done).length;
+      if (!exRem) continue;
+      const partner = plan.exercises.find(e => e.name === ex.supersetWith);
+      if (!partner || isExAbandoned(partner.name)) continue;
+      const pRem = (data[partner.name] || []).filter(s => !s.done).length;
+      if (!pRem) continue;
+      const restSec = Math.max(
+        getRestSeconds(ex.name, plan.type),
+        getRestSeconds(partner.name, plan.type)
+      );
+      const paired = Math.min(exRem, pRem);
+      const savedSec = Math.max(0, paired - 1) * restSec;
+      if (savedSec < 90) continue;
+      return { a: ex.name, b: partner.name, savedMin: Math.round(savedSec / 60) };
+    }
+    return null;
+  })();
+
   const [editingSet, setEditingSet] = useState(null);
   const [editW, setEditW] = useState("");
   const [editR, setEditR] = useState("");
@@ -3857,6 +3909,16 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, sa
               setRestLeft(0); setPhase("ready"); restStartedAtRef.current = 0;
               onSaveSession({ data, activeEx, activeIdx, exerciseHolds, sessionStartedAt: sessionStartedAt.current, restStartedAt: null, restDuration: 0 });
             }}>Skip rest →</button>
+          </div>
+        )}
+
+        {/* ── SUPERSET HINT — surfaces when close-time is at risk and a T3 pair has work left ── */}
+        {supersetHint && phase !== "resting" && (
+          <div className="superset-hint">
+            <div className="superset-hint-k">Running tight · save ~{supersetHint.savedMin}m</div>
+            <div className="superset-hint-v">
+              Superset <strong>{supersetHint.a}</strong> with <strong>{supersetHint.b}</strong> — alternate sets instead of resting between. Same muscles recover while the partner works.
+            </div>
           </div>
         )}
 
@@ -5125,7 +5187,7 @@ function StatsTab({ stats, setStats, phase, theme, setTheme }) {
             </button>
           ))}
         </div>
-        <div className="app-version">PHUL Tracker · v6.2</div>
+        <div className="app-version">PHUL Tracker · v6.3</div>
       </div>
 
       <DataBackup />
