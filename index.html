@@ -694,14 +694,17 @@ button { cursor: pointer; }
 }
 .session-progress .done-n { color: var(--ink); font-weight: 700; }
 
+/* Default chip: accent-tinted edge + accent minutes, no background tint.
+   Color shifts ONLY when close-time is at risk (tight / over). Pace
+   (ahead/on pace/behind) is text-only — doesn't drive chip color. */
 .eta-chip {
   font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
   color: var(--ink);
-  background: color-mix(in oklab, var(--accent) 6%, var(--card));
-  border: 1px solid color-mix(in oklab, var(--accent) 28%, var(--line-2));
+  background: transparent;
+  border: 1px solid color-mix(in oklab, var(--accent) 40%, var(--line-2));
   padding: 4px 10px;
   border-radius: 999px;
   font-variant-numeric: tabular-nums;
@@ -716,48 +719,36 @@ button { cursor: pointer; }
   letter-spacing: 0.04em;
   font-variant-numeric: tabular-nums;
 }
-.eta-chip.ahead {
-  color: var(--ok);
-  border-color: color-mix(in oklab, var(--ok) 38%, transparent);
-  background: color-mix(in oklab, var(--ok) 10%, var(--card));
-}
-.eta-chip.ahead .eta-dur { color: var(--ok); }
-.eta-chip.behind {
-  color: var(--bad);
-  border-color: color-mix(in oklab, var(--bad) 38%, transparent);
-  background: color-mix(in oklab, var(--bad) 10%, var(--card));
-}
-.eta-chip.behind .eta-dur { color: var(--bad); }
-.eta-chip.on-pace {
-  color: var(--ink);
-  border-color: color-mix(in oklab, var(--accent) 28%, var(--line-2));
-}
-.eta-chip.on-pace .eta-dur { color: var(--accent); }
-.eta-chip.tight {
-  color: var(--warn);
-  border-color: color-mix(in oklab, var(--warn) 38%, transparent);
-  background: color-mix(in oklab, var(--warn) 10%, var(--card));
-}
-.eta-chip.over {
-  color: var(--bad);
-  border-color: color-mix(in oklab, var(--bad) 45%, transparent);
-  background: color-mix(in oklab, var(--bad) 12%, var(--card));
-  animation: eta-over-pulse 2.2s ease-in-out infinite;
-}
-@keyframes eta-over-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--bad) 30%, transparent); }
-  50%      { box-shadow: 0 0 0 4px color-mix(in oklab, var(--bad) 0%, transparent); }
-}
 .eta-chip .eta-pace {
   font-weight: 500;
   letter-spacing: 0.06em;
-  opacity: 0.8;
+  opacity: 0.7;
   text-transform: lowercase;
+  color: var(--ink-3);
 }
 .eta-chip .eta-warn {
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: lowercase;
+}
+/* Tight — within 15 min of gym close: amber */
+.eta-chip.tight {
+  color: var(--warn);
+  border-color: color-mix(in oklab, var(--warn) 45%, transparent);
+  background: color-mix(in oklab, var(--warn) 8%, transparent);
+}
+.eta-chip.tight .eta-dur { color: var(--warn); }
+/* Over — projected past gym close: red, subtle pulse */
+.eta-chip.over {
+  color: var(--bad);
+  border-color: color-mix(in oklab, var(--bad) 50%, transparent);
+  background: color-mix(in oklab, var(--bad) 10%, transparent);
+  animation: eta-over-pulse 2.2s ease-in-out infinite;
+}
+.eta-chip.over .eta-dur { color: var(--bad); }
+@keyframes eta-over-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--bad) 30%, transparent); }
+  50%      { box-shadow: 0 0 0 4px color-mix(in oklab, var(--bad) 0%, transparent); }
 }
 .session-ctl { display: flex; gap: 6px; }
 .session-ctl button {
@@ -3348,8 +3339,17 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, sa
     return null;
   };
 
-  // Session start timestamp — saved once, used for duration in history
-  const sessionStartedAt = useRef(savedSession?.sessionStartedAt || Date.now());
+  // Session start timestamp — saved once, used for duration in history.
+  // If the saved draft is stale (opened more than 3h after it started), we
+  // assume it's a resumed session from a previous gym trip and reset the
+  // start to now, otherwise `elapsed` would count all the intervening hours
+  // and wreck the ETA calculator.
+  const sessionStartedAt = useRef((() => {
+    const saved = savedSession?.sessionStartedAt;
+    if (!saved) return Date.now();
+    const elapsedHours = (Date.now() - saved) / 3600000;
+    return elapsedHours > 3 ? Date.now() : saved;
+  })());
 
   // Restore rest timer from timestamp if app was closed mid-rest
   const savedRestAt  = savedSession?.restStartedAt || null;
@@ -3793,7 +3793,7 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, sa
             <span className="done-n">{doneCount}</span>/{plan.exercises.length} exercises
           </span>
           {!allDone && etaMin > 0 && finishLabel && (
-            <span className={`eta-chip ${closeInfo.state || paceCls}`}>
+            <span className={`eta-chip ${closeInfo.state}`}>
               ~{finishLabel}
               <span className="eta-dur"> · {etaMin}m</span>
               {closeInfo.state ? (
