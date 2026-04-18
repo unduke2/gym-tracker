@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" width="180" height="180">
+  <!-- Background: rounded graphite square, matches Carbon theme bg -->
+  <rect width="180" height="180" rx="40" fill="#0e0e10"/>
+  <!-- Subtle ember glow behind barbell -->
+  <circle cx="90" cy="90" r="65" fill="url(#glow)" opacity="0.6"/>
+  <defs>
+    <radialGradient id="glow">
+      <stop offset="0" stop-color="#ff4b1f" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#ff4b1f" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <!-- Barbell glyph: end caps + inner plates + bar -->
+  <g fill="#ff4b1f">
+    <rect x="22"  y="70" width="14" height="40" rx="3"/>
+    <rect x="40"  y="78" width="11" height="24" rx="2.5"/>
+    <rect x="55"  y="86" width="70" height="8"  rx="2"/>
+    <rect x="129" y="78" width="11" height="24" rx="2.5"/>
+    <rect x="144" y="70" width="14" height="40" rx="3"/>
+  </g>
+</svg>

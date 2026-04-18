@@ -11,6 +11,8 @@
 <meta name="apple-mobile-web-app-title" content="PHUL Tracker"/>
 <meta name="theme-color" content="#0e0e10"/>
 <title>PHUL Tracker</title>
+<link rel="icon" type="image/svg+xml" href="icon.svg"/>
+<link rel="apple-touch-icon" href="icon.svg"/>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -2564,9 +2566,11 @@ input.text-in {
 </head>
 <body>
 <div id="root"></div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<!-- React + Babel served from same origin (Netlify) to avoid CDN-unreachable
+     failure modes at the gym. Matches versions previously loaded from cdnjs. -->
+<script src="vendor/react.min.js"></script>
+<script src="vendor/react-dom.min.js"></script>
+<script src="vendor/babel.min.js"></script>
 <script type="text/babel">
 const { useState, useEffect, useRef } = React;
 
@@ -5187,7 +5191,7 @@ function StatsTab({ stats, setStats, phase, theme, setTheme }) {
             </button>
           ))}
         </div>
-        <div className="app-version">PHUL Tracker · v6.3</div>
+        <div className="app-version">PHUL Tracker · v6.4</div>
       </div>
 
       <DataBackup />
