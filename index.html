@@ -724,11 +724,37 @@ button { cursor: pointer; }
   color: var(--ink-2);
   border-color: var(--line-2);
 }
+.eta-chip.tight {
+  color: var(--warn);
+  border-color: color-mix(in oklab, var(--warn) 38%, transparent);
+  background: color-mix(in oklab, var(--warn) 10%, var(--card));
+}
+.eta-chip.over {
+  color: var(--bad);
+  border-color: color-mix(in oklab, var(--bad) 45%, transparent);
+  background: color-mix(in oklab, var(--bad) 12%, var(--card));
+  animation: eta-over-pulse 2.2s ease-in-out infinite;
+}
+@keyframes eta-over-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--bad) 30%, transparent); }
+  50%      { box-shadow: 0 0 0 4px color-mix(in oklab, var(--bad) 0%, transparent); }
+}
 .eta-chip .eta-pace {
   font-weight: 500;
   letter-spacing: 0.06em;
   opacity: 0.8;
   text-transform: lowercase;
+}
+.eta-chip .eta-warn {
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: lowercase;
+}
+.eta-chip .eta-dur {
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
 }
 .session-ctl { display: flex; gap: 6px; }
 .session-ctl button {
@@ -2840,6 +2866,19 @@ const DAYS = ["Upper Power","Lower Power","Upper Hypertrophy","Lower Hypertrophy
 const BULK_KCAL = 2900, CUT_KCAL = 2200, PROTEIN_G = 155;
 const INIT_STATS = { weight: 74.1, height: 180, bodyFat: 14.3, bmr: 2200, date: "2026-03-23" };
 
+// Personal gym schedule — used to warn when the session ETA will overshoot
+// closing time. Keys: 0=Sun, 1=Mon ... 6=Sat. Hours are LOCAL (phone timezone).
+// Edit if the gym schedule changes.
+const GYM_HOURS = {
+  0: { open: 9,  close: 13 }, // Sunday
+  1: { open: 7,  close: 22 }, // Monday
+  2: { open: 7,  close: 22 }, // Tuesday
+  3: { open: 7,  close: 22 }, // Wednesday
+  4: { open: 7,  close: 22 }, // Thursday
+  5: { open: 7,  close: 22 }, // Friday
+  6: { open: 8,  close: 20 }, // Saturday
+};
+
 // ─── SHARED UI ────────────────────────────────────────────────────────────────
 const Pill = ({ color, children }) => (
   <span style={{ background: color+"20", color, border:`1px solid ${color}40`, borderRadius:20, padding:"2px 8px", fontSize:10, fontWeight:700, letterSpacing:1 }}>{children}</span>
@@ -3390,68 +3429,123 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, sa
   const abandonedList = plan.exercises.filter(ex => isExAbandoned(ex.name));
 
   // ─── SESSION ETA ──────────────────────────────────────────────────────
-  // Blend: static estimate (work + rest per remaining set + between-ex transitions)
-  // with observed pace (elapsed ÷ completed sets), confidence-weighted by how
-  // many sets you've already logged. Result in minutes.
+  // Goal: project when the session will finish (wall-clock HH:MM).
+  //
+  // Model:
+  //   baseline = historical avg min/set × remaining_sets
+  //              (fallback: hardcoded 2.5 min/set if no history)
+  //   observed = elapsed_min / completed_sets × remaining_sets (this session)
+  //   eta      = blend(observed, baseline) — observed fully trusted by set 6
+  //   finishAt = now + eta minutes
+  //
+  // Internal sanity clamp: eta is never allowed below the sum of required
+  // rests (getRestSeconds + getBetweenExerciseRest) for remaining work.
+  // That floor is deterministic; useful as a safety check against bad
+  // history, not shown in UI.
+
   const [nowTick, setNowTick] = useState(Date.now());
   useEffect(() => {
     const id = setInterval(() => setNowTick(Date.now()), 15000);
     return () => clearInterval(id);
   }, []);
-  const etaMin = (() => {
-    const elapsedMin = (nowTick - sessionStartedAt.current) / 60000;
-    let completedSetCount = 0;
-    let remainingSetCount = 0;
-    let staticSec = 0;
-    const remainingExs = plan.exercises.filter(ex => !isExAbandoned(ex.name));
-    remainingExs.forEach((ex, idx) => {
-      const sets = data[ex.name] || [];
-      const done = sets.filter(s => s.done).length;
-      const remaining = sets.length - done;
-      completedSetCount += done;
-      remainingSetCount += remaining;
-      if (remaining > 0) {
-        // Work time per set: heavier tier = longer time under tension + setup
-        const workSec = ex.tier === 1 ? 55 : ex.tier === 2 ? 40 : 30;
-        const restSec = getRestSeconds(ex.name, plan.type);
-        // `remaining` sets × work + `remaining - 1` between-set rests
-        staticSec += remaining * workSec + Math.max(0, remaining - 1) * restSec;
-        // Between-exercise transition rest (if another exercise follows)
-        const hasMoreAfter = remainingExs.slice(idx + 1).some(e => {
-          const s = data[e.name] || [];
-          return s.some(x => !x.done);
-        });
-        if (hasMoreAfter) staticSec += getBetweenExerciseRest(ex.name, plan.type);
+
+  const remainingSetCount = plan.exercises.reduce((t, ex) => {
+    if (isExAbandoned(ex.name)) return t;
+    return t + ((data[ex.name] || []).filter(s => !s.done).length);
+  }, 0);
+  const completedSetCount = plan.exercises.reduce(
+    (t, ex) => t + ((data[ex.name] || []).filter(s => s.done).length), 0);
+  const elapsedMin = (nowTick - sessionStartedAt.current) / 60000;
+
+  // Personal avg minutes per set — prefer same-day history, fall back to
+  // same-type, then null for cold start.
+  const historicalMinPerSet = (() => {
+    const calc = (sessions) => {
+      let mins = 0, sets = 0;
+      for (const s of sessions) {
+        const d = s.durationMins;
+        if (!d || d <= 0) continue;
+        const done = Object.values(s.exercises || {}).reduce(
+          (a, arr) => a + arr.filter(x => x.done).length, 0);
+        if (done < 3) continue;
+        mins += d;
+        sets += done;
       }
-    });
-    const staticMin = staticSec / 60;
-    if (completedSetCount < 2 || elapsedMin < 0.5) return Math.round(staticMin);
-    // Observed pace model
-    const obsMinPerSet = elapsedMin / completedSetCount;
-    const obsMin = remainingSetCount * obsMinPerSet;
-    // Confidence: fully trust observed pace at 6+ completed sets, blend before
-    const w = Math.min(1, completedSetCount / 6);
-    return Math.round(w * obsMin + (1 - w) * staticMin);
+      return sets >= 5 ? mins / sets : null;
+    };
+    const all = Object.values(workoutLogs);
+    return calc(all.filter(s => s.day === dayName))
+        || calc(all.filter(s => PHUL[s.day]?.type === plan.type))
+        || null;
   })();
-  // Pace vs static baseline — informs chip color. `pace` is observed vs
-  // static ratio: <1 = ahead, >1 = behind. Show the chip color only when
-  // we have enough signal (≥ 3 done sets).
+
+  // Rest floor — deterministic lower bound for the remaining work. Used
+  // internally to clamp; not shown.
+  const restFloorMin = (() => {
+    let sec = 0;
+    const rem = plan.exercises.filter(ex => !isExAbandoned(ex.name));
+    rem.forEach((ex, idx) => {
+      const sets = (data[ex.name] || []).filter(s => !s.done).length;
+      if (!sets) return;
+      sec += Math.max(0, sets - 1) * getRestSeconds(ex.name, plan.type);
+      const hasMoreAfter = rem.slice(idx + 1).some(e =>
+        (data[e.name] || []).some(x => !x.done));
+      if (hasMoreAfter) sec += getBetweenExerciseRest(ex.name, plan.type);
+    });
+    return sec / 60;
+  })();
+
+  const baselineMinPerSet = historicalMinPerSet ?? 2.5; // 2.5 min/set fallback
+  const baselineMin = remainingSetCount * baselineMinPerSet;
+
+  const etaMin = (() => {
+    if (!remainingSetCount) return 0;
+    if (completedSetCount < 2 || elapsedMin < 0.5) return Math.round(Math.max(restFloorMin, baselineMin));
+    const rawObs = elapsedMin / completedSetCount;
+    // Cap at 2.5× baseline — protects against pause/distraction inflating
+    // elapsed time (bathroom breaks, phone calls, waiting for machines).
+    // If you really are 2.5× slower than your norm, the ETA is still roughly
+    // right; the cap just prevents runaway inflation.
+    const cappedObs = Math.min(rawObs, 2.5 * baselineMinPerSet);
+    const obsMin = remainingSetCount * cappedObs;
+    const w = Math.min(1, completedSetCount / 6);
+    const blended = w * obsMin + (1 - w) * baselineMin;
+    return Math.round(Math.max(restFloorMin, blended));
+  })();
+
+  // Projected wall-clock finish time (HH:MM, 24h local)
+  const finishAt = remainingSetCount > 0
+    ? new Date(nowTick + etaMin * 60 * 1000)
+    : null;
+  const finishLabel = finishAt
+    ? `${String(finishAt.getHours()).padStart(2,"0")}:${String(finishAt.getMinutes()).padStart(2,"0")}`
+    : "";
+
+  // Pace indicator — observed vs baseline min/set
   const paceCls = (() => {
-    if (doneCount < 3) return "";
-    const elapsedMin = Math.max(0.1, (nowTick - sessionStartedAt.current) / 60000);
-    const completedSetCount = plan.exercises.reduce((t, ex) =>
-      t + ((data[ex.name] || []).filter(s => s.done).length), 0);
-    if (completedSetCount < 2) return "";
+    if (completedSetCount < 3 || elapsedMin < 1) return "";
     const obsMinPerSet = elapsedMin / completedSetCount;
-    // Static expectation per set ≈ workSec + restSec blended across tiers
-    const staticPerSet = plan.exercises.reduce((acc, ex) => {
-      const w = ex.tier === 1 ? 55 : ex.tier === 2 ? 40 : 30;
-      return acc + (w + getRestSeconds(ex.name, plan.type)) / plan.exercises.length;
-    }, 0) / 60;
-    const ratio = obsMinPerSet / staticPerSet;
+    const ratio = obsMinPerSet / baselineMinPerSet;
     if (ratio < 0.9) return "ahead";
     if (ratio > 1.15) return "behind";
     return "on-pace";
+  })();
+
+  // Gym close warning — if projected finish overshoots today's close time
+  // (or is within 15 min of it), flag the chip. Gym hours from GYM_HOURS
+  // constant use the device's local timezone automatically via Date.
+  const closeInfo = (() => {
+    if (!finishAt) return { state: "", label: "" };
+    const now = new Date(nowTick);
+    const dow = now.getDay();
+    const hours = GYM_HOURS[dow];
+    if (!hours) return { state: "", label: "" };
+    const closeAt = new Date(now);
+    closeAt.setHours(hours.close, 0, 0, 0);
+    const overshootMin = (finishAt - closeAt) / 60000;
+    if (overshootMin > 0) return { state: "over", label: "past close" };
+    if (overshootMin > -15) return { state: "tight", label: "tight" };
+    return { state: "", label: "" };
   })();
 
   const [editingSet, setEditingSet] = useState(null);
@@ -3681,10 +3775,15 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, sa
           <span className="session-progress">
             <span className="done-n">{doneCount}</span>/{plan.exercises.length} exercises
           </span>
-          {!allDone && etaMin > 0 && (
-            <span className={`eta-chip ${paceCls}`}>
-              ~{etaMin}m
-              {paceCls && <span className="eta-pace"> · {paceCls === "ahead" ? "ahead" : paceCls === "behind" ? "behind" : "on pace"}</span>}
+          {!allDone && etaMin > 0 && finishLabel && (
+            <span className={`eta-chip ${closeInfo.state || paceCls}`}>
+              ~{finishLabel}
+              <span className="eta-dur"> · {etaMin}m</span>
+              {closeInfo.state ? (
+                <span className="eta-warn"> · {closeInfo.label}</span>
+              ) : paceCls && (
+                <span className="eta-pace"> · {paceCls === "ahead" ? "ahead" : paceCls === "behind" ? "behind" : "on pace"}</span>
+              )}
             </span>
           )}
         </div>
@@ -5009,7 +5108,7 @@ function StatsTab({ stats, setStats, phase, theme, setTheme }) {
             </button>
           ))}
         </div>
-        <div className="app-version">PHUL Tracker · v6.1</div>
+        <div className="app-version">PHUL Tracker · v6.2</div>
       </div>
 
       <DataBackup />
