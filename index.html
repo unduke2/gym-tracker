@@ -693,6 +693,43 @@ button { cursor: pointer; }
   font-variant-numeric: tabular-nums;
 }
 .session-progress .done-n { color: var(--ink); font-weight: 700; }
+
+.eta-chip {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--ink-2);
+  background: var(--card);
+  border: 1px solid var(--line-2);
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.eta-chip.ahead {
+  color: var(--ok);
+  border-color: color-mix(in oklab, var(--ok) 38%, transparent);
+  background: color-mix(in oklab, var(--ok) 10%, var(--card));
+}
+.eta-chip.behind {
+  color: var(--bad);
+  border-color: color-mix(in oklab, var(--bad) 38%, transparent);
+  background: color-mix(in oklab, var(--bad) 10%, var(--card));
+}
+.eta-chip.on-pace {
+  color: var(--ink-2);
+  border-color: var(--line-2);
+}
+.eta-chip .eta-pace {
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  opacity: 0.8;
+  text-transform: lowercase;
+}
 .session-ctl { display: flex; gap: 6px; }
 .session-ctl button {
   background: transparent;
@@ -3352,6 +3389,71 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, sa
   const heldList    = plan.exercises.filter(ex => isExHeld(ex.name));
   const abandonedList = plan.exercises.filter(ex => isExAbandoned(ex.name));
 
+  // ─── SESSION ETA ──────────────────────────────────────────────────────
+  // Blend: static estimate (work + rest per remaining set + between-ex transitions)
+  // with observed pace (elapsed ÷ completed sets), confidence-weighted by how
+  // many sets you've already logged. Result in minutes.
+  const [nowTick, setNowTick] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowTick(Date.now()), 15000);
+    return () => clearInterval(id);
+  }, []);
+  const etaMin = (() => {
+    const elapsedMin = (nowTick - sessionStartedAt.current) / 60000;
+    let completedSetCount = 0;
+    let remainingSetCount = 0;
+    let staticSec = 0;
+    const remainingExs = plan.exercises.filter(ex => !isExAbandoned(ex.name));
+    remainingExs.forEach((ex, idx) => {
+      const sets = data[ex.name] || [];
+      const done = sets.filter(s => s.done).length;
+      const remaining = sets.length - done;
+      completedSetCount += done;
+      remainingSetCount += remaining;
+      if (remaining > 0) {
+        // Work time per set: heavier tier = longer time under tension + setup
+        const workSec = ex.tier === 1 ? 55 : ex.tier === 2 ? 40 : 30;
+        const restSec = getRestSeconds(ex.name, plan.type);
+        // `remaining` sets × work + `remaining - 1` between-set rests
+        staticSec += remaining * workSec + Math.max(0, remaining - 1) * restSec;
+        // Between-exercise transition rest (if another exercise follows)
+        const hasMoreAfter = remainingExs.slice(idx + 1).some(e => {
+          const s = data[e.name] || [];
+          return s.some(x => !x.done);
+        });
+        if (hasMoreAfter) staticSec += getBetweenExerciseRest(ex.name, plan.type);
+      }
+    });
+    const staticMin = staticSec / 60;
+    if (completedSetCount < 2 || elapsedMin < 0.5) return Math.round(staticMin);
+    // Observed pace model
+    const obsMinPerSet = elapsedMin / completedSetCount;
+    const obsMin = remainingSetCount * obsMinPerSet;
+    // Confidence: fully trust observed pace at 6+ completed sets, blend before
+    const w = Math.min(1, completedSetCount / 6);
+    return Math.round(w * obsMin + (1 - w) * staticMin);
+  })();
+  // Pace vs static baseline — informs chip color. `pace` is observed vs
+  // static ratio: <1 = ahead, >1 = behind. Show the chip color only when
+  // we have enough signal (≥ 3 done sets).
+  const paceCls = (() => {
+    if (doneCount < 3) return "";
+    const elapsedMin = Math.max(0.1, (nowTick - sessionStartedAt.current) / 60000);
+    const completedSetCount = plan.exercises.reduce((t, ex) =>
+      t + ((data[ex.name] || []).filter(s => s.done).length), 0);
+    if (completedSetCount < 2) return "";
+    const obsMinPerSet = elapsedMin / completedSetCount;
+    // Static expectation per set ≈ workSec + restSec blended across tiers
+    const staticPerSet = plan.exercises.reduce((acc, ex) => {
+      const w = ex.tier === 1 ? 55 : ex.tier === 2 ? 40 : 30;
+      return acc + (w + getRestSeconds(ex.name, plan.type)) / plan.exercises.length;
+    }, 0) / 60;
+    const ratio = obsMinPerSet / staticPerSet;
+    if (ratio < 0.9) return "ahead";
+    if (ratio > 1.15) return "behind";
+    return "on-pace";
+  })();
+
   const [editingSet, setEditingSet] = useState(null);
   const [editW, setEditW] = useState("");
   const [editR, setEditR] = useState("");
@@ -3579,9 +3681,12 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, sa
           <span className="session-progress">
             <span className="done-n">{doneCount}</span>/{plan.exercises.length} exercises
           </span>
-          <span className="session-progress" style={{color:"var(--ink-3)"}}>
-            {isExHeld(activeEx) ? "held" : phase === "resting" ? (restType==="exercise"?"between ex":"rest") : `set ${activeIdx+1}`}
-          </span>
+          {!allDone && etaMin > 0 && (
+            <span className={`eta-chip ${paceCls}`}>
+              ~{etaMin}m
+              {paceCls && <span className="eta-pace"> · {paceCls === "ahead" ? "ahead" : paceCls === "behind" ? "behind" : "on pace"}</span>}
+            </span>
+          )}
         </div>
         <div className="session-progress-bar">
           <i style={{width:`${(doneCount/plan.exercises.length)*100}%`, background: planAccentVar}}/>
@@ -4904,7 +5009,7 @@ function StatsTab({ stats, setStats, phase, theme, setTheme }) {
             </button>
           ))}
         </div>
-        <div className="app-version">PHUL Tracker · v6.0</div>
+        <div className="app-version">PHUL Tracker · v6.1</div>
       </div>
 
       <DataBackup />
