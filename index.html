@@ -2927,12 +2927,19 @@ function App() {
   const [dietLogs, setDietLogs]     = useState(() => lsGet("phul_diet") || {});
   const [draftSession, setDraftSession] = useState(() => lsGet("phul_draft") || null);
   const [activeSession, setActiveSession] = useState(null);
+  // Custom sessions — imported via JSON in WorkoutTab. Shape matches
+  // SESSION_FORMAT.md schema. Stored as an array; addressable by .id.
+  const [customSessions, setCustomSessions] = useState(() => lsGet("phul_custom_sessions") || []);
 
   useEffect(() => { lsSet("phul_phase", phase); }, [phase]);
   useEffect(() => { lsSet("phul_theme", theme); }, [theme]);
   useEffect(() => { lsSet("phul_stats", stats); }, [stats]);
   useEffect(() => { lsSet("phul_logs", workoutLogs); }, [workoutLogs]);
   useEffect(() => { lsSet("phul_diet", dietLogs); }, [dietLogs]);
+  useEffect(() => { lsSet("phul_custom_sessions", customSessions); }, [customSessions]);
+
+  // Plan lookup — checks PHUL first, then custom sessions by id
+  const resolvePlan = (key) => PHUL[key] || customSessions.find(s => s.id === key) || null;
 
   // Keep iOS status-bar / browser chrome color in sync with theme bg
   useEffect(() => {
@@ -2954,27 +2961,46 @@ function App() {
 
   const clearDraft = () => { setDraftSession(null); lsSet("phul_draft", null); };
 
-  if (activeSession) return (
-    <SessionLogger
-      dayName={activeSession}
-      workoutLogs={workoutLogs}
-      savedSession={draftSession?.dayName === activeSession ? draftSession : null}
-      onSaveSession={saveDraft}
-      onFinish={(data, sessionStartedAt, abandoned) => {
-        const key = today + "_" + activeSession.replace(/ /g,"_") + "_" + Date.now();
-        const durationMins = Math.round((Date.now() - (sessionStartedAt || Date.now())) / 60000);
-        setWorkoutLogs(prev => ({ ...prev, [key]: { day:activeSession, exercises:data, date:today, ts:Date.now(), durationMins, abandoned: abandoned || [] } }));
-        clearDraft();
-        setActiveSession(null);
-        setTab("workout");
-      }}
-      onDiscard={() => {
-        clearDraft();
-        setActiveSession(null);
-      }}
-      onCancel={() => setActiveSession(null)}
-    />
-  );
+  if (activeSession) {
+    const activePlan = resolvePlan(activeSession);
+    if (!activePlan) {
+      // Defensive: custom session was deleted while active — bail cleanly
+      setActiveSession(null);
+      return null;
+    }
+    return (
+      <SessionLogger
+        dayName={activeSession}
+        plan={activePlan}
+        workoutLogs={workoutLogs}
+        savedSession={draftSession?.dayName === activeSession ? draftSession : null}
+        onSaveSession={saveDraft}
+        onFinish={(data, sessionStartedAt, abandoned) => {
+          const key = today + "_" + activeSession.replace(/ /g,"_") + "_" + Date.now();
+          const durationMins = Math.round((Date.now() - (sessionStartedAt || Date.now())) / 60000);
+          setWorkoutLogs(prev => ({ ...prev, [key]: {
+            day: activeSession,
+            dayLabel: activePlan.name || activeSession,
+            isCustom: !PHUL[activeSession],
+            type: activePlan.type,
+            exercises: data,
+            date: today,
+            ts: Date.now(),
+            durationMins,
+            abandoned: abandoned || []
+          }}));
+          clearDraft();
+          setActiveSession(null);
+          setTab("workout");
+        }}
+        onDiscard={() => {
+          clearDraft();
+          setActiveSession(null);
+        }}
+        onCancel={() => setActiveSession(null)}
+      />
+    );
+  }
 
   const tabs = [
     { id:"dash",    label:"Home",  icon:(
@@ -3024,7 +3050,7 @@ function App() {
 
       <main className="app-main">
         {tab==="dash"    && <Dashboard latest={latest} phase={phase} kcalTarget={kcalTarget} todayDiet={todayDiet} workoutLogs={workoutLogs} setTab={setTab} setActiveSession={setActiveSession} draftSession={draftSession} />}
-        {tab==="workout" && <WorkoutTab workoutLogs={workoutLogs} setWorkoutLogs={setWorkoutLogs} setActiveSession={setActiveSession} draftSession={draftSession} />}
+        {tab==="workout" && <WorkoutTab workoutLogs={workoutLogs} setWorkoutLogs={setWorkoutLogs} setActiveSession={setActiveSession} draftSession={draftSession} customSessions={customSessions} setCustomSessions={setCustomSessions} />}
         {tab==="diet"    && <DietTab today={today} todayDiet={todayDiet} kcalTarget={kcalTarget} dietLogs={dietLogs} setDietLogs={setDietLogs} phase={phase} stats={stats} />}
         {tab==="stats"   && <StatsTab stats={stats} setStats={setStats} phase={phase} theme={theme} setTheme={setTheme} />}
       </main>
@@ -3072,7 +3098,9 @@ function mesocycleDelta(workoutLogs, dayType) {
 }
 function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, setActiveSession, draftSession }) {
   const recent = Object.values(workoutLogs).sort((a,b) => b.ts-a.ts);
-  const lastDay = recent[0]?.day;
+  // Pick the most recent PHUL session to determine next day in rotation —
+  // custom sessions don't advance the PHUL cycle.
+  const lastDay = recent.find(s => PHUL[s.day])?.day;
   const nextIdx = lastDay ? (DAYS.indexOf(lastDay)+1)%DAYS.length : 0;
   const nextDay = DAYS[nextIdx];
   const nextPlan = PHUL[nextDay];
@@ -3302,11 +3330,15 @@ function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, 
           </div>
           {recent.slice(0,3).map((s,i) => {
             const p = PHUL[s.day];
+            const t = s.type || p?.type;
+            const pillCls = t === "power" ? "power" : t === "hypertrophy" ? "hyper" : "";
+            const pillLabel = t === "power" ? "PWR" : t === "hypertrophy" ? "HYP" : "CUS";
+            const displayName = s.dayLabel || p?.name || s.day;
             return (
               <div key={i} style={{display:"flex", justifyContent:"space-between", padding:"10px 0", borderTop: i>0?"1px solid var(--line)":"none"}}>
                 <div style={{fontSize:13, fontWeight:600}}>
-                  <span className={`pill ${p?.type==="power"?"power":"hyper"}`} style={{marginRight:10}}>{p?.type==="power"?"PWR":"HYP"}</span>
-                  {s.day}
+                  <span className={`pill ${pillCls}`} style={{marginRight:10}}>{pillLabel}</span>
+                  {displayName}
                 </div>
                 <div style={{fontFamily:"var(--font-mono)", fontSize:11, color:"var(--ink-3)", letterSpacing:"0.04em"}}>{s.date}</div>
               </div>
@@ -3319,8 +3351,15 @@ function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, 
 }
 
 // ─── SESSION LOGGER ───────────────────────────────────────────────────────────
-function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, savedSession, onSaveSession }) {
-  const plan = PHUL[dayName];
+function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCancel, onDiscard, savedSession, onSaveSession }) {
+  // plan may be passed directly (handles custom sessions) or looked up from PHUL
+  const plan = planProp || PHUL[dayName];
+  // Rest-time resolvers — check per-exercise override first (custom sessions
+  // can specify `rest: { set, betweenEx }`), fall back to the global helpers.
+  const resolveSetRest = (ex, dayType) =>
+    (typeof ex?.rest?.set === "number") ? ex.rest.set : getRestSeconds(ex.name, dayType);
+  const resolveBetweenExRest = (ex, dayType) =>
+    (typeof ex?.rest?.betweenEx === "number") ? ex.rest.betweenEx : getBetweenExerciseRest(ex.name, dayType);
   const [data, setData] = useState(() => {
     if (savedSession?.data) return savedSession.data;
     const init = {};
@@ -3457,7 +3496,7 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, sa
   const curIdx    = plan.exercises.findIndex(e => e.name===activeEx);
   const curEx     = plan.exercises[curIdx];
   const sug       = curEx ? calcNextWeight(curEx, workoutLogs) : null;
-  const restTime  = curEx ? getRestSeconds(activeEx, plan.type) : 60;
+  const restTime  = curEx ? resolveSetRest(curEx, plan.type) : 60;
   // "Resolved" = done OR abandoned. Held exercises still block finishing.
   const allResolved = plan.exercises.every(ex => isExDone(ex.name) || isExAbandoned(ex.name));
   const allDone     = allResolved;
@@ -3524,10 +3563,10 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, sa
     rem.forEach((ex, idx) => {
       const sets = (data[ex.name] || []).filter(s => !s.done).length;
       if (!sets) return;
-      sec += Math.max(0, sets - 1) * getRestSeconds(ex.name, plan.type);
+      sec += Math.max(0, sets - 1) * resolveSetRest(ex, plan.type);
       const hasMoreAfter = rem.slice(idx + 1).some(e =>
         (data[e.name] || []).some(x => !x.done));
-      if (hasMoreAfter) sec += getBetweenExerciseRest(ex.name, plan.type);
+      if (hasMoreAfter) sec += resolveBetweenExRest(ex, plan.type);
     });
     return sec / 60;
   })();
@@ -3603,8 +3642,8 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, sa
       const pRem = (data[partner.name] || []).filter(s => !s.done).length;
       if (!pRem) continue;
       const restSec = Math.max(
-        getRestSeconds(ex.name, plan.type),
-        getRestSeconds(partner.name, plan.type)
+        resolveSetRest(ex, plan.type),
+        resolveSetRest(partner, plan.type)
       );
       const paired = Math.min(exRem, pRem);
       const savedSec = Math.max(0, paired - 1) * restSec;
@@ -3695,9 +3734,12 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, sa
       setRestLeft(0);
       onSaveSession({ data: newData, activeEx: newActiveEx, activeIdx: newActiveIdx, exerciseHolds, sessionStartedAt: sessionStartedAt.current, restStartedAt: null, restDuration: 0 });
     } else {
+      // activeEx here is the exercise that just finished its last set.
+      // Use its rest overrides if it's a custom session, else defaults.
+      const prevEx = plan.exercises.find(e => e.name === activeEx);
       const rt = changingExercise
-        ? getBetweenExerciseRest(activeEx, plan.type)
-        : getRestSeconds(activeEx, plan.type);
+        ? resolveBetweenExRest(prevEx, plan.type)
+        : resolveSetRest(prevEx, plan.type);
       setRestType(changingExercise ? "exercise" : "set");
       setRestDuration(rt);
       setPhase("resting");
@@ -4241,15 +4283,94 @@ function SessionLogger({ dayName, workoutLogs, onFinish, onCancel, onDiscard, sa
 }
 
 // ─── WORKOUT TAB ──────────────────────────────────────────────────────────────
-function WorkoutTab({ workoutLogs, setWorkoutLogs, setActiveSession, draftSession }) {
+// Validate an imported custom-session JSON object. Returns [normalizedSession, null]
+// on success, or [null, errorMessage] on failure.
+function validateCustomSession(obj, existingIds) {
+  if (!obj || typeof obj !== "object") return [null, "Not a valid JSON object."];
+  if (obj.schemaVersion !== 1) return [null, "Unsupported schemaVersion (expected 1)."];
+  if (!obj.id || typeof obj.id !== "string") return [null, "Missing or invalid `id`."];
+  if (!obj.name || typeof obj.name !== "string") return [null, "Missing or invalid `name`."];
+  if (!["power","hypertrophy","custom"].includes(obj.type)) return [null, '`type` must be "power", "hypertrophy", or "custom".'];
+  if (!Array.isArray(obj.exercises) || obj.exercises.length === 0) return [null, "`exercises` must be a non-empty array."];
+  if (existingIds && existingIds.includes(obj.id)) return [null, `A session with id "${obj.id}" already exists. Change the id or delete the old one first.`];
+
+  const normalized = {
+    schemaVersion: 1,
+    id: obj.id,
+    name: obj.name,
+    description: obj.description || "",
+    type: obj.type,
+    icon: obj.icon || (obj.type === "power" ? "⚡" : obj.type === "hypertrophy" ? "◆" : "●"),
+    createdAt: obj.createdAt || Date.now(),
+    exercises: [],
+  };
+
+  for (let i = 0; i < obj.exercises.length; i++) {
+    const ex = obj.exercises[i];
+    if (!ex.name || typeof ex.name !== "string") return [null, `Exercise #${i+1}: missing name.`];
+    if (!Number.isInteger(ex.tier) || ex.tier < 1 || ex.tier > 3) return [null, `"${ex.name}": tier must be 1, 2, or 3.`];
+    if (!Number.isInteger(ex.sets) || ex.sets < 1) return [null, `"${ex.name}": sets must be a positive integer.`];
+    if (typeof ex.repRange !== "string" || !/^\d+-\d+$/.test(ex.repRange)) return [null, `"${ex.name}": repRange must be a string like "8-12".`];
+    if (typeof ex.startWeight !== "number" || ex.startWeight < 0) return [null, `"${ex.name}": startWeight must be a non-negative number.`];
+
+    const norm = {
+      name: ex.name,
+      day: obj.id, // normalize: each exercise references the custom session's id
+      tier: ex.tier,
+      sets: ex.sets,
+      repRange: ex.repRange,
+      startWeight: ex.startWeight,
+      note: ex.note || "",
+    };
+    if (ex.barbell === true) {
+      norm.barbell = true;
+      if (typeof ex.barWeight !== "number" || ex.barWeight <= 0) return [null, `"${ex.name}": barWeight is required when barbell is true.`];
+      norm.barWeight = ex.barWeight;
+    }
+    if (typeof ex.supersetWith === "string") norm.supersetWith = ex.supersetWith;
+    if (ex.rest && typeof ex.rest === "object") {
+      const rest = {};
+      if (typeof ex.rest.set === "number" && ex.rest.set >= 0) rest.set = ex.rest.set;
+      if (typeof ex.rest.betweenEx === "number" && ex.rest.betweenEx >= 0) rest.betweenEx = ex.rest.betweenEx;
+      if (Object.keys(rest).length) norm.rest = rest;
+    }
+    normalized.exercises.push(norm);
+  }
+  return [normalized, null];
+}
+
+function WorkoutTab({ workoutLogs, setWorkoutLogs, setActiveSession, draftSession, customSessions, setCustomSessions }) {
   const [view, setView] = useState("plan");
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [confirmDelCustom, setConfirmDelCustom] = useState(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [importError, setImportError] = useState("");
+  const [importSaved, setImportSaved] = useState(false);
   const history = Object.entries(workoutLogs).sort((a,b) => b[1].ts-a[1].ts);
 
   const deleteSession = (key) => {
     setWorkoutLogs(prev => { const n = {...prev}; delete n[key]; return n; });
     setConfirmDelete(null);
   };
+  const deleteCustomSession = (id) => {
+    setCustomSessions(prev => prev.filter(s => s.id !== id));
+    setConfirmDelCustom(null);
+  };
+  const handleImport = () => {
+    setImportError("");
+    let parsed;
+    try { parsed = JSON.parse(importText); }
+    catch (e) { setImportError("Invalid JSON — check for syntax errors."); return; }
+    const existingIds = customSessions.map(s => s.id);
+    const [norm, err] = validateCustomSession(parsed, existingIds);
+    if (err) { setImportError(err); return; }
+    setCustomSessions(prev => [...prev, norm]);
+    setImportText("");
+    setImportSaved(true);
+    setTimeout(() => { setImportOpen(false); setImportSaved(false); }, 900);
+  };
+
   return (
     <>
       {draftSession?.dayName && (
@@ -4297,6 +4418,54 @@ function WorkoutTab({ workoutLogs, setWorkoutLogs, setActiveSession, draftSessio
               </div>
             );
           })}
+
+          <div className="eyebrow" style={{padding:"20px 2px 0", display:"flex", justifyContent:"space-between", alignItems:"baseline"}}>
+            <span>Custom sessions</span>
+            <button className="more" onClick={() => { setImportOpen(true); setImportError(""); }} style={{textTransform:"none", letterSpacing:"0.12em"}}>+ Import</button>
+          </div>
+          {customSessions.length === 0 && (
+            <div style={{color:"var(--ink-4)", fontSize:12, fontStyle:"italic", padding:"2px 2px 4px", lineHeight:1.55}}>
+              One-off sessions — makeup days, recovery, running. Generate a JSON using SESSION_FORMAT.md and import it here.
+            </div>
+          )}
+          {customSessions.map(s => {
+            const typeCls = s.type === "power" ? "power" : s.type === "hypertrophy" ? "hyper" : "";
+            return (
+              <div key={s.id} className={`day-card ${typeCls}`}>
+                <div className="day-card-head">
+                  <div className="day-card-head-l">
+                    <span className={`eyebrow ${typeCls?`eyebrow-${typeCls}`:""}`} style={!typeCls?{color:"var(--ink-3)"}:{}}>
+                      Custom · {s.type}
+                    </span>
+                    <div className="day-card-name">{s.icon} {s.name}</div>
+                    {s.description && <div style={{fontFamily:"var(--font-mono)", fontSize:10, color:"var(--ink-3)", marginTop:4, letterSpacing:"0.04em"}}>{s.description}</div>}
+                  </div>
+                  <div style={{display:"flex", gap:6, flexDirection:"column", alignItems:"flex-end"}}>
+                    <button className="day-card-start" onClick={() => setActiveSession(s.id)}>Start</button>
+                    {confirmDelCustom === s.id ? (
+                      <div className="del-confirm">
+                        <button onClick={() => setConfirmDelCustom(null)}>cancel</button>
+                        <button className="danger" onClick={() => deleteCustomSession(s.id)}>delete</button>
+                      </div>
+                    ) : (
+                      <button className="del-btn" onClick={() => setConfirmDelCustom(s.id)}>⌫</button>
+                    )}
+                  </div>
+                </div>
+                <div className="day-card-ex-list">
+                  {s.exercises.map(ex => (
+                    <div key={ex.name} className="day-ex-row">
+                      <div className="ex-left">
+                        {ex.name}
+                        {ex.barbell && <span className="bar-tag">＋bar</span>}
+                      </div>
+                      <div className="ex-right">{ex.sets}×{ex.repRange}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </>
       )}
 
@@ -4306,13 +4475,17 @@ function WorkoutTab({ workoutLogs, setWorkoutLogs, setActiveSession, draftSessio
           {history.length===0 && <div style={{color:"var(--ink-3)", fontSize:13, padding:"6px 2px"}}>No sessions logged yet.</div>}
           {history.map(([key,log]) => {
             const p = PHUL[log.day];
-            const typeCls = p?.type === "power" ? "power" : "hyper";
+            const typeCls = (log.type || p?.type) === "power" ? "power" : (log.type || p?.type) === "hypertrophy" ? "hyper" : "";
             const filled = Object.entries(log.exercises||{}).filter(([,sets]) => sets.some(s => s.weight||s.reps));
+            const displayName = log.dayLabel || p?.name || log.day;
             return (
               <div key={key} className={`hist-card ${typeCls}`}>
                 <div className="hist-card-head">
                   <div>
-                    <div className="hist-card-day">{log.day}</div>
+                    <div className="hist-card-day">
+                      {displayName}
+                      {log.isCustom && <span className="pill" style={{marginLeft:8, fontSize:9}}>custom</span>}
+                    </div>
                     <div className="hist-card-date">{log.date}{log.durationMins > 0 ? ` · ${log.durationMins} min` : ""}</div>
                   </div>
                   {confirmDelete === key ? (
@@ -4333,6 +4506,41 @@ function WorkoutTab({ workoutLogs, setWorkoutLogs, setActiveSession, draftSessio
             );
           })}
         </>
+      )}
+
+      {/* Import session modal */}
+      {importOpen && (
+        <div className="modal-bg" onClick={() => setImportOpen(false)}>
+          <div className="modal-sheet" onClick={e => e.stopPropagation()}>
+            <div className="modal-k">Import custom session</div>
+            <div style={{fontSize:12, color:"var(--ink-3)", lineHeight:1.55, marginBottom:12}}>
+              Paste JSON matching <code style={{color:"var(--accent)", fontFamily:"var(--font-mono)"}}>SESSION_FORMAT.md</code>. Ask a Claude session to generate one for a specific goal (makeup, recovery, running, etc.).
+            </div>
+            <textarea
+              value={importText}
+              onChange={e => { setImportText(e.target.value); setImportError(""); }}
+              placeholder='{ "schemaVersion": 1, "id": "...", "name": "...", ... }'
+              spellCheck={false}
+              style={{
+                width:"100%", minHeight:180, resize:"vertical",
+                background:"var(--card-2)", border:"1px solid var(--line-2)", borderRadius:10,
+                padding:12, color:"var(--ink)", fontFamily:"var(--font-mono)", fontSize:12,
+                letterSpacing:"0.02em", lineHeight:1.5,
+              }}
+            />
+            {importError && (
+              <div style={{marginTop:10, padding:"10px 12px", background:"color-mix(in oklab, var(--bad) 10%, transparent)", border:"1px solid color-mix(in oklab, var(--bad) 35%, transparent)", borderRadius:8, fontSize:12, color:"var(--bad)", lineHeight:1.5}}>
+                {importError}
+              </div>
+            )}
+            <div className="btn-row" style={{marginTop:14}}>
+              <button className="btn ghost" onClick={() => { setImportOpen(false); setImportText(""); setImportError(""); }}>Cancel</button>
+              <button className={`btn ${importSaved?"ok":"accent"}`} onClick={handleImport} disabled={!importText.trim()}>
+                {importSaved ? "Imported ✓" : "Import"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
@@ -5191,7 +5399,7 @@ function StatsTab({ stats, setStats, phase, theme, setTheme }) {
             </button>
           ))}
         </div>
-        <div className="app-version">PHUL Tracker · v6.4</div>
+        <div className="app-version">PHUL Tracker · v6.5</div>
       </div>
 
       <DataBackup />
@@ -5202,7 +5410,7 @@ function StatsTab({ stats, setStats, phase, theme, setTheme }) {
 // ─── DATA BACKUP ─────────────────────────────────────────────────────────────
 function DataBackup() {
   const [status, setStatus] = useState("");
-  const keys = ["phul_phase","phul_stats","phul_logs","phul_diet","phul_draft"];
+  const keys = ["phul_phase","phul_stats","phul_logs","phul_diet","phul_draft","phul_meals","phul_custom_sessions","phul_theme"];
 
   const exportData = () => {
     const data = {};

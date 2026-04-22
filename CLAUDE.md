@@ -20,8 +20,13 @@ All reads/writes go through `lsGet`/`lsSet` (top of the script). Keys used:
 - `phul_diet` — map of daily nutrition entries keyed by ISO date
 - `phul_draft` — the single in-progress session (auto-saved; enables resume after reload/screen-off)
 - `phul_meals` — user's meal database (overrides `DEFAULT_MEALS`)
+- `phul_custom_sessions` — array of imported custom session plans (see `SESSION_FORMAT.md`)
+- `phul_theme` — "carbon" | "blueprint"
 
 The `DataBackup` component exports/imports these keys as JSON — this is the migration path between app versions, so preserve key names when changing shapes.
+
+### Custom sessions (imported via `SESSION_FORMAT.md`)
+Beyond the fixed PHUL 4-day split, users can import one-off session plans as JSON — makeup days, recovery, running, accessory-only days. See `SESSION_FORMAT.md` at the repo root for the schema + example + a prompt template for asking Claude to generate one. `App.resolvePlan(key)` looks up PHUL first, then custom sessions by id. Custom session exercises can override rest times via `ex.rest.set` / `ex.rest.betweenEx`, which `SessionLogger` reads through `resolveSetRest` / `resolveBetweenExRest` wrappers instead of calling `getRestSeconds` directly. Custom session logs carry `isCustom: true`, `dayLabel: <name>`, and `type: <power|hypertrophy|custom>` so history + dashboard can render them gracefully.
 
 ### Top-level structure (all in `index.html`)
 - **`App`** — root component. Owns all persistent state and the `activeSession` / `tab` routing. When `activeSession` is set, it renders `SessionLogger` full-screen instead of the tab layout.
