@@ -522,6 +522,58 @@ button { cursor: pointer; }
 .start-btn:hover .arrow { transform: translateX(3px); }
 .start-btn:active { transform: scale(0.99); }
 
+/* Catch-up card — pending makeups from abandoned exercises */
+.catchup-card {
+  background: color-mix(in oklab, var(--accent-hold) 7%, var(--card));
+  border: 1px solid color-mix(in oklab, var(--accent-hold) 32%, var(--line));
+  border-radius: var(--r-lg);
+  padding: 16px 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.catchup-card .section-head { margin-bottom: 4px; }
+.catchup-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  text-align: left;
+  width: 100%;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent-hold);
+  border-radius: 10px;
+  padding: 11px 14px;
+  color: var(--ink);
+  font-family: var(--font);
+}
+.catchup-group.power { border-left-color: var(--accent-power); }
+.catchup-group.hyper { border-left-color: var(--accent-hyper); }
+.catchup-group:active { transform: scale(0.995); }
+.catchup-group-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+.catchup-group-head .cg-day {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.catchup-group-head .cg-meta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+  font-weight: 600;
+}
+.catchup-ex-list {
+  font-size: 12px;
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+
 /* Unfinished session banner */
 .draft-banner {
   background: color-mix(in oklab, var(--accent-hold) 12%, var(--card));
@@ -2927,6 +2979,10 @@ function App() {
   const [dietLogs, setDietLogs]     = useState(() => lsGet("phul_diet") || {});
   const [draftSession, setDraftSession] = useState(() => lsGet("phul_draft") || null);
   const [activeSession, setActiveSession] = useState(null);
+  // When set, SessionLogger runs a filtered slice of the day's plan — used
+  // for "catch up" standalone makeup sessions. Array of exercise names to
+  // include; null means full plan.
+  const [activeSessionFilter, setActiveSessionFilter] = useState(null);
   // Custom sessions — imported via JSON in WorkoutTab. Shape matches
   // SESSION_FORMAT.md schema. Stored as an array; addressable by .id.
   const [customSessions, setCustomSessions] = useState(() => lsGet("phul_custom_sessions") || []);
@@ -2961,11 +3017,41 @@ function App() {
 
   const clearDraft = () => { setDraftSession(null); lsSet("phul_draft", null); };
 
+  // Derived: pending catch-up groups (for dashboard banner + makeup starter)
+  const pendingMakeups = computePendingMakeups(workoutLogs);
+
+  // Start a standalone makeup session — filters the target day's plan down
+  // to just the missed exercises. Blocks if a draft for the same day is in
+  // progress (would conflict semantically — finish or discard that first).
+  const startMakeup = (dayType, exNames) => {
+    if (draftSession?.dayName === dayType) {
+      alert(`You have a draft "${dayType}" session in progress. Finish or discard it before catching up.`);
+      return;
+    }
+    setActiveSessionFilter(exNames);
+    setActiveSession(dayType);
+  };
+
   if (activeSession) {
-    const activePlan = resolvePlan(activeSession);
-    if (!activePlan) {
+    const rawPlan = resolvePlan(activeSession);
+    if (!rawPlan) {
       // Defensive: custom session was deleted while active — bail cleanly
       setActiveSession(null);
+      setActiveSessionFilter(null);
+      return null;
+    }
+    // Apply makeup filter if active
+    const activePlan = activeSessionFilter
+      ? {
+          ...rawPlan,
+          name: `${rawPlan.name || activeSession} · Makeup`,
+          exercises: rawPlan.exercises.filter(ex => activeSessionFilter.includes(ex.name)),
+        }
+      : rawPlan;
+    // Guard: filter excluded everything (e.g. makeup exNames don't exist anymore)
+    if (!activePlan.exercises.length) {
+      setActiveSession(null);
+      setActiveSessionFilter(null);
       return null;
     }
     return (
@@ -2973,8 +3059,8 @@ function App() {
         dayName={activeSession}
         plan={activePlan}
         workoutLogs={workoutLogs}
-        savedSession={draftSession?.dayName === activeSession ? draftSession : null}
-        onSaveSession={saveDraft}
+        savedSession={draftSession?.dayName === activeSession && !activeSessionFilter ? draftSession : null}
+        onSaveSession={activeSessionFilter ? () => {} : saveDraft}
         onFinish={(data, sessionStartedAt, abandoned) => {
           const key = today + "_" + activeSession.replace(/ /g,"_") + "_" + Date.now();
           const durationMins = Math.round((Date.now() - (sessionStartedAt || Date.now())) / 60000);
@@ -2982,22 +3068,29 @@ function App() {
             day: activeSession,
             dayLabel: activePlan.name || activeSession,
             isCustom: !PHUL[activeSession],
-            type: activePlan.type,
+            isMakeup: !!activeSessionFilter,
+            makeupFrom: activeSessionFilter || null,
+            type: rawPlan.type,
             exercises: data,
             date: today,
             ts: Date.now(),
             durationMins,
             abandoned: abandoned || []
           }}));
-          clearDraft();
+          if (!activeSessionFilter) clearDraft();
           setActiveSession(null);
+          setActiveSessionFilter(null);
           setTab("workout");
         }}
         onDiscard={() => {
-          clearDraft();
+          if (!activeSessionFilter) clearDraft();
           setActiveSession(null);
+          setActiveSessionFilter(null);
         }}
-        onCancel={() => setActiveSession(null)}
+        onCancel={() => {
+          setActiveSession(null);
+          setActiveSessionFilter(null);
+        }}
       />
     );
   }
@@ -3049,7 +3142,7 @@ function App() {
       </header>
 
       <main className="app-main">
-        {tab==="dash"    && <Dashboard latest={latest} phase={phase} kcalTarget={kcalTarget} todayDiet={todayDiet} workoutLogs={workoutLogs} setTab={setTab} setActiveSession={setActiveSession} draftSession={draftSession} />}
+        {tab==="dash"    && <Dashboard latest={latest} phase={phase} kcalTarget={kcalTarget} todayDiet={todayDiet} workoutLogs={workoutLogs} setTab={setTab} setActiveSession={setActiveSession} draftSession={draftSession} pendingMakeups={pendingMakeups} startMakeup={startMakeup} />}
         {tab==="workout" && <WorkoutTab workoutLogs={workoutLogs} setWorkoutLogs={setWorkoutLogs} setActiveSession={setActiveSession} draftSession={draftSession} customSessions={customSessions} setCustomSessions={setCustomSessions} />}
         {tab==="diet"    && <DietTab today={today} todayDiet={todayDiet} kcalTarget={kcalTarget} dietLogs={dietLogs} setDietLogs={setDietLogs} phase={phase} stats={stats} />}
         {tab==="stats"   && <StatsTab stats={stats} setStats={setStats} phase={phase} theme={theme} setTheme={setTheme} />}
@@ -3082,6 +3175,59 @@ function sessionVolume(log) {
   }
   return t;
 }
+// Pending makeups — derived from logs each render, no new state. For each
+// PHUL session's `abandoned` list, the exercise stays "pending" until any
+// subsequent same-day-type session records a completed set of it. Ignored if
+// older than `windowDays` (default 14). Returns array grouped by dayType.
+function computePendingMakeups(workoutLogs, windowDays = 14) {
+  const cutoff = Date.now() - windowDays * 86400000;
+  const allLogs = Object.entries(workoutLogs)
+    .filter(([, log]) => PHUL[log.day])
+    .sort((a, b) => a[1].ts - b[1].ts);
+
+  const pendingByDay = {}; // dayType → [{ exName, sourceLogKey, sourceDate, abandonedAt }]
+
+  for (const [key, log] of allLogs) {
+    const dayType = log.day;
+    pendingByDay[dayType] = pendingByDay[dayType] || [];
+
+    // Resolve: any exercise this session completed gets removed from pending
+    if (log.exercises) {
+      pendingByDay[dayType] = pendingByDay[dayType].filter(p => {
+        const doneCount = log.exercises[p.exName]?.filter(s => s.done).length || 0;
+        return doneCount === 0;
+      });
+    }
+
+    // Add new pending from this session's abandoned list
+    if (log.abandoned?.length) {
+      for (const exName of log.abandoned) {
+        if (pendingByDay[dayType].some(p => p.exName === exName)) continue;
+        pendingByDay[dayType].push({
+          exName,
+          sourceLogKey: key,
+          sourceDate: log.date,
+          abandonedAt: log.ts,
+        });
+      }
+    }
+  }
+
+  // Flatten + apply time window
+  const groups = [];
+  for (const [dayType, items] of Object.entries(pendingByDay)) {
+    const fresh = items.filter(i => i.abandonedAt >= cutoff);
+    if (fresh.length) groups.push({ dayType, items: fresh });
+  }
+  // Sort groups by most recent abandonedAt
+  groups.sort((a, b) => {
+    const aMax = Math.max(...a.items.map(i => i.abandonedAt));
+    const bMax = Math.max(...b.items.map(i => i.abandonedAt));
+    return bMax - aMax;
+  });
+  return groups;
+}
+
 function mesocycleDelta(workoutLogs, dayType) {
   const same = Object.values(workoutLogs)
     .filter(l => l.day === dayType)
@@ -3096,7 +3242,19 @@ function mesocycleDelta(workoutLogs, dayType) {
   const deltaPct = ((last - avg) / avg) * 100;
   return { last, avg, deltaPct };
 }
-function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, setActiveSession, draftSession }) {
+function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, setActiveSession, draftSession, pendingMakeups = [], startMakeup }) {
+  // When a pending group is tapped, this holds it for the choice modal.
+  const [catchupOpen, setCatchupOpen] = useState(null);
+  // Convert a ts → relative "3 days ago" / "today" / "2w ago"
+  const relTime = (ts) => {
+    const diff = Date.now() - ts;
+    const d = Math.floor(diff / 86400000);
+    if (d <= 0) return "today";
+    if (d === 1) return "yesterday";
+    if (d < 7) return `${d} days ago`;
+    const w = Math.floor(d / 7);
+    return w === 1 ? "1w ago" : `${w}w ago`;
+  };
   const recent = Object.values(workoutLogs).sort((a,b) => b.ts-a.ts);
   // Pick the most recent PHUL session to determine next day in rotation —
   // custom sessions don't advance the PHUL cycle.
@@ -3169,6 +3327,59 @@ function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, 
             <div className="dv">{draftSession.dayName}</div>
           </div>
           <button onClick={() => setActiveSession(draftSession.dayName)}>Resume →</button>
+        </div>
+      )}
+
+      {pendingMakeups.length > 0 && (
+        <div className="catchup-card">
+          <div className="section-head">
+            <span className="eyebrow" style={{color:"var(--accent-hold)"}}>
+              Catch up · {pendingMakeups.reduce((t, g) => t + g.items.length, 0)} missed
+            </span>
+          </div>
+          {pendingMakeups.map(group => {
+            const mostRecent = Math.max(...group.items.map(i => i.abandonedAt));
+            const typeCls = PHUL[group.dayType]?.type === "power" ? "power" : "hyper";
+            return (
+              <button
+                key={group.dayType}
+                className={`catchup-group ${typeCls}`}
+                onClick={() => setCatchupOpen(group)}
+              >
+                <div className="catchup-group-head">
+                  <span className="cg-day">{group.dayType}</span>
+                  <span className="cg-meta">{group.items.length} · {relTime(mostRecent)}</span>
+                </div>
+                <div className="catchup-ex-list">
+                  {group.items.map(i => i.exName).join(" · ")}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Catch-up choice modal */}
+      {catchupOpen && (
+        <div className="modal-bg" onClick={() => setCatchupOpen(null)}>
+          <div className="modal-sheet" onClick={e => e.stopPropagation()}>
+            <div className="modal-k">{catchupOpen.dayType} · {catchupOpen.items.length} missed</div>
+            <div style={{fontSize:13, color:"var(--ink-2)", lineHeight:1.55, marginBottom:16}}>
+              {catchupOpen.items.map(i => i.exName).join(" · ")}
+            </div>
+            <div style={{fontSize:12, color:"var(--ink-3)", lineHeight:1.5, marginBottom:14, padding:"12px 14px", background:"var(--card-2)", borderRadius:10}}>
+              This opens a short session with just these exercises. Your completed sets will feed into <strong style={{color:"var(--ink)"}}>{catchupOpen.dayType}</strong> progression — same as doing them on your normal scheduled day.
+            </div>
+            <div className="btn-row">
+              <button className="btn ghost" onClick={() => setCatchupOpen(null)}>Not now</button>
+              <button className="btn accent" onClick={() => {
+                const exNames = catchupOpen.items.map(i => i.exName);
+                const dayType = catchupOpen.dayType;
+                setCatchupOpen(null);
+                startMakeup(dayType, exNames);
+              }}>Start catch-up →</button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -3379,6 +3590,10 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
   const [exerciseHolds, setExerciseHolds] = useState(() => savedSession?.exerciseHolds || {});
   const [tierGuardModal, setTierGuardModal] = useState(null); // holds pending ex if user tries to skip past T1
   const [confirmAbandon, setConfirmAbandon] = useState(null);
+  // Two-tap confirm for the direct "Skip" button on the active exercise card.
+  // Distinct from confirmAbandon (which is for the hold-chips abandon flow).
+  const [confirmSkipActive, setConfirmSkipActive] = useState(false);
+  useEffect(() => { setConfirmSkipActive(false); }, [activeEx, phase]);
 
   // Helpers
   const isExDone      = (exName) => data[exName]?.every(s => s.done);
@@ -4094,7 +4309,16 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="4" width="4" height="16" rx="1"/><rect x="15" y="4" width="4" height="16" rx="1"/></svg>
                       Taken
                     </button>
-                    <button onClick={() => addSet(activeEx)}>+ set</button>
+                    {confirmSkipActive ? (
+                      <button className="danger" onClick={() => { abandonHeld(activeEx); setConfirmSkipActive(false); }}>
+                        Confirm skip
+                      </button>
+                    ) : (
+                      <button className="danger" onClick={() => setConfirmSkipActive(true)}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 5l7 7-7 7M13 5l7 7-7 7"/></svg>
+                        Skip
+                      </button>
+                    )}
                   </div>
                 </>
               )}
@@ -4485,6 +4709,7 @@ function WorkoutTab({ workoutLogs, setWorkoutLogs, setActiveSession, draftSessio
                     <div className="hist-card-day">
                       {displayName}
                       {log.isCustom && <span className="pill" style={{marginLeft:8, fontSize:9}}>custom</span>}
+                      {log.isMakeup && <span className="pill hold" style={{marginLeft:8, fontSize:9}}>makeup</span>}
                     </div>
                     <div className="hist-card-date">{log.date}{log.durationMins > 0 ? ` · ${log.durationMins} min` : ""}</div>
                   </div>
@@ -5399,7 +5624,7 @@ function StatsTab({ stats, setStats, phase, theme, setTheme }) {
             </button>
           ))}
         </div>
-        <div className="app-version">PHUL Tracker · v6.5</div>
+        <div className="app-version">PHUL Tracker · v6.6</div>
       </div>
 
       <DataBackup />
