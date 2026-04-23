@@ -2759,6 +2759,25 @@ function calcNextWeight(exercise, logs) {
   }
 
   if (!history.length) {
+    // No clean (non-abandoned) history exists. Before falling back to the
+    // original startWeight, check if an abandoned session has a last weight
+    // we can remember — partial data shouldn't drive progression (handled
+    // above by the skip), but it IS still a signal of "this is the weight
+    // you last used on this exercise." Return that weight with HOLD status.
+    for (const [, session] of Object.entries(logs).sort((a,b) => b[1].ts - a[1].ts)) {
+      if (session.day !== exercise.day) continue;
+      const sets = session.exercises?.[exercise.name];
+      if (!sets?.length) continue;
+      const filled = sets.filter(s => s.weight);
+      if (!filled.length) continue;
+      const lastWeight = parseFloat(filled[0].weight);
+      if (isNaN(lastWeight) || lastWeight <= 0) continue;
+      const w = snap(lastWeight, eq);
+      return {
+        weight: w, status: "hold-partial", increment: baseInc, eq,
+        note: `→ hold ${w}kg — partial data last time, complete all sets this round.`
+      };
+    }
     return { weight: exercise.startWeight, status: "start", increment: baseInc, eq, note: `Start: ${exercise.startWeight}kg` };
   }
 
@@ -4356,7 +4375,7 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
                 );
               })()}
               {sug?.note && (
-                <div className={`sug-note ${sug.status==="increase"||sug.status==="crush"?"ok":sug.status==="deload"||sug.status.includes("step-down")?"bad":sug.status==="stall-reset"?"warn":sug.status==="grind"?"hold":""}`}>
+                <div className={`sug-note ${sug.status==="increase"||sug.status==="crush"?"ok":sug.status==="deload"||sug.status.includes("step-down")?"bad":sug.status==="stall-reset"?"warn":sug.status==="grind"||sug.status==="hold-partial"?"hold":""}`}>
                   {sug.note}
                 </div>
               )}
@@ -5750,7 +5769,7 @@ function StatsTab({ stats, setStats, phase, theme, setTheme }) {
             </button>
           ))}
         </div>
-        <div className="app-version">PHUL Tracker · v6.8</div>
+        <div className="app-version">PHUL Tracker · v6.9</div>
       </div>
 
       <DataBackup />
