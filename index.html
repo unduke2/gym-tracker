@@ -1757,6 +1757,62 @@ button { cursor: pointer; }
 }
 .del-confirm button.danger { background: var(--bad); border-color: var(--bad); color: var(--ink); }
 
+/* Date nav — Diet tab, for editing past days */
+.date-nav {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 14px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+.date-nav-arrow {
+  background: transparent;
+  border: 1px solid var(--line-2);
+  color: var(--ink-2);
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  font-size: 14px;
+  font-weight: 700;
+}
+.date-nav-arrow:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.date-nav-label {
+  text-align: center;
+  min-width: 0;
+}
+.date-nav-label .dn-day {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.date-nav-label .dn-sub {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  margin-top: 2px;
+  font-weight: 600;
+}
+.date-nav-today {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: none;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
 /* ─── DIET TAB ─── */
 
 /* Targets card — kcal + prot bars */
@@ -2686,9 +2742,14 @@ function calcNextWeight(exercise, logs) {
   const [minR, maxR] = exercise.repRange.split("-").map(Number);
 
   // ─── Pull last 3 same-day sessions (only those with actual logged data for this exercise) ──
+  // Skip sessions where THIS exercise was abandoned — 1 set of 24 reps from an
+  // abandoned Cable Fly isn't "crushing 3 sets", it's partial data that would
+  // misfire the crush/progress branches. The partial data is still in the log
+  // for reference; it just doesn't drive the weight suggestion.
   const history = [];
   for (const [, session] of Object.entries(logs).sort((a,b) => b[1].ts - a[1].ts)) {
     if (session.day === exercise.day) {
+      if (session.abandoned?.includes(exercise.name)) continue;
       const sets = session.exercises?.[exercise.name];
       if (sets?.length > 0 && sets.some(s => s.weight && s.reps)) {
         history.push(sets);
@@ -4821,8 +4882,14 @@ const CAT_ORDER  = ["breakfast","post","lunch","snack","dinner"];
 // ─── DIET TAB ─────────────────────────────────────────────────────────────────
 function DietTab({ today, todayDiet, kcalTarget, dietLogs, setDietLogs, phase, stats }) {
   const [view, setView] = useState("today"); // today | library | history
+  // Which date the "Today" view is currently editing. Defaults to today but can
+  // walk backwards via the date nav — handles the "forgot to log yesterday" /
+  // "logging after midnight" cases cleanly.
+  const [editDate, setEditDate] = useState(today);
+  const editDiet = dietLogs[editDate] || { kcal:0, protein:0, meals:[], extras:[] };
+  const isToday = editDate === today;
   const [meals, setMeals] = useState(() => lsGet(MEAL_DB_KEY) || DEFAULT_MEALS);
-  const [todayMeals, setTodayMeals] = useState(() => todayDiet.meals || []);
+  const [dayMeals, setDayMeals] = useState(() => editDiet.meals || []);
   const [manualKcal, setManualKcal] = useState({ name:"", kcal:"", prot:"" });
   const [manualProt, setManualProt] = useState("");
   const [saved, setSaved] = useState(false);
@@ -4832,30 +4899,51 @@ function DietTab({ today, todayDiet, kcalTarget, dietLogs, setDietLogs, phase, s
 
   useEffect(() => { lsSet(MEAL_DB_KEY, meals); }, [meals]);
 
-  // Compute today totals
-  const mealKcal = todayMeals.reduce((s,m) => {
+  // Re-hydrate dayMeals whenever the edited date changes or the stored log
+  // for that date mutates externally (e.g., via history delete).
+  useEffect(() => {
+    setDayMeals((dietLogs[editDate] || {}).meals || []);
+    setSaved(false);
+  }, [editDate]);
+
+  // Compute totals for the currently-edited day
+  const mealKcal = dayMeals.reduce((s,m) => {
     const found = meals.find(x => x.id === m.id);
     return s + (found ? getMealKcal(found, phase) : 0);
   }, 0);
-  const mealProt = todayMeals.reduce((s,m) => {
+  const mealProt = dayMeals.reduce((s,m) => {
     const found = meals.find(x => x.id === m.id);
     return s + (found ? found.baseProt : 0);
   }, 0);
-  const extrasKcal = (todayDiet.extras||[]).reduce((s,e)=>s+e.kcal,0);
-  const extrasProt = (todayDiet.extras||[]).reduce((s,e)=>s+e.prot,0);
+  const extrasKcal = (editDiet.extras||[]).reduce((s,e)=>s+e.kcal,0);
+  const extrasProt = (editDiet.extras||[]).reduce((s,e)=>s+e.prot,0);
   const totalKcal = mealKcal + extrasKcal;
   const totalProt = mealProt + extrasProt;
 
   const saveDay = () => {
-    setDietLogs(prev => ({ ...prev, [today]:{ ...(prev[today]||{}), kcal:totalKcal, protein:totalProt, meals:todayMeals } }));
+    setDietLogs(prev => ({ ...prev, [editDate]:{ ...(prev[editDate]||{}), kcal:totalKcal, protein:totalProt, meals:dayMeals } }));
     setSaved(true); setTimeout(() => setSaved(false), 2000);
   };
 
   const addMealToday = (meal) => {
-    setTodayMeals(prev => [...prev, { id:meal.id, ts:Date.now() }]);
+    setDayMeals(prev => [...prev, { id:meal.id, ts:Date.now() }]);
   };
   const removeMealFromToday = (idx) => {
-    setTodayMeals(prev => prev.filter((_,i) => i!==idx));
+    setDayMeals(prev => prev.filter((_,i) => i!==idx));
+  };
+
+  // Date nav helpers
+  const shiftDate = (days) => {
+    const d = new Date(editDate); d.setDate(d.getDate() + days);
+    const next = d.toISOString().slice(0,10);
+    if (next > today) return; // don't navigate into the future
+    setEditDate(next);
+  };
+  const prettyDate = (iso) => {
+    const d = new Date(iso);
+    const wk = d.toLocaleDateString("en-US", { weekday: "short" });
+    const mo = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return `${wk} · ${mo}`;
   };
 
   // Streak — consecutive days hitting protein target
@@ -4896,17 +4984,35 @@ function DietTab({ today, todayDiet, kcalTarget, dietLogs, setDietLogs, phase, s
 
       {view==="today" && (
         <>
+          {/* Date nav — defaults to today, walks back for "forgot to log" days */}
+          <div className="date-nav">
+            <button className="date-nav-arrow" onClick={() => shiftDate(-1)} aria-label="Previous day">←</button>
+            <div className="date-nav-label">
+              <div className="dn-day">{isToday ? "Today" : prettyDate(editDate)}</div>
+              <div className="dn-sub">{isToday ? prettyDate(editDate) : "editing past day"}</div>
+            </div>
+            <button
+              className="date-nav-arrow"
+              onClick={() => shiftDate(1)}
+              disabled={isToday}
+              aria-label="Next day"
+            >→</button>
+            {!isToday && (
+              <button className="date-nav-today" onClick={() => setEditDate(today)}>Today</button>
+            )}
+          </div>
+
           {/* Targets card */}
           <div className="targets-card">
             <div className="targets-head">
               <div className={`targets-phase ${phase}`}>
-                <div className="tk">Today · {today}</div>
+                <div className="tk">{isToday ? "Today" : "Editing"} · {editDate}</div>
                 <div className="tv">
                   <span className="ph">{phase==="bulk"?"↑ Bulk":"↓ Cut"}</span>
                   <span className="tnum">{kcalTarget}</span> kcal target
                 </div>
               </div>
-              {streak > 0 && (
+              {streak > 0 && isToday && (
                 <div style={{textAlign:"center"}}>
                   <div style={{fontSize:20}}>🔥</div>
                   <div style={{fontSize:13, fontWeight:800, color:"var(--accent)"}}>{streak}</div>
@@ -4945,18 +5051,18 @@ function DietTab({ today, todayDiet, kcalTarget, dietLogs, setDietLogs, phase, s
             </div>
           </div>
 
-          {/* Today's meals */}
+          {/* Day's meals */}
           <div className="card">
             <div className="section-head">
-              <span className="eyebrow">Today's meals</span>
+              <span className="eyebrow">{isToday ? "Today's" : "Day's"} meals</span>
               <button className="more" onClick={() => setView("library")}>+ Add</button>
             </div>
-            {todayMeals.length === 0 && (
+            {dayMeals.length === 0 && (
               <div style={{fontSize:13, color:"var(--ink-4)", textAlign:"center", padding:"14px 0"}}>
                 No meals yet. Go to Meals to add.
               </div>
             )}
-            {todayMeals.map((tm, i) => {
+            {dayMeals.map((tm, i) => {
               const m = meals.find(x => x.id===tm.id);
               if (!m) return null;
               return (
@@ -4984,15 +5090,15 @@ function DietTab({ today, todayDiet, kcalTarget, dietLogs, setDietLogs, phase, s
               <span className="eyebrow">Extras</span>
               <span className="eyebrow" style={{color:"var(--ink-4)"}}>off-library items</span>
             </div>
-            {(todayDiet.extras||[]).map((ex,i) => (
+            {(editDiet.extras||[]).map((ex,i) => (
               <div key={i} className="meal-row">
                 <div className="meal-row-l">
                   <div className="meal-row-name">{ex.name||"Extra"}</div>
                   <div className="meal-row-sub">{ex.kcal} kcal · {ex.prot}g protein</div>
                 </div>
                 <button className="meal-x" onClick={() => {
-                  const updated = (todayDiet.extras||[]).filter((_,idx)=>idx!==i);
-                  setDietLogs(prev => ({ ...prev, [today]:{ ...prev[today], extras:updated } }));
+                  const updated = (editDiet.extras||[]).filter((_,idx)=>idx!==i);
+                  setDietLogs(prev => ({ ...prev, [editDate]:{ ...prev[editDate], extras:updated } }));
                 }}>×</button>
               </div>
             ))}
@@ -5013,15 +5119,15 @@ function DietTab({ today, todayDiet, kcalTarget, dietLogs, setDietLogs, phase, s
                 const k = parseNum(manualKcal.kcal)||0;
                 if (!k) return;
                 const item = { name: manualKcal.name||"Extra", kcal:k, prot:parseNum(manualKcal.prot)||0 };
-                const updated = [...(todayDiet.extras||[]), item];
-                setDietLogs(prev => ({ ...prev, [today]:{ ...prev[today]||{}, extras:updated } }));
+                const updated = [...(editDiet.extras||[]), item];
+                setDietLogs(prev => ({ ...prev, [editDate]:{ ...prev[editDate]||{}, extras:updated } }));
                 setManualKcal({ name:"", kcal:"", prot:"" });
               }}>+</button>
             </div>
           </div>
 
           <button className={`btn ${saved?"ghost":"accent"} huge`} onClick={saveDay}>
-            {saved ? "Saved ✓" : "Save day"}
+            {saved ? "Saved ✓" : (isToday ? "Save day" : `Save ${editDate}`)}
           </button>
 
           {/* 7-day grid */}
@@ -5197,7 +5303,15 @@ function DietTab({ today, todayDiet, kcalTarget, dietLogs, setDietLogs, phase, s
                     <button className="danger" onClick={() => { setDietLogs(prev => { const n={...prev}; delete n[date]; return n; }); setConfirmDelDiet(null); }}>delete</button>
                   </div>
                 ) : (
-                  <button className="del-btn" onClick={() => setConfirmDelDiet(date)}>⌫</button>
+                  <div style={{display:"flex", gap:6}}>
+                    <button
+                      className="del-btn"
+                      onClick={() => { setEditDate(date); setView("today"); }}
+                      style={{color:"var(--accent)", borderColor:"color-mix(in oklab, var(--accent) 40%, var(--line-2))"}}
+                      aria-label="Edit this day"
+                    >✎</button>
+                    <button className="del-btn" onClick={() => setConfirmDelDiet(date)}>⌫</button>
+                  </div>
                 )}
               </div>
             );
@@ -5636,7 +5750,7 @@ function StatsTab({ stats, setStats, phase, theme, setTheme }) {
             </button>
           ))}
         </div>
-        <div className="app-version">PHUL Tracker · v6.7</div>
+        <div className="app-version">PHUL Tracker · v6.8</div>
       </div>
 
       <DataBackup />
