@@ -2623,6 +2623,18 @@ input.text-in {
 <script src="vendor/react.min.js"></script>
 <script src="vendor/react-dom.min.js"></script>
 <script src="vendor/babel.min.js"></script>
+
+<!-- Service worker: caches shell + vendor for true offline support and
+     near-zero host bandwidth after first load. -->
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("sw.js").catch(err => {
+        console.warn("SW registration failed:", err);
+      });
+    });
+  }
+</script>
 <script type="text/babel">
 const { useState, useEffect, useRef } = React;
 
@@ -5624,7 +5636,7 @@ function StatsTab({ stats, setStats, phase, theme, setTheme }) {
             </button>
           ))}
         </div>
-        <div className="app-version">PHUL Tracker · v6.6</div>
+        <div className="app-version">PHUL Tracker · v6.7</div>
       </div>
 
       <DataBackup />
