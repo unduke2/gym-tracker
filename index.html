@@ -338,6 +338,8 @@ button { cursor: pointer; }
   align-items: center;
   justify-content: center;
   gap: 8px;
+  -webkit-appearance: none;
+  appearance: none;
 }
 .btn:active { transform: scale(0.99); }
 .btn.accent { background: var(--accent); color: var(--accent-ink); }
@@ -349,7 +351,8 @@ button { cursor: pointer; }
 }
 .btn.ghost:active { background: var(--card-2); }
 .btn.danger { background: var(--bad); color: var(--ink); }
-.btn:disabled { background: var(--card-2); color: var(--ink-4); }
+/* Dim the button but keep its accent/ok/ghost coloring so text stays readable. */
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .btn.huge { padding: 20px 22px; font-size: 16px; border-radius: 14px; }
 .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
@@ -572,6 +575,58 @@ button { cursor: pointer; }
   font-size: 12px;
   color: var(--ink-2);
   line-height: 1.5;
+}
+
+/* Catch-up modal — per-exercise row with dismiss action */
+.catchup-item-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.catchup-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--card-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.catchup-item-l { flex: 1; min-width: 0; }
+.catchup-item-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.catchup-item-sub {
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--ink-4);
+}
+.catchup-item-dismiss {
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  font-weight: 700;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.catchup-item-dismiss:active {
+  background: var(--bg-2);
+  color: var(--ink-2);
+  transform: scale(0.97);
 }
 
 /* Unfinished session banner */
@@ -1952,6 +2007,10 @@ button { cursor: pointer; }
   font-weight: 600;
 }
 .qa-chip.dashed { border-style: dashed; color: var(--ink-3); }
+.qa-chip.fav {
+  border-color: color-mix(in oklab, var(--accent-gold) 50%, var(--line-2));
+  background: color-mix(in oklab, var(--accent-gold) 8%, var(--card-2));
+}
 
 /* Extras form */
 .extras-form {
@@ -2137,6 +2196,45 @@ button { cursor: pointer; }
   text-transform: uppercase;
   white-space: nowrap;
 }
+.meal-lib-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.meal-lib-mini-row {
+  display: flex;
+  gap: 6px;
+}
+.meal-lib-mini {
+  background: transparent;
+  border: 1px solid var(--line-2);
+  color: var(--ink-3);
+  border-radius: 8px;
+  padding: 5px 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  min-width: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.meal-lib-mini.star.on {
+  color: var(--accent-gold);
+  border-color: color-mix(in oklab, var(--accent-gold) 50%, var(--line-2));
+  background: color-mix(in oklab, var(--accent-gold) 10%, transparent);
+}
+.meal-lib-mini:active { transform: scale(0.95); }
+.meal-lib-item.fav {
+  border-left: 3px solid var(--accent-gold);
+  padding-left: 12px;
+}
 .meal-lib-meta {
   display: flex; gap: 12px;
   margin-top: 6px;
@@ -2201,6 +2299,45 @@ button { cursor: pointer; }
   font-size: 12px;
   color: var(--ink-2);
 }
+
+/* "Save as preset" suggestion shown above extras form when a name repeats */
+.preset-suggest {
+  background: color-mix(in oklab, var(--accent) 9%, var(--card));
+  border: 1px solid color-mix(in oklab, var(--accent) 32%, var(--line));
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+.preset-suggest .ps-text {
+  font-size: 12px;
+  color: var(--ink-2);
+  line-height: 1.45;
+}
+.preset-suggest .ps-text strong { color: var(--ink); font-weight: 800; }
+.preset-suggest .ps-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.preset-suggest button {
+  background: transparent;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  -webkit-appearance: none;
+  appearance: none;
+}
+.preset-suggest button.save {
+  color: var(--accent);
+  border-color: color-mix(in oklab, var(--accent) 50%, var(--line-2));
+}
+.preset-suggest button:active { transform: scale(0.97); }
 
 /* ─── STATS TAB ─── */
 
@@ -3070,6 +3207,9 @@ function App() {
   const [workoutLogs, setWorkoutLogs] = useState(() => lsGet("phul_logs") || {});
   const [dietLogs, setDietLogs]     = useState(() => lsGet("phul_diet") || {});
   const [draftSession, setDraftSession] = useState(() => lsGet("phul_draft") || null);
+  // Separate slot for in-progress catch-up sessions so a running makeup doesn't
+  // clobber a paused regular-session draft. Carries { dayName, filter, data, ... }.
+  const [makeupDraft, setMakeupDraft] = useState(() => lsGet("phul_makeup_draft") || null);
   const [activeSession, setActiveSession] = useState(null);
   // When set, SessionLogger runs a filtered slice of the day's plan — used
   // for "catch up" standalone makeup sessions. Array of exercise names to
@@ -3078,6 +3218,9 @@ function App() {
   // Custom sessions — imported via JSON in WorkoutTab. Shape matches
   // SESSION_FORMAT.md schema. Stored as an array; addressable by .id.
   const [customSessions, setCustomSessions] = useState(() => lsGet("phul_custom_sessions") || []);
+  // Catch-up entries the user marked done manually (offline-completed etc.).
+  // Array of "${sourceLogKey}::${exName}" strings — filtered out of pending.
+  const [dismissedMakeups, setDismissedMakeups] = useState(() => lsGet("phul_dismissed_makeups") || []);
 
   useEffect(() => { lsSet("phul_phase", phase); }, [phase]);
   useEffect(() => { lsSet("phul_theme", theme); }, [theme]);
@@ -3085,6 +3228,7 @@ function App() {
   useEffect(() => { lsSet("phul_logs", workoutLogs); }, [workoutLogs]);
   useEffect(() => { lsSet("phul_diet", dietLogs); }, [dietLogs]);
   useEffect(() => { lsSet("phul_custom_sessions", customSessions); }, [customSessions]);
+  useEffect(() => { lsSet("phul_dismissed_makeups", dismissedMakeups); }, [dismissedMakeups]);
 
   // Plan lookup — checks PHUL first, then custom sessions by id
   const resolvePlan = (key) => PHUL[key] || customSessions.find(s => s.id === key) || null;
@@ -3109,8 +3253,31 @@ function App() {
 
   const clearDraft = () => { setDraftSession(null); lsSet("phul_draft", null); };
 
+  const saveMakeupDraft = (state) => {
+    const d = { dayName: activeSession, filter: activeSessionFilter, ...makeupDraft, ...state };
+    setMakeupDraft(d);
+    lsSet("phul_makeup_draft", d);
+  };
+
+  const clearMakeupDraft = () => { setMakeupDraft(null); lsSet("phul_makeup_draft", null); };
+
+  // Compare two exercise-name arrays for equivalent set membership (order-free).
+  const sameFilter = (a, b) => {
+    if (!a || !b) return false;
+    if (a.length !== b.length) return false;
+    const A = [...a].sort(), B = [...b].sort();
+    return A.every((x, i) => x === B[i]);
+  };
+
   // Derived: pending catch-up groups (for dashboard banner + makeup starter)
-  const pendingMakeups = computePendingMakeups(workoutLogs);
+  const pendingMakeups = computePendingMakeups(workoutLogs, dismissedMakeups);
+
+  // Mark a specific abandoned exercise as done (offline / already caught up)
+  // so it stops showing in the Catch Up card.
+  const dismissMakeup = (sourceLogKey, exName) => {
+    const token = `${sourceLogKey}::${exName}`;
+    setDismissedMakeups(prev => prev.includes(token) ? prev : [...prev, token]);
+  };
 
   // Start a standalone makeup session — filters the target day's plan down
   // to just the missed exercises. Blocks if a draft for the same day is in
@@ -3146,13 +3313,19 @@ function App() {
       setActiveSessionFilter(null);
       return null;
     }
+    // Pick the right draft slot for this session. Filtered (catch-up) sessions
+    // use phul_makeup_draft — keyed by dayName + filter exact match — so they
+    // don't conflict with any paused regular-session draft.
+    const savedForThis = activeSessionFilter
+      ? (makeupDraft?.dayName === activeSession && sameFilter(makeupDraft?.filter, activeSessionFilter) ? makeupDraft : null)
+      : (draftSession?.dayName === activeSession ? draftSession : null);
     return (
       <SessionLogger
         dayName={activeSession}
         plan={activePlan}
         workoutLogs={workoutLogs}
-        savedSession={draftSession?.dayName === activeSession && !activeSessionFilter ? draftSession : null}
-        onSaveSession={activeSessionFilter ? () => {} : saveDraft}
+        savedSession={savedForThis}
+        onSaveSession={activeSessionFilter ? saveMakeupDraft : saveDraft}
         onFinish={(data, sessionStartedAt, abandoned) => {
           const key = today + "_" + activeSession.replace(/ /g,"_") + "_" + Date.now();
           const durationMins = Math.round((Date.now() - (sessionStartedAt || Date.now())) / 60000);
@@ -3169,13 +3342,13 @@ function App() {
             durationMins,
             abandoned: abandoned || []
           }}));
-          if (!activeSessionFilter) clearDraft();
+          if (activeSessionFilter) clearMakeupDraft(); else clearDraft();
           setActiveSession(null);
           setActiveSessionFilter(null);
           setTab("workout");
         }}
         onDiscard={() => {
-          if (!activeSessionFilter) clearDraft();
+          if (activeSessionFilter) clearMakeupDraft(); else clearDraft();
           setActiveSession(null);
           setActiveSessionFilter(null);
         }}
@@ -3234,7 +3407,7 @@ function App() {
       </header>
 
       <main className="app-main">
-        {tab==="dash"    && <Dashboard latest={latest} phase={phase} kcalTarget={kcalTarget} todayDiet={todayDiet} workoutLogs={workoutLogs} setTab={setTab} setActiveSession={setActiveSession} draftSession={draftSession} pendingMakeups={pendingMakeups} startMakeup={startMakeup} />}
+        {tab==="dash"    && <Dashboard latest={latest} phase={phase} kcalTarget={kcalTarget} todayDiet={todayDiet} workoutLogs={workoutLogs} setTab={setTab} setActiveSession={setActiveSession} draftSession={draftSession} pendingMakeups={pendingMakeups} startMakeup={startMakeup} dismissMakeup={dismissMakeup} />}
         {tab==="workout" && <WorkoutTab workoutLogs={workoutLogs} setWorkoutLogs={setWorkoutLogs} setActiveSession={setActiveSession} draftSession={draftSession} customSessions={customSessions} setCustomSessions={setCustomSessions} />}
         {tab==="diet"    && <DietTab today={today} todayDiet={todayDiet} kcalTarget={kcalTarget} dietLogs={dietLogs} setDietLogs={setDietLogs} phase={phase} stats={stats} />}
         {tab==="stats"   && <StatsTab stats={stats} setStats={setStats} phase={phase} theme={theme} setTheme={setTheme} />}
@@ -3271,8 +3444,9 @@ function sessionVolume(log) {
 // PHUL session's `abandoned` list, the exercise stays "pending" until any
 // subsequent same-day-type session records a completed set of it. Ignored if
 // older than `windowDays` (default 14). Returns array grouped by dayType.
-function computePendingMakeups(workoutLogs, windowDays = 14) {
+function computePendingMakeups(workoutLogs, dismissedMakeups = [], windowDays = 14) {
   const cutoff = Date.now() - windowDays * 86400000;
+  const dismissedSet = new Set(dismissedMakeups);
   const allLogs = Object.entries(workoutLogs)
     .filter(([, log]) => PHUL[log.day])
     .sort((a, b) => a[1].ts - b[1].ts);
@@ -3291,9 +3465,11 @@ function computePendingMakeups(workoutLogs, windowDays = 14) {
       });
     }
 
-    // Add new pending from this session's abandoned list
+    // Add new pending from this session's abandoned list — skipping anything
+    // the user manually marked done from the Catch Up card.
     if (log.abandoned?.length) {
       for (const exName of log.abandoned) {
+        if (dismissedSet.has(`${key}::${exName}`)) continue;
         if (pendingByDay[dayType].some(p => p.exName === exName)) continue;
         pendingByDay[dayType].push({
           exName,
@@ -3334,7 +3510,7 @@ function mesocycleDelta(workoutLogs, dayType) {
   const deltaPct = ((last - avg) / avg) * 100;
   return { last, avg, deltaPct };
 }
-function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, setActiveSession, draftSession, pendingMakeups = [], startMakeup }) {
+function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, setActiveSession, draftSession, pendingMakeups = [], startMakeup, dismissMakeup }) {
   // When a pending group is tapped, this holds it for the choice modal.
   const [catchupOpen, setCatchupOpen] = useState(null);
   // Convert a ts → relative "3 days ago" / "today" / "2w ago"
@@ -3436,7 +3612,7 @@ function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, 
               <button
                 key={group.dayType}
                 className={`catchup-group ${typeCls}`}
-                onClick={() => setCatchupOpen(group)}
+                onClick={() => setCatchupOpen(group.dayType)}
               >
                 <div className="catchup-group-head">
                   <span className="cg-day">{group.dayType}</span>
@@ -3451,29 +3627,47 @@ function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, 
         </div>
       )}
 
-      {/* Catch-up choice modal */}
-      {catchupOpen && (
-        <div className="modal-bg" onClick={() => setCatchupOpen(null)}>
-          <div className="modal-sheet" onClick={e => e.stopPropagation()}>
-            <div className="modal-k">{catchupOpen.dayType} · {catchupOpen.items.length} missed</div>
-            <div style={{fontSize:13, color:"var(--ink-2)", lineHeight:1.55, marginBottom:16}}>
-              {catchupOpen.items.map(i => i.exName).join(" · ")}
-            </div>
-            <div style={{fontSize:12, color:"var(--ink-3)", lineHeight:1.5, marginBottom:14, padding:"12px 14px", background:"var(--card-2)", borderRadius:10}}>
-              This opens a short session with just these exercises. Your completed sets will feed into <strong style={{color:"var(--ink)"}}>{catchupOpen.dayType}</strong> progression — same as doing them on your normal scheduled day.
-            </div>
-            <div className="btn-row">
-              <button className="btn ghost" onClick={() => setCatchupOpen(null)}>Not now</button>
-              <button className="btn accent" onClick={() => {
-                const exNames = catchupOpen.items.map(i => i.exName);
-                const dayType = catchupOpen.dayType;
-                setCatchupOpen(null);
-                startMakeup(dayType, exNames);
-              }}>Start catch-up →</button>
+      {/* Catch-up choice modal. Track selected dayType only — rows come from
+          the live pendingMakeups so a dismissal updates the list immediately
+          and the modal auto-closes when the group empties. */}
+      {(() => {
+        const live = catchupOpen ? pendingMakeups.find(g => g.dayType === catchupOpen) : null;
+        if (!live) return null;
+        return (
+          <div className="modal-bg" onClick={() => setCatchupOpen(null)}>
+            <div className="modal-sheet" onClick={e => e.stopPropagation()}>
+              <div className="modal-k">{live.dayType} · {live.items.length} missed</div>
+              <div className="catchup-item-list">
+                {live.items.map(it => (
+                  <div key={it.sourceLogKey + "::" + it.exName} className="catchup-item">
+                    <div className="catchup-item-l">
+                      <div className="catchup-item-name">{it.exName}</div>
+                      <div className="catchup-item-sub">missed {relTime(it.abandonedAt)}</div>
+                    </div>
+                    <button
+                      className="catchup-item-dismiss"
+                      onClick={() => dismissMakeup(it.sourceLogKey, it.exName)}
+                      title="Already did this one"
+                    >Mark done</button>
+                  </div>
+                ))}
+              </div>
+              <div style={{fontSize:12, color:"var(--ink-3)", lineHeight:1.5, marginBottom:14, padding:"12px 14px", background:"var(--card-2)", borderRadius:10}}>
+                Start catch-up to log these now, or tap <strong style={{color:"var(--ink-2)"}}>Mark done</strong> on any you already completed offline. Completed sets feed into <strong style={{color:"var(--ink)"}}>{live.dayType}</strong> progression.
+              </div>
+              <div className="btn-row">
+                <button className="btn ghost" onClick={() => setCatchupOpen(null)}>Not now</button>
+                <button className="btn accent" onClick={() => {
+                  const exNames = live.items.map(i => i.exName);
+                  const dayType = live.dayType;
+                  setCatchupOpen(null);
+                  startMakeup(dayType, exNames);
+                }}>Start catch-up →</button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       <div className="next-card">
         <div className="label-row">
@@ -4915,8 +5109,54 @@ function DietTab({ today, todayDiet, kcalTarget, dietLogs, setDietLogs, phase, s
   const [showAddMeal, setShowAddMeal] = useState(false);
   const [newMeal, setNewMeal] = useState({ name:"", cat:"snack", desc:"", baseKcal:"", baseProt:"", carbHeavy:false, tip:"" });
   const [confirmDelDiet, setConfirmDelDiet] = useState(null);
+  // Meal-library edit mode. `editingMealId` points at the meal being edited;
+  // `editDraft` holds the in-progress edit values (applied on Save).
+  const [editingMealId, setEditingMealId] = useState(null);
+  const [editDraft, setEditDraft] = useState(null);
+  // Extras names the user has explicitly dismissed from the Save-as-preset
+  // nudge so we don't pester them. Session-scoped — simple by design.
+  const [dismissedPresetSuggestions, setDismissedPresetSuggestions] = useState([]);
 
   useEffect(() => { lsSet(MEAL_DB_KEY, meals); }, [meals]);
+
+  // Toggle favorite on a library meal. Favorites pin to the top of Quick add.
+  const toggleFavMeal = (id) => {
+    setMeals(prev => prev.map(m => m.id === id ? { ...m, fav: !m.fav } : m));
+  };
+  // Begin editing a library meal — clone values into the draft so we don't
+  // mutate the live meal until Save.
+  const startEditMeal = (m) => {
+    setEditingMealId(m.id);
+    setEditDraft({
+      name: m.name,
+      cat: m.cat,
+      desc: m.desc || "",
+      baseKcal: String(m.baseKcal),
+      baseProt: String(m.baseProt),
+      carbHeavy: !!m.carbHeavy,
+      tip: m.tip || "",
+    });
+  };
+  const cancelEditMeal = () => { setEditingMealId(null); setEditDraft(null); };
+  const saveEditMeal = () => {
+    if (!editingMealId || !editDraft) return;
+    if (!editDraft.name.trim() || !editDraft.baseKcal || !editDraft.baseProt) return;
+    setMeals(prev => prev.map(m => m.id === editingMealId ? {
+      ...m,
+      name: editDraft.name.trim(),
+      cat: editDraft.cat,
+      desc: editDraft.desc,
+      baseKcal: parseNum(editDraft.baseKcal),
+      baseProt: parseNum(editDraft.baseProt),
+      carbHeavy: !!editDraft.carbHeavy,
+      tip: editDraft.tip,
+    } : m));
+    cancelEditMeal();
+  };
+  const deleteMeal = (id) => {
+    setMeals(prev => prev.filter(m => m.id !== id));
+    if (editingMealId === id) cancelEditMeal();
+  };
 
   // Re-hydrate dayMeals whenever the edited date changes or the stored log
   // for that date mutates externally (e.g., via history delete).
@@ -5096,9 +5336,33 @@ function DietTab({ today, todayDiet, kcalTarget, dietLogs, setDietLogs, phase, s
             })}
             <div className="qa-head">Quick add</div>
             <div className="qa-chips">
-              {CAT_ORDER.flatMap(cat => meals.filter(m => m.cat===cat)).slice(0,6).map(m => (
-                <button key={m.id} className="qa-chip" onClick={() => addMealToday(m)}>+ {m.name}</button>
-              ))}
+              {(() => {
+                // Score meals by: favorites first, then usage count over the
+                // last 14 days of logs, then most-recent use. Surfaces what
+                // the user actually reaches for — not a stale category order.
+                const since = Date.now() - 14 * 86400000;
+                const sinceIso = new Date(since).toISOString().slice(0,10);
+                const useCount = {};
+                const lastUsed = {};
+                for (const [date, log] of Object.entries(dietLogs)) {
+                  if (date < sinceIso) continue;
+                  for (const tm of (log.meals || [])) {
+                    useCount[tm.id] = (useCount[tm.id] || 0) + 1;
+                    lastUsed[tm.id] = Math.max(lastUsed[tm.id] || 0, tm.ts || 0);
+                  }
+                }
+                const ranked = [...meals].sort((a, b) => {
+                  if (!!b.fav - !!a.fav) return (!!b.fav) - (!!a.fav);
+                  const ca = useCount[a.id] || 0, cb = useCount[b.id] || 0;
+                  if (cb !== ca) return cb - ca;
+                  return (lastUsed[b.id] || 0) - (lastUsed[a.id] || 0);
+                });
+                return ranked.slice(0, 6).map(m => (
+                  <button key={m.id} className={`qa-chip${m.fav?" fav":""}`} onClick={() => addMealToday(m)}>
+                    {m.fav && <span style={{color:"var(--accent-gold)", marginRight:2}}>★</span>}+ {m.name}
+                  </button>
+                ));
+              })()}
               <button className="qa-chip dashed" onClick={() => setView("library")}>see all →</button>
             </div>
           </div>
@@ -5109,6 +5373,61 @@ function DietTab({ today, todayDiet, kcalTarget, dietLogs, setDietLogs, phase, s
               <span className="eyebrow">Extras</span>
               <span className="eyebrow" style={{color:"var(--ink-4)"}}>off-library items</span>
             </div>
+            {/* Save-as-preset nudge: any extras name logged ≥3x in the last 14 days
+                that doesn't already exist as a library meal. Shown one at a time. */}
+            {(() => {
+              const since = Date.now() - 14 * 86400000;
+              const sinceIso = new Date(since).toISOString().slice(0,10);
+              const byName = {};
+              for (const [date, log] of Object.entries(dietLogs)) {
+                if (date < sinceIso) continue;
+                for (const ex of (log.extras || [])) {
+                  const key = (ex.name || "").trim().toLowerCase();
+                  if (!key) continue;
+                  byName[key] = byName[key] || { name: ex.name, count: 0, kcals: [], prots: [] };
+                  byName[key].count++;
+                  byName[key].kcals.push(ex.kcal || 0);
+                  byName[key].prots.push(ex.prot || 0);
+                }
+              }
+              const existingLower = new Set(meals.map(m => m.name.toLowerCase()));
+              const candidates = Object.entries(byName)
+                .filter(([k, v]) => v.count >= 3
+                  && !existingLower.has(k)
+                  && !dismissedPresetSuggestions.includes(k))
+                .sort((a,b) => b[1].count - a[1].count);
+              if (!candidates.length) return null;
+              const [key, info] = candidates[0];
+              const avgK = Math.round(info.kcals.reduce((s,x)=>s+x,0) / info.kcals.length);
+              const avgP = Math.round(info.prots.reduce((s,x)=>s+x,0) / info.prots.length);
+              return (
+                <div className="preset-suggest">
+                  <div className="ps-text">
+                    You logged <strong>{info.name}</strong> {info.count}× recently — save it to the library?
+                    <div style={{marginTop:3, fontSize:10, fontFamily:"var(--font-mono)", color:"var(--ink-4)", letterSpacing:"0.06em"}}>
+                      avg {avgK} kcal · {avgP}g prot
+                    </div>
+                  </div>
+                  <div className="ps-actions">
+                    <button onClick={() => setDismissedPresetSuggestions(p => [...p, key])}>Skip</button>
+                    <button className="save" onClick={() => {
+                      const m = {
+                        id: "m" + Date.now(),
+                        name: info.name,
+                        cat: "snack",
+                        desc: "saved from extras",
+                        baseKcal: avgK,
+                        baseProt: avgP,
+                        carbHeavy: false,
+                        tip: "",
+                      };
+                      setMeals(prev => [...prev, m]);
+                      setDismissedPresetSuggestions(p => [...p, key]);
+                    }}>Save</button>
+                  </div>
+                </div>
+              );
+            })()}
             {(editDiet.extras||[]).map((ex,i) => (
               <div key={i} className="meal-row">
                 <div className="meal-row-l">
@@ -5219,26 +5538,88 @@ function DietTab({ today, todayDiet, kcalTarget, dietLogs, setDietLogs, phase, s
             {CAT_ORDER.map(cat => {
               const catMeals = meals.filter(m => m.cat===cat);
               if (!catMeals.length) return null;
+              // Favorites pin to the top within each category.
+              const sortedCat = [...catMeals].sort((a,b) => (!!b.fav) - (!!a.fav));
               return (
                 <div key={cat} style={{marginBottom:18}}>
                   <div className="meal-cat">{CAT_LABELS[cat]}</div>
-                  {catMeals.map(m => (
-                    <div key={m.id} className="meal-lib-item">
-                      <div className="meal-lib-top">
-                        <div style={{flex:1, minWidth:0}}>
-                          <div className="meal-lib-name">{m.name}</div>
-                          <div className="meal-lib-desc">{m.desc}</div>
-                          {m.tip && <div className="meal-lib-tip">💡 {m.tip}</div>}
+                  {sortedCat.map(m => {
+                    if (editingMealId === m.id && editDraft) {
+                      return (
+                        <div key={m.id} className="add-meal-form" style={{marginBottom:8}}>
+                          <div className="eyebrow" style={{marginBottom:12}}>Edit meal</div>
+                          {[
+                            { label:"Name",         key:"name", ph:"Chicken + quinoa" },
+                            { label:"Description",  key:"desc", ph:"Ingredients + quantities" },
+                            { label:"Tip (optional)", key:"tip", ph:"Context / pairing" },
+                          ].map(f => (
+                            <div key={f.key} style={{marginBottom:10}}>
+                              <label>{f.label}</label>
+                              <input value={editDraft[f.key]} onChange={e => setEditDraft(p=>({...p,[f.key]:e.target.value}))} placeholder={f.ph} type="text"/>
+                            </div>
+                          ))}
+                          <div className="amf-row">
+                            <div>
+                              <label>Kcal</label>
+                              <input value={editDraft.baseKcal} onChange={e => setEditDraft(p=>({...p,baseKcal:e.target.value}))} placeholder="500" type="text" inputMode="decimal" style={{textAlign:"center"}}/>
+                            </div>
+                            <div>
+                              <label>Prot g</label>
+                              <input value={editDraft.baseProt} onChange={e => setEditDraft(p=>({...p,baseProt:e.target.value}))} placeholder="40" type="text" inputMode="decimal" style={{textAlign:"center"}}/>
+                            </div>
+                            <div>
+                              <label>Category</label>
+                              <select value={editDraft.cat} onChange={e => setEditDraft(p=>({...p,cat:e.target.value}))}>
+                                {CAT_ORDER.map(c => <option key={c} value={c}>{c}</option>)}
+                              </select>
+                            </div>
+                          </div>
+                          <div className="amf-check">
+                            <input type="checkbox" checked={editDraft.carbHeavy} onChange={e => setEditDraft(p=>({...p,carbHeavy:e.target.checked}))} id={`carb-${m.id}`}/>
+                            <label htmlFor={`carb-${m.id}`} style={{marginBottom:0}}>Carb-heavy (scales portions per phase)</label>
+                          </div>
+                          <div style={{display:"grid", gridTemplateColumns:"auto 1fr 1fr", gap:10}}>
+                            <button className="btn danger" style={{padding:"10px 12px"}} onClick={() => {
+                              if (confirm(`Delete "${m.name}" from the library?`)) deleteMeal(m.id);
+                            }}>Delete</button>
+                            <button className="btn ghost" onClick={cancelEditMeal}>Cancel</button>
+                            <button className="btn accent" onClick={saveEditMeal}>Save</button>
+                          </div>
                         </div>
-                        <button className="meal-lib-add" onClick={() => { addMealToday(m); setView("today"); }}>+ add</button>
+                      );
+                    }
+                    return (
+                      <div key={m.id} className={`meal-lib-item${m.fav?" fav":""}`}>
+                        <div className="meal-lib-top">
+                          <div style={{flex:1, minWidth:0}}>
+                            <div className="meal-lib-name">{m.name}</div>
+                            <div className="meal-lib-desc">{m.desc}</div>
+                            {m.tip && <div className="meal-lib-tip">💡 {m.tip}</div>}
+                          </div>
+                          <div className="meal-lib-actions">
+                            <button className="meal-lib-add" onClick={() => { addMealToday(m); setView("today"); }}>+ add</button>
+                            <div className="meal-lib-mini-row">
+                              <button
+                                className={`meal-lib-mini star${m.fav?" on":""}`}
+                                onClick={() => toggleFavMeal(m.id)}
+                                title={m.fav ? "Unfavorite" : "Favorite"}
+                              >{m.fav ? "★" : "☆"}</button>
+                              <button
+                                className="meal-lib-mini"
+                                onClick={() => startEditMeal(m)}
+                                title="Edit meal"
+                              >Edit</button>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="meal-lib-meta">
+                          <span className="k">{getMealKcal(m,phase)} kcal</span>
+                          <span className="p">{m.baseProt}g prot</span>
+                          {m.carbHeavy && <span className="tag">{phase==="bulk"?"↑ bulk carbs":"↓ cut carbs"}</span>}
+                        </div>
                       </div>
-                      <div className="meal-lib-meta">
-                        <span className="k">{getMealKcal(m,phase)} kcal</span>
-                        <span className="p">{m.baseProt}g prot</span>
-                        {m.carbHeavy && <span className="tag">{phase==="bulk"?"↑ bulk carbs":"↓ cut carbs"}</span>}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               );
             })}
@@ -5769,7 +6150,7 @@ function StatsTab({ stats, setStats, phase, theme, setTheme }) {
             </button>
           ))}
         </div>
-        <div className="app-version">PHUL Tracker · v6.9</div>
+        <div className="app-version">PHUL Tracker · v7.0</div>
       </div>
 
       <DataBackup />
@@ -5780,7 +6161,7 @@ function StatsTab({ stats, setStats, phase, theme, setTheme }) {
 // ─── DATA BACKUP ─────────────────────────────────────────────────────────────
 function DataBackup() {
   const [status, setStatus] = useState("");
-  const keys = ["phul_phase","phul_stats","phul_logs","phul_diet","phul_draft","phul_meals","phul_custom_sessions","phul_theme"];
+  const keys = ["phul_phase","phul_stats","phul_logs","phul_diet","phul_draft","phul_makeup_draft","phul_meals","phul_custom_sessions","phul_theme","phul_dismissed_makeups"];
 
   const exportData = () => {
     const data = {};
