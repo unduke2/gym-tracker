@@ -2836,8 +2836,27 @@ function lsGet(key) {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; } catch { return null; }
 }
 function lsSet(key, val) {
-  try { if (val === null) { localStorage.removeItem(key); } else { localStorage.setItem(key, JSON.stringify(val)); } } catch {}
+  try {
+    if (val === null) { localStorage.removeItem(key); }
+    else { localStorage.setItem(key, JSON.stringify(val)); }
+    return true;
+  } catch (e) {
+    // Don't fail silently — a swallowed write means lost data with a misleading
+    // "saved" UI. Warn always; alert on quota so the user can export + free space.
+    console.warn("lsSet failed for", key, e);
+    if (e && (e.name === "QuotaExceededError" || e.code === 22 || e.code === 1014)) {
+      try { alert("Storage is full — your latest change may not have saved. Export a backup from the Body tab and free up space."); } catch {}
+    }
+    return false;
+  }
 }
+
+// Local calendar date as YYYY-MM-DD. NOT toISOString() (which is UTC and files
+// after-midnight entries on the wrong day for anyone east/west of UTC).
+function isoLocal(d) {
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+function todayStr() { return isoLocal(new Date()); }
 
 // ─── EQUIPMENT & PROGRESSION ──────────────────────────────────────────────────
 function getEquipmentType(exName) {
@@ -2876,6 +2895,9 @@ function avgReps(sets) {
 function calcNextWeight(exercise, logs) {
   const eq = getEquipmentType(exercise.name);
   const baseInc = getBaseIncrement(eq);
+  // Lowest sane suggestion: empty bar for barbells, one increment otherwise.
+  // Clamps deloads so they never round back up or bottom out at 0kg.
+  const minWeight = exercise.barbell ? (exercise.barWeight || BAR.olympic) : baseInc;
   const [minR, maxR] = exercise.repRange.split("-").map(Number);
 
   // ─── Pull last 3 same-day sessions (only those with actual logged data for this exercise) ──
@@ -2925,8 +2947,20 @@ function calcNextWeight(exercise, logs) {
   }
 
   const lastWeight  = parseFloat(filledLast[0].weight);
-  const reps        = filledLast.map(s => parseInt(s.reps));
-  const setCount    = filledLast.length;
+  if (!(lastWeight > 0)) { // non-numeric / ≤0 weight — don't propagate NaN into a suggestion
+    return { weight: exercise.startWeight, status: "start", increment: baseInc, eq, note: `Start: ${exercise.startWeight}kg` };
+  }
+  // Judge progression only on sets done AT the working (top) weight, so a
+  // mid-exercise back-off / drop set isn't credited against the heavier load.
+  const workingSets = filledLast.filter(s =>
+    Math.abs(parseFloat(s.weight) - lastWeight) < 1e-9 && Number.isFinite(parseInt(s.reps)));
+  const judgeSets   = workingSets.length ? workingSets : filledLast;
+  const reps        = judgeSets.map(s => parseInt(s.reps)).filter(Number.isFinite);
+  const setCount    = reps.length;
+  if (!setCount) {
+    const w = snap(lastWeight, eq);
+    return { weight: w, status: "same", increment: baseInc, eq, note: `→ hold ${w}kg — log clean sets at this weight.` };
+  }
 
   // ─── Performance metrics ───────────────────────────────────────────────
   const totalReps        = reps.reduce((a, b) => a + b, 0);
@@ -2940,6 +2974,17 @@ function calcNextWeight(exercise, logs) {
   const allTop           = reps.every(r => r >= maxR);
   const totalOverTop     = reps.reduce((sum, r) => sum + Math.max(0, r - maxR), 0);
 
+  // ─── RPE signal (optional) ──────────────────────────────────────────────
+  // RPE is logged per set but may be absent (older logs, or you didn't tap it).
+  // When present it refines push/hold calls: low effort → room to add load;
+  // near-max effort → consolidate. avgRpe stays null when no set carried an RPE,
+  // and every branch below then behaves exactly as the rep-only version did.
+  const rpeVals = filledLast.map(s => s.rpe).filter(v => typeof v === "number" && v > 0);
+  const avgRpe  = rpeVals.length ? rpeVals.reduce((a, b) => a + b, 0) / rpeVals.length : null;
+  const rpeShow = avgRpe !== null ? Math.round(avgRpe * 2) / 2 : null; // nearest 0.5, for notes
+  const rpeEasy = avgRpe !== null && avgRpe <= 7;    // ≈3+ reps left — clear room to progress
+  const rpeMax  = avgRpe !== null && avgRpe >= 9.5;  // grinding, ~0 reps left — back off pushing
+
   // ─── Stall counter: consecutive sessions at same weight without hitting top ──
   let stallCount = 0;
   for (const sessionSets of history) {
@@ -2951,22 +2996,37 @@ function calcNextWeight(exercise, logs) {
     stallCount++;
   }
 
-  // ─── Pct helper ────────────────────────────────────────────────────────
-  const pct = (p) => snap(lastWeight * p, eq);
+  // ─── Deload helper ───────────────────────────────────────────────────────
+  // A deload must actually reduce the load: at light weights a raw -7/-10/-15%
+  // can round back to the same number, so force at least one increment down and
+  // clamp to a sane floor (empty bar / one increment) — never 0kg.
+  const dropTo = (p) =>
+    Math.max(minWeight, Math.min(snap(lastWeight * p, eq), snap(lastWeight - baseInc, eq)));
 
   // ─── DECISION TREE (priority order, first match wins) ──────────────────
 
   // 1. CRUSH — all sets ≥ maxR AND cumulative excess ≥ setCount (~1 extra rep per set)
   if (allTop && totalOverTop >= setCount) {
-    const next = snap(lastWeight + baseInc * 2, eq);
+    const inc  = rpeMax ? baseInc : baseInc * 2;   // near-max effort → temper the jump
+    const next = snap(lastWeight + inc, eq);
     return {
-      weight: next, status: "crush", increment: baseInc * 2, eq,
-      note: `↑↑ +${baseInc*2}kg — crushed it (+${totalOverTop} reps over top). Big jump.`
+      weight: next, status: "crush", increment: inc, eq,
+      note: rpeMax
+        ? `↑ +${inc}kg — beat the top (+${totalOverTop} reps) but RPE ~${rpeShow}. Solid bump.`
+        : `↑↑ +${inc}kg — crushed it (+${totalOverTop} reps over top). Big jump.`
     };
   }
 
   // 2. PROGRESS — all sets hit top
   if (allTop) {
+    // Hit every top rep AND it felt easy → there's clear headroom, jump harder.
+    if (rpeEasy) {
+      const next = snap(lastWeight + baseInc * 2, eq);
+      return {
+        weight: next, status: "crush", increment: baseInc * 2, eq,
+        note: `↑↑ +${baseInc*2}kg — all sets at ${maxR} reps, RPE ~${rpeShow} (easy). Jump.`
+      };
+    }
     const next = snap(lastWeight + baseInc, eq);
     return {
       weight: next, status: "increase", increment: baseInc, eq,
@@ -2976,7 +3036,7 @@ function calcNextWeight(exercise, logs) {
 
   // 3. HARD DELOAD — 2+ fails with significant deficit
   if (failedSets >= 2 && worstDeficit >= 2) {
-    const drop = pct(0.85);
+    const drop = dropTo(0.85);
     return {
       weight: drop, status: "deload", increment: baseInc, eq,
       note: `↓↓ -15% deload — ${failedSets} sets well below ${minR}. Full reset.`
@@ -2985,7 +3045,7 @@ function calcNextWeight(exercise, logs) {
 
   // 4. DELOAD — 2+ fails, mild
   if (failedSets >= 2) {
-    const drop = pct(0.90);
+    const drop = dropTo(0.90);
     return {
       weight: drop, status: "deload", increment: baseInc, eq,
       note: `↓ -10% deload — ${failedSets} sets below ${minR}. Rebuild.`
@@ -2994,7 +3054,7 @@ function calcNextWeight(exercise, logs) {
 
   // 5. STEP DOWN — 1 fail, deficit ≥2 reps (weight was too heavy on one set)
   if (failedSets === 1 && worstDeficit >= 2) {
-    const drop = snap(lastWeight - baseInc, eq);
+    const drop = Math.max(minWeight, snap(lastWeight - baseInc, eq));
     return {
       weight: drop, status: "step-down", increment: baseInc, eq,
       note: `↓ -${baseInc}kg — one set hit ${worstReps} (${worstDeficit} below min). Small step back.`
@@ -3003,7 +3063,7 @@ function calcNextWeight(exercise, logs) {
 
   // 6. STALL RESET — held same weight for 2+ sessions without hitting top
   if (stallCount >= 2) {
-    const drop = pct(0.93);
+    const drop = dropTo(0.93);
     return {
       weight: drop, status: "stall-reset", increment: baseInc, eq,
       note: `↓ -7% stall reset — same weight for ${stallCount+1} sessions. Reset to build back stronger.`
@@ -3018,8 +3078,27 @@ function calcNextWeight(exercise, logs) {
     };
   }
 
-  // 8. STRONG HOLD — no fails, close to top. Try micro-progression on DB_light
+  // 8. STRONG HOLD — no fails, close to top.
   if (perf >= 0.75) {
+    // Close to top AND it felt easy → don't sit here, add load now.
+    if (rpeEasy) {
+      const inc  = eq === "dumbbell_light" ? dbIncrement(lastWeight) : baseInc;
+      const next = snap(lastWeight + inc, eq);
+      if (next > lastWeight) {
+        return {
+          weight: next, status: "increase", increment: inc, eq,
+          note: `↑ +${inc}kg — ${Math.round(perf*100)}% of target at RPE ~${rpeShow} (easy). Room to climb.`
+        };
+      }
+    }
+    // Near-max effort already → consolidate this weight before adding load.
+    if (rpeMax) {
+      return {
+        weight: lastWeight, status: "same", increment: baseInc, eq,
+        note: `→ hold ${lastWeight}kg — ${Math.round(perf*100)}% of target at RPE ~${rpeShow}. Consolidate, then push for top.`
+      };
+    }
+    // Micro-progression for light dumbbells (rep-only default).
     if (eq === "dumbbell_light") {
       const microInc = dbIncrement(lastWeight);
       const next = snap(lastWeight + microInc, eq);
@@ -3145,13 +3224,12 @@ const PHUL = {
       // Tier 2 — accessory compounds
       { name: "Flat DB Press",         day: "Upper Hypertrophy", tier: 2, sets: 4, repRange: "8-12",  startWeight: 20,  note: "Wide ROM. Full stretch each rep. Per dumbbell." },
       { name: "One Arm DB Row",        day: "Upper Hypertrophy", tier: 2, sets: 3, repRange: "10-12", startWeight: 20,  note: "Big stretch at bottom, row to hip. Per dumbbell." },
-      { name: "Cable Fly",             day: "Upper Hypertrophy", tier: 2, sets: 3, repRange: "12-15", startWeight: 10,  note: "Squeeze hard at centre." },
       // Tier 3 — isolations
-      { name: "DB Lateral Raise",      day: "Upper Hypertrophy", tier: 3, sets: 4, repRange: "12-15", startWeight: 7,   note: "Lead with elbows. Per dumbbell." },
-      { name: "Face Pull",             day: "Upper Hypertrophy", tier: 3, sets: 5, repRange: "12-20", startWeight: 25,  note: "Rotate externally. Shoulder health." },
-      { name: "Incline DB Curl",       day: "Upper Hypertrophy", tier: 3, sets: 4, repRange: "10-15", startWeight: 9,   supersetWith: "Tricep Pushdown", note: "Full stretch — great for long head. Per dumbbell." },
-      { name: "Hammer Curl",           day: "Upper Hypertrophy", tier: 3, sets: 3, repRange: "10-15", startWeight: 9,   note: "Neutral grip — brachialis & brachioradialis. Builds arm thickness. Per dumbbell." },
+      { name: "DB Lateral Raise",      day: "Upper Hypertrophy", tier: 3, sets: 5, repRange: "12-15", startWeight: 7,   note: "Lead with elbows. Side delts are the one muscle you under-train — earn these. Per dumbbell." },
+      { name: "Face Pull",             day: "Upper Hypertrophy", tier: 3, sets: 4, repRange: "12-20", startWeight: 25,  note: "Rotate externally. Shoulder health + rear delts." },
+      { name: "Incline DB Curl",       day: "Upper Hypertrophy", tier: 3, sets: 3, repRange: "10-15", startWeight: 9,   supersetWith: "Tricep Pushdown", note: "Full stretch — great for long head. Per dumbbell." },
       { name: "Tricep Pushdown",       day: "Upper Hypertrophy", tier: 3, sets: 3, repRange: "10-15", startWeight: 25,  supersetWith: "Incline DB Curl", note: "Lock elbows. Squeeze at bottom." },
+      { name: "Hammer Curl",           day: "Upper Hypertrophy", tier: 3, sets: 3, repRange: "10-15", startWeight: 9,   note: "Neutral grip — brachialis & brachioradialis (arm thickness + forearms). Standalone, not chained to the incline curl. Per dumbbell." },
     ]
   },
   "Lower Hypertrophy": {
@@ -3199,17 +3277,29 @@ const Bar = ({ value, max, color }) => (
 );
 
 // ─── APP ──────────────────────────────────────────────────────────────────────
+// Stable signature for a catch-up (makeup) session: its day + the exact set of
+// exercises being made up. Used to key concurrent makeup drafts so two running
+// catch-ups never share — and clobber — a single storage slot.
+function makeupKey(dayName, filter) {
+  return dayName + "::" + [...(filter || [])].sort().join("|");
+}
 function App() {
   const [tab, setTab]               = useState("dash");
   const [phase, setPhase]           = useState(() => lsGet("phul_phase") || "bulk");
   const [theme, setTheme]           = useState(() => lsGet("phul_theme") || "carbon");
-  const [stats, setStats]           = useState(() => lsGet("phul_stats") || [INIT_STATS]);
+  const [stats, setStats]           = useState(() => { const s = lsGet("phul_stats"); return (Array.isArray(s) && s.length) ? s : [INIT_STATS]; });
   const [workoutLogs, setWorkoutLogs] = useState(() => lsGet("phul_logs") || {});
   const [dietLogs, setDietLogs]     = useState(() => lsGet("phul_diet") || {});
   const [draftSession, setDraftSession] = useState(() => lsGet("phul_draft") || null);
-  // Separate slot for in-progress catch-up sessions so a running makeup doesn't
-  // clobber a paused regular-session draft. Carries { dayName, filter, data, ... }.
-  const [makeupDraft, setMakeupDraft] = useState(() => lsGet("phul_makeup_draft") || null);
+  // Map of in-progress catch-up sessions, keyed by makeupKey(dayName, filter), so
+  // two concurrent catch-ups each keep their own slot instead of sharing one and
+  // overwriting each other. Migrates the legacy single-draft shape on first load.
+  const [makeupDrafts, setMakeupDrafts] = useState(() => {
+    const raw = lsGet("phul_makeup_draft");
+    if (!raw) return {};
+    if (raw.dayName && raw.filter) return { [makeupKey(raw.dayName, raw.filter)]: raw }; // migrate v≤7.0
+    return raw;
+  });
   const [activeSession, setActiveSession] = useState(null);
   // When set, SessionLogger runs a filtered slice of the day's plan — used
   // for "catch up" standalone makeup sessions. Array of exercise names to
@@ -3240,13 +3330,17 @@ function App() {
     document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
 
-  const latest = stats[stats.length - 1];
+  const latest = stats[stats.length - 1] || INIT_STATS;
   const kcalTarget = phase === "bulk" ? BULK_KCAL : CUT_KCAL;
-  const today = new Date().toISOString().slice(0,10);
+  const today = todayStr();
   const todayDiet = dietLogs[today] || { kcal:0, protein:0, notes:"" };
 
   const saveDraft = (state) => {
-    const d = { dayName: activeSession, ...draftSession, ...state };
+    // Only merge an EXISTING draft if it belongs to THIS day. Otherwise a stale
+    // draft from a different day would leak its dayName/fields into the new
+    // session and corrupt it. dayName is authoritative, so it's set last.
+    const base = (draftSession && draftSession.dayName === activeSession) ? draftSession : {};
+    const d = { ...base, ...state, dayName: activeSession };
     setDraftSession(d);
     lsSet("phul_draft", d);
   };
@@ -3254,19 +3348,22 @@ function App() {
   const clearDraft = () => { setDraftSession(null); lsSet("phul_draft", null); };
 
   const saveMakeupDraft = (state) => {
-    const d = { dayName: activeSession, filter: activeSessionFilter, ...makeupDraft, ...state };
-    setMakeupDraft(d);
-    lsSet("phul_makeup_draft", d);
+    const key = makeupKey(activeSession, activeSessionFilter);
+    setMakeupDrafts(prev => {
+      const next = { ...prev, [key]: { ...prev[key], ...state, dayName: activeSession, filter: activeSessionFilter } };
+      lsSet("phul_makeup_draft", next);
+      return next;
+    });
   };
 
-  const clearMakeupDraft = () => { setMakeupDraft(null); lsSet("phul_makeup_draft", null); };
-
-  // Compare two exercise-name arrays for equivalent set membership (order-free).
-  const sameFilter = (a, b) => {
-    if (!a || !b) return false;
-    if (a.length !== b.length) return false;
-    const A = [...a].sort(), B = [...b].sort();
-    return A.every((x, i) => x === B[i]);
+  // Clears just this catch-up's slot (keyed) — leaves any other running makeup intact.
+  const clearMakeupDraft = (dayName, filter) => {
+    setMakeupDrafts(prev => {
+      const next = { ...prev };
+      delete next[makeupKey(dayName, filter)];
+      lsSet("phul_makeup_draft", next);
+      return next;
+    });
   };
 
   // Derived: pending catch-up groups (for dashboard banner + makeup starter)
@@ -3289,6 +3386,18 @@ function App() {
     }
     setActiveSessionFilter(exNames);
     setActiveSession(dayType);
+  };
+
+  // Guard the normal "Start" buttons: the regular draft lives in a single slot,
+  // so starting a DIFFERENT day would overwrite an unfinished one. Confirm first;
+  // resuming the same day (or starting with no draft) skips the prompt.
+  const startSession = (dayKey) => {
+    if (draftSession && draftSession.dayName && draftSession.dayName !== dayKey) {
+      const ok = window.confirm(`You have an unfinished "${draftSession.dayName}" session saved. Discard it and start a new one?\n\nTap Cancel to keep it — you can Resume it from the banner instead.`);
+      if (!ok) return;
+      clearDraft();
+    }
+    setActiveSession(dayKey);
   };
 
   if (activeSession) {
@@ -3314,10 +3423,10 @@ function App() {
       return null;
     }
     // Pick the right draft slot for this session. Filtered (catch-up) sessions
-    // use phul_makeup_draft — keyed by dayName + filter exact match — so they
-    // don't conflict with any paused regular-session draft.
+    // look up their own keyed slot in makeupDrafts (day + exact exercise set), so
+    // concurrent catch-ups never share — or clobber — a draft.
     const savedForThis = activeSessionFilter
-      ? (makeupDraft?.dayName === activeSession && sameFilter(makeupDraft?.filter, activeSessionFilter) ? makeupDraft : null)
+      ? (makeupDrafts[makeupKey(activeSession, activeSessionFilter)] || null)
       : (draftSession?.dayName === activeSession ? draftSession : null);
     return (
       <SessionLogger
@@ -3342,13 +3451,13 @@ function App() {
             durationMins,
             abandoned: abandoned || []
           }}));
-          if (activeSessionFilter) clearMakeupDraft(); else clearDraft();
+          if (activeSessionFilter) clearMakeupDraft(activeSession, activeSessionFilter); else clearDraft();
           setActiveSession(null);
           setActiveSessionFilter(null);
           setTab("workout");
         }}
         onDiscard={() => {
-          if (activeSessionFilter) clearMakeupDraft(); else clearDraft();
+          if (activeSessionFilter) clearMakeupDraft(activeSession, activeSessionFilter); else clearDraft();
           setActiveSession(null);
           setActiveSessionFilter(null);
         }}
@@ -3407,8 +3516,8 @@ function App() {
       </header>
 
       <main className="app-main">
-        {tab==="dash"    && <Dashboard latest={latest} phase={phase} kcalTarget={kcalTarget} todayDiet={todayDiet} workoutLogs={workoutLogs} setTab={setTab} setActiveSession={setActiveSession} draftSession={draftSession} pendingMakeups={pendingMakeups} startMakeup={startMakeup} dismissMakeup={dismissMakeup} />}
-        {tab==="workout" && <WorkoutTab workoutLogs={workoutLogs} setWorkoutLogs={setWorkoutLogs} setActiveSession={setActiveSession} draftSession={draftSession} customSessions={customSessions} setCustomSessions={setCustomSessions} />}
+        {tab==="dash"    && <Dashboard latest={latest} phase={phase} kcalTarget={kcalTarget} todayDiet={todayDiet} workoutLogs={workoutLogs} setTab={setTab} setActiveSession={setActiveSession} startSession={startSession} draftSession={draftSession} pendingMakeups={pendingMakeups} startMakeup={startMakeup} dismissMakeup={dismissMakeup} />}
+        {tab==="workout" && <WorkoutTab workoutLogs={workoutLogs} setWorkoutLogs={setWorkoutLogs} setActiveSession={setActiveSession} startSession={startSession} draftSession={draftSession} customSessions={customSessions} setCustomSessions={setCustomSessions} />}
         {tab==="diet"    && <DietTab today={today} todayDiet={todayDiet} kcalTarget={kcalTarget} dietLogs={dietLogs} setDietLogs={setDietLogs} phase={phase} stats={stats} />}
         {tab==="stats"   && <StatsTab stats={stats} setStats={setStats} phase={phase} theme={theme} setTheme={setTheme} />}
       </main>
@@ -3510,7 +3619,7 @@ function mesocycleDelta(workoutLogs, dayType) {
   const deltaPct = ((last - avg) / avg) * 100;
   return { last, avg, deltaPct };
 }
-function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, setActiveSession, draftSession, pendingMakeups = [], startMakeup, dismissMakeup }) {
+function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, setActiveSession, startSession, draftSession, pendingMakeups = [], startMakeup, dismissMakeup }) {
   // When a pending group is tapped, this holds it for the choice modal.
   const [catchupOpen, setCatchupOpen] = useState(null);
   // Convert a ts → relative "3 days ago" / "today" / "2w ago"
@@ -3718,7 +3827,7 @@ function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, 
           </div>
         )}
 
-        <button className="start-btn" onClick={() => setActiveSession(nextDay)}>
+        <button className="start-btn" onClick={() => startSession(nextDay)}>
           Start session
           <svg className="arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M5 12h14M13 6l6 6-6 6"/>
@@ -4849,7 +4958,7 @@ function validateCustomSession(obj, existingIds) {
   return [normalized, null];
 }
 
-function WorkoutTab({ workoutLogs, setWorkoutLogs, setActiveSession, draftSession, customSessions, setCustomSessions }) {
+function WorkoutTab({ workoutLogs, setWorkoutLogs, setActiveSession, startSession, draftSession, customSessions, setCustomSessions }) {
   const [view, setView] = useState("plan");
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [confirmDelCustom, setConfirmDelCustom] = useState(null);
@@ -4912,7 +5021,7 @@ function WorkoutTab({ workoutLogs, setWorkoutLogs, setActiveSession, draftSessio
                     <span className={`eyebrow eyebrow-${typeCls}`}>{p.type === "power" ? "Power" : "Hypertrophy"}</span>
                     <div className="day-card-name">{day}</div>
                   </div>
-                  <button className="day-card-start" onClick={() => setActiveSession(day)}>Start</button>
+                  <button className="day-card-start" onClick={() => startSession(day)}>Start</button>
                 </div>
                 <div className="day-card-ex-list">
                   {p.exercises.map(ex => (
@@ -4951,7 +5060,7 @@ function WorkoutTab({ workoutLogs, setWorkoutLogs, setActiveSession, draftSessio
                     {s.description && <div style={{fontFamily:"var(--font-mono)", fontSize:10, color:"var(--ink-3)", marginTop:4, letterSpacing:"0.04em"}}>{s.description}</div>}
                   </div>
                   <div style={{display:"flex", gap:6, flexDirection:"column", alignItems:"flex-end"}}>
-                    <button className="day-card-start" onClick={() => setActiveSession(s.id)}>Start</button>
+                    <button className="day-card-start" onClick={() => startSession(s.id)}>Start</button>
                     {confirmDelCustom === s.id ? (
                       <div className="del-confirm">
                         <button onClick={() => setConfirmDelCustom(null)}>cancel</button>
@@ -5193,37 +5302,42 @@ function DietTab({ today, todayDiet, kcalTarget, dietLogs, setDietLogs, phase, s
 
   // Date nav helpers
   const shiftDate = (days) => {
-    const d = new Date(editDate); d.setDate(d.getDate() + days);
-    const next = d.toISOString().slice(0,10);
+    const [y,m,dd] = editDate.split("-").map(Number);
+    const d = new Date(y, m-1, dd); d.setDate(d.getDate() + days);
+    const next = isoLocal(d);
     if (next > today) return; // don't navigate into the future
     setEditDate(next);
   };
   const prettyDate = (iso) => {
-    const d = new Date(iso);
+    const [y,m,dd] = iso.split("-").map(Number);
+    const d = new Date(y, m-1, dd); // parse as LOCAL date, not UTC midnight
     const wk = d.toLocaleDateString("en-US", { weekday: "short" });
     const mo = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
     return `${wk} · ${mo}`;
   };
 
-  // Streak — consecutive days hitting protein target
-  const sortedDays = Object.entries(dietLogs).sort((a,b) => b[0].localeCompare(a[0]));
+  // Walk back from today over CONSECUTIVE calendar days; a skipped day breaks
+  // the streak. An unlogged today is allowed (doesn't break it).
   let streak = 0;
-  for (const [,d] of sortedDays) {
-    if (d.protein >= PROTEIN_G) streak++; else break;
+  {
+    const cur = new Date();
+    const hit = (k) => { const l = dietLogs[k]; return !!(l && l.protein >= PROTEIN_G); };
+    if (!hit(isoLocal(cur))) cur.setDate(cur.getDate() - 1);
+    while (hit(isoLocal(cur))) { streak++; cur.setDate(cur.getDate() - 1); }
   }
 
   // 7-day grid
   const last7 = Array.from({length:7}, (_,i) => {
     const d = new Date(); d.setDate(d.getDate()-i);
-    const key = d.toISOString().slice(0,10);
+    const key = isoLocal(d);
     const log = dietLogs[key];
     return { key, log, isToday: key===today };
   }).reverse();
 
   // 14-day averages
   const recent14 = Object.entries(dietLogs).sort((a,b)=>b[0].localeCompare(a[0])).slice(0,14);
-  const avgKcal = recent14.length ? Math.round(recent14.reduce((s,[,d])=>s+d.kcal,0)/recent14.length) : 0;
-  const avgProt = recent14.length ? Math.round(recent14.reduce((s,[,d])=>s+d.protein,0)/recent14.length) : 0;
+  const avgKcal = recent14.length ? Math.round(recent14.reduce((s,[,d])=>s+(d.kcal||0),0)/recent14.length) : 0;
+  const avgProt = recent14.length ? Math.round(recent14.reduce((s,[,d])=>s+(d.protein||0),0)/recent14.length) : 0;
   const surplus = avgKcal - kcalTarget;
 
   const kcalPct = Math.min(100, (totalKcal/kcalTarget)*100);
@@ -5436,7 +5550,8 @@ function DietTab({ today, todayDiet, kcalTarget, dietLogs, setDietLogs, phase, s
                 </div>
                 <button className="meal-x" onClick={() => {
                   const updated = (editDiet.extras||[]).filter((_,idx)=>idx!==i);
-                  setDietLogs(prev => ({ ...prev, [editDate]:{ ...prev[editDate], extras:updated } }));
+                  const exK = updated.reduce((s,e)=>s+(e.kcal||0),0), exP = updated.reduce((s,e)=>s+(e.prot||0),0);
+                  setDietLogs(prev => ({ ...prev, [editDate]:{ ...prev[editDate]||{}, meals:dayMeals, extras:updated, kcal: mealKcal+exK, protein: mealProt+exP } }));
                 }}>×</button>
               </div>
             ))}
@@ -5458,7 +5573,8 @@ function DietTab({ today, todayDiet, kcalTarget, dietLogs, setDietLogs, phase, s
                 if (!k) return;
                 const item = { name: manualKcal.name||"Extra", kcal:k, prot:parseNum(manualKcal.prot)||0 };
                 const updated = [...(editDiet.extras||[]), item];
-                setDietLogs(prev => ({ ...prev, [editDate]:{ ...prev[editDate]||{}, extras:updated } }));
+                const exK = updated.reduce((s,e)=>s+(e.kcal||0),0), exP = updated.reduce((s,e)=>s+(e.prot||0),0);
+                setDietLogs(prev => ({ ...prev, [editDate]:{ ...prev[editDate]||{}, meals:dayMeals, extras:updated, kcal: mealKcal+exK, protein: mealProt+exP } }));
                 setManualKcal({ name:"", kcal:"", prot:"" });
               }}>+</button>
             </div>
@@ -5478,7 +5594,7 @@ function DietTab({ today, todayDiet, kcalTarget, dietLogs, setDietLogs, phase, s
                 const hitKcal = log && log.kcal >= kcalTarget;
                 const hitProt = log && log.protein >= PROTEIN_G;
                 const cellCls = !log ? "empty" : hitKcal && hitProt ? "ok" : hitProt ? "half" : "bad";
-                const day = new Date(key).toLocaleDateString("en-US",{weekday:"short"}).slice(0,1).toUpperCase();
+                const [ky,km,kd] = key.split("-").map(Number); const day = new Date(ky, km-1, kd).toLocaleDateString("en-US",{weekday:"short"}).slice(0,1).toUpperCase();
                 return (
                   <div key={key} className={`d7-cell ${cellCls} ${isToday?"today":""}`}>
                     <div className="dow">{day}</div>
@@ -5792,16 +5908,18 @@ function analyseProgress(stats, phase) {
 function StatsTab({ stats, setStats, phase, theme, setTheme }) {
   const [form, setForm] = useState({ weight:"", bodyFat:"" });
   const [saved, setSaved] = useState(false);
-  const latest = stats[stats.length-1];
-  const first  = stats[0];
+  const latest = stats[stats.length-1] || INIT_STATS;
+  const first  = stats[0] || INIT_STATS;
   const analysis = analyseProgress(stats, phase);
 
   const addEntry = () => {
-    if (!form.weight || !form.bodyFat) return;
     const w  = parseNum(form.weight);
     const bf = parseNum(form.bodyFat);
+    // Real numeric range guard — parseNum coerces garbage to 0, which would
+    // otherwise store a bogus 0kg/0% entry and fire a false "losing muscle" alert.
+    if (!(w >= 30 && w <= 300) || !(bf >= 3 && bf <= 60)) return;
     const e = {
-      date: new Date().toISOString().slice(0,10),
+      date: todayStr(),
       weight: w,
       bodyFat: bf,
       leanMass: parseFloat((w * (1 - bf/100)).toFixed(1)),
@@ -6085,7 +6203,7 @@ function StatsTab({ stats, setStats, phase, theme, setTheme }) {
         <button
           className={`btn ${saved?"ghost":form.weight&&form.bodyFat?"accent":""}`}
           onClick={addEntry}
-          disabled={!form.weight||!form.bodyFat||isNaN(parseNum(form.weight))||isNaN(parseNum(form.bodyFat))}
+          disabled={!(parseNum(form.weight)>=30 && parseNum(form.weight)<=300) || !(parseNum(form.bodyFat)>=3 && parseNum(form.bodyFat)<=60)}
         >
           {saved ? "Logged ✓" : "Log measurement"}
         </button>
@@ -6150,7 +6268,7 @@ function StatsTab({ stats, setStats, phase, theme, setTheme }) {
             </button>
           ))}
         </div>
-        <div className="app-version">PHUL Tracker · v7.0</div>
+        <div className="app-version">PHUL Tracker · v7.1</div>
       </div>
 
       <DataBackup />
@@ -6178,20 +6296,36 @@ function DataBackup() {
     setTimeout(() => setStatus(""), 2000);
   };
 
+  // Validate shapes BEFORE writing anything — a bad or old backup must never
+  // partially overwrite good data or persist a value that white-screens the app.
+  const okType = {
+    phul_phase:  v => v === "bulk" || v === "cut",
+    phul_stats:  v => Array.isArray(v) && v.length > 0,
+    phul_logs:   v => v && typeof v === "object" && !Array.isArray(v),
+    phul_diet:   v => v && typeof v === "object" && !Array.isArray(v),
+    phul_draft:  v => v === null || (v && typeof v === "object" && !Array.isArray(v)),
+    phul_makeup_draft: v => v === null || (v && typeof v === "object" && !Array.isArray(v)),
+    phul_meals:  v => Array.isArray(v),
+    phul_custom_sessions: v => Array.isArray(v),
+    phul_theme:  v => typeof v === "string",
+    phul_dismissed_makeups: v => Array.isArray(v),
+  };
   const importData = (e) => {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
-      try {
-        const data = JSON.parse(ev.target.result);
-        keys.forEach(k => { if (data[k] !== undefined) lsSet(k, data[k]); });
-        setStatus("imported ✓ — reload to see data");
-        setTimeout(() => window.location.reload(), 1500);
-      } catch {
-        setStatus("error — invalid file");
-        setTimeout(() => setStatus(""), 3000);
-      }
+      let data;
+      try { data = JSON.parse(ev.target.result); }
+      catch { setStatus("error — not valid JSON"); setTimeout(() => setStatus(""), 3000); return; }
+      const present = keys.filter(k => data[k] !== undefined);
+      if (!present.length) { setStatus("error — no recognizable data in file"); setTimeout(() => setStatus(""), 3000); return; }
+      const bad = present.filter(k => okType[k] && !okType[k](data[k]));
+      if (bad.length) { setStatus(`error — bad data for: ${bad.join(", ")}`); setTimeout(() => setStatus(""), 4000); return; }
+      // All-or-nothing: only writes once every present key validates.
+      present.forEach(k => lsSet(k, data[k]));
+      setStatus("imported ✓ — reload to see data");
+      setTimeout(() => window.location.reload(), 1500);
     };
     reader.readAsText(file);
     e.target.value = "";
@@ -6213,7 +6347,49 @@ function DataBackup() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+// Error boundary — a single render-time throw (e.g. one corrupt value) would
+// otherwise unmount React and white-screen the app permanently, with no way to
+// reach the export/import UI. This shows a recovery screen instead.
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  componentDidCatch(error, info) { console.error("PHUL crashed during render:", error, info); }
+  exportBackup() {
+    try {
+      const keys = ["phul_phase","phul_stats","phul_logs","phul_diet","phul_draft","phul_makeup_draft","phul_meals","phul_custom_sessions","phul_theme","phul_dismissed_makeups"];
+      const data = {};
+      keys.forEach(k => { try { const v = localStorage.getItem(k); if (v != null) data[k] = JSON.parse(v); } catch {} });
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "phul-backup-recovery.json";
+      a.click();
+    } catch (e) { console.warn(e); }
+  }
+  clearDrafts() {
+    try { localStorage.removeItem("phul_draft"); localStorage.removeItem("phul_makeup_draft"); } catch {}
+    location.reload();
+  }
+  render() {
+    if (!this.state.error) return this.props.children;
+    const wrap = { minHeight:"100dvh", background:"#0e0e10", color:"#f2f0ea", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:14, padding:24, fontFamily:"system-ui, -apple-system, sans-serif", textAlign:"center" };
+    const btn  = { width:"100%", maxWidth:320, padding:"15px", borderRadius:12, border:"1px solid rgba(255,255,255,0.18)", background:"#1b1b1f", color:"#f2f0ea", fontSize:15, fontWeight:700 };
+    return (
+      <div style={wrap}>
+        <div style={{fontSize:40}}>🛠️</div>
+        <div style={{fontSize:20, fontWeight:800}}>Something glitched</div>
+        <div style={{fontSize:14, color:"#c9c6bd", lineHeight:1.5, maxWidth:340}}>
+          The app hit an error while rendering, but <strong>your data is safe</strong> on this device. Export a backup first, then try clearing an unfinished session.
+        </div>
+        <button style={{...btn, background:"#ff4b1f", color:"#0e0e10", border:"none"}} onClick={() => this.exportBackup()}>Export backup ↓</button>
+        <button style={btn} onClick={() => this.clearDrafts()}>Clear unfinished session &amp; reload</button>
+        <button style={btn} onClick={() => location.reload()}>Just reload</button>
+        <div style={{fontSize:11, color:"#7f7c74", marginTop:8, maxWidth:340, wordBreak:"break-word"}}>{String((this.state.error && this.state.error.message) || this.state.error)}</div>
+      </div>
+    );
+  }
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<ErrorBoundary><App/></ErrorBoundary>);
 </script>
 </body>
 </html>

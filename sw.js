@@ -10,7 +10,7 @@
  * Bump CACHE_VERSION when the precache list changes (e.g. new vendor file).
  * App versions don't need a bump — HTML network-first handles those.
  */
-const CACHE_VERSION = "phul-v7.0";
+const CACHE_VERSION = "phul-v7.1";
 const PRECACHE = [
   "./",
   "./index.html",
