@@ -45,6 +45,7 @@
   --accent-ink:   #0e0e10;
   --accent-power: #ff4b1f;  /* Power days, heavy low reps */
   --accent-hyper: #3fd9bd;  /* Hypertrophy, volume */
+  --accent-full:  #4a9eff;  /* Full-body days */
   --accent-gold:  #e8b14a;  /* PR achievement */
   --accent-hold:  #ffb547;  /* Held / paused exercise */
   --ok:           #4ecb7a;
@@ -92,6 +93,7 @@
   --accent-ink:   #0c1a2e;
   --accent-power: #ff7a59;
   --accent-hyper: #6de3ff;
+  --accent-full:  #8fb8ff;
   --accent-gold:  #ffd36e;
   --accent-hold:  #ffc65a;
   --ok:          #7ee3b0;
@@ -1028,6 +1030,7 @@ button { cursor: pointer; }
 .wblock .sug-note.warn { color: var(--warn); }
 .wblock .sug-note.bad { color: var(--bad); }
 .wblock .sug-note.hold { color: var(--accent-hold); }
+.wblock .sug-note.info { color: var(--accent-full); }
 
 /* Plate diagram */
 .barbell {
@@ -1751,6 +1754,247 @@ button { cursor: pointer; }
   margin-left: 6px;
   letter-spacing: 0.12em;
   font-weight: 700;
+}
+.day-card-desc {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-3);
+  letter-spacing: 0.03em;
+  line-height: 1.5;
+  margin-top: 3px;
+}
+.day-ex-divider {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  padding: 10px 0 4px;
+  border-top: 1px dashed var(--line-2);
+  margin-top: 6px;
+}
+.day-ex-row.optional .ex-left,
+.day-ex-row.optional .ex-right { color: var(--ink-4); }
+
+/* ── Full-body day type ── */
+.pill.fullbody { background: color-mix(in oklab, var(--accent-full) 14%, transparent); color: var(--accent-full); }
+.eyebrow-fullbody { color: var(--accent-full); }
+.eyebrow-fullbody::before {
+  content: "";
+  display: inline-block;
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+  background: var(--accent-full);
+}
+.day-card.fullbody { border-left: 3px solid var(--accent-full); }
+.day-card.fullbody .day-card-start { background: var(--accent-full); color: var(--accent-ink); }
+.hist-card.fullbody { border-left: 3px solid var(--accent-full); }
+.week-cell.fullbody .wc-mark {
+  background: color-mix(in oklab, var(--accent-full) 14%, transparent);
+  border-color: color-mix(in oklab, var(--accent-full) 38%, transparent);
+  color: var(--accent-full);
+}
+.week-cell.fullbody .wc-tag { color: var(--accent-full); }
+.week-cell.next .wc-mark {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.week-cell.next .wc-tag { color: var(--accent); font-weight: 800; }
+
+/* ── Consistency card ──
+   Replaces the old "N/4 sessions this week" quota readout. */
+.streak-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 4px 0 2px;
+}
+.streak-big { display: flex; flex-direction: column; line-height: 1; }
+.streak-big .sb-n {
+  font-family: var(--font-mono);
+  font-size: 30px;
+  font-weight: 800;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.streak-big .sb-l {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  margin-top: 5px;
+}
+.streak-weeks {
+  display: flex;
+  gap: 5px;
+  flex: 1;
+  align-items: center;
+  justify-content: flex-end;
+}
+.sw-dot {
+  width: 22px; height: 22px;
+  border-radius: 6px;
+  border: 1px solid var(--line-2);
+  background: var(--card-2, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sw-dot.on {
+  background: color-mix(in oklab, var(--ok) 22%, transparent);
+  border-color: color-mix(in oklab, var(--ok) 55%, transparent);
+}
+.sw-dot .sw-n {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ok);
+}
+.streak-note {
+  font-size: 12px;
+  color: var(--ink-3);
+  line-height: 1.55;
+  padding-top: 10px;
+  margin-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+/* ── One-time data-repair notice ── */
+.mig-card { border-color: color-mix(in oklab, var(--accent-full) 40%, var(--line)); }
+.mig-body { font-size: 12px; color: var(--ink-3); line-height: 1.6; }
+.mig-body ul { margin: 8px 0 0; padding-left: 16px; display: flex; flex-direction: column; gap: 6px; }
+.mig-body li { line-height: 1.55; }
+.mig-body b { color: var(--ink-2); font-family: var(--font-mono); }
+.mig-body i { font-family: var(--font-mono); font-style: normal; color: var(--ink-4); }
+
+/* ── Program switcher ── */
+.prog-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.prog-switch button {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  padding: 11px 12px;
+  border-radius: 11px;
+  border: 1px solid var(--line-2);
+  background: var(--card);
+  color: var(--ink-3);
+}
+.prog-switch button.on {
+  border-color: var(--accent);
+  background: color-mix(in oklab, var(--accent) 10%, var(--card));
+  color: var(--ink);
+}
+.prog-switch .ps-name { font-size: 13px; font-weight: 700; }
+.prog-switch .ps-tag {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  color: var(--ink-4);
+  line-height: 1.45;
+}
+
+/* ── Warm-up ramp ── */
+.warmup {
+  border: 1px dashed var(--line-2);
+  border-radius: 12px;
+  padding: 11px 13px 9px;
+  margin-bottom: 12px;
+  background: color-mix(in oklab, var(--accent-hold) 5%, transparent);
+}
+.warmup-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.warmup-head .wu-k {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent-hold);
+  font-weight: 700;
+}
+.warmup-head .wu-skip {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--ink-4);
+  background: none;
+  border: none;
+  padding: 2px 0;
+}
+.warmup-rows { display: flex; flex-direction: column; gap: 2px; }
+.wu-row {
+  display: grid;
+  grid-template-columns: 42px 1fr auto;
+  align-items: baseline;
+  gap: 10px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line);
+}
+.wu-row:last-child { border-bottom: none; }
+.wu-row .wu-tag {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+.wu-row .wu-w {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.wu-row .wu-w em { font-style: normal; font-size: 9px; color: var(--ink-4); margin-left: 2px; }
+.wu-row .wu-r {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.wu-row.target .wu-tag { color: var(--accent); }
+.wu-row.target .wu-w { color: var(--ink); font-size: 16px; }
+
+/* ── Minimum session ──
+   Styled as a real, affirmative option — not a muted "give up" link. */
+.finish-btn.min-session {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 14px 18px;
+  text-transform: none;
+  letter-spacing: 0;
+  border-color: color-mix(in oklab, var(--ok) 45%, var(--line-2));
+  background: color-mix(in oklab, var(--ok) 8%, var(--card));
+  color: var(--ok);
+}
+.finish-btn.min-session .ms-main {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.finish-btn.min-session .ms-sub {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  color: var(--ink-3);
+  text-transform: none;
 }
 
 /* Session history rows */
@@ -2858,10 +3102,84 @@ function isoLocal(d) {
 }
 function todayStr() { return isoLocal(new Date()); }
 
+// ─── NUMERIC PARSING ──────────────────────────────────────────────────────────
+// Weights and reps are stored as strings typed on a phone keyboard, so they can
+// carry a comma decimal ("17,5") from a locale keypad. parseFloat("17,5") is 17
+// — a silent 0.5kg data loss that then propagates through every progression
+// calculation. Always parse through num().
+function num(v) {
+  if (typeof v === "number") return Number.isFinite(v) ? v : NaN;
+  if (typeof v !== "string") return NaN;
+  const n = parseFloat(v.replace(",", "."));
+  return Number.isFinite(n) ? n : NaN;
+}
+// A set only counts toward progression if it carries a real weight AND real reps.
+// Reps of 0 means the set was attempted and missed entirely — it's a note to self,
+// not a data point, and feeding it to the decision tree reads as a catastrophic
+// failure and triggers a deload the lifter didn't earn.
+function isScorable(s) {
+  const w = num(s?.weight), r = num(s?.reps);
+  return w > 0 && Number.isFinite(r) && r > 0;
+}
+
+// ─── ONE-TIME DATA MIGRATION ──────────────────────────────────────────────────
+// Repairs historical damage from earlier versions. Idempotent and version-stamped
+// so it runs once. Each fix corresponds to a real corruption found in live data:
+//   1. comma decimals stored raw ("17,5" read back as 17kg)
+//   2. 0-rep sets stored with done:true (scored as total failure → phantom deloads)
+//   3. stranded makeup drafts left behind by abandoned catch-up sessions
+const MIGRATION_KEY = "phul_migration_v";
+const MIGRATION_VERSION = 1;
+function runMigrations() {
+  if ((lsGet(MIGRATION_KEY) || 0) >= MIGRATION_VERSION) return null;
+  const report = { commas: 0, zeroReps: 0, drafts: 0 };
+
+  const logs = lsGet("phul_logs");
+  if (logs && typeof logs === "object") {
+    for (const session of Object.values(logs)) {
+      for (const sets of Object.values(session?.exercises || {})) {
+        if (!Array.isArray(sets)) continue;
+        for (const s of sets) {
+          if (typeof s?.weight === "string" && s.weight.includes(",")) {
+            s.weight = s.weight.replace(",", ".");
+            report.commas++;
+          }
+          // Un-complete 0-rep sets rather than deleting them: the lifter's intent
+          // ("I tried this and got nothing") is preserved in history, it just
+          // stops counting as a scored failure.
+          if (s?.done && num(s.reps) === 0) {
+            s.done = false;
+            report.zeroReps++;
+          }
+        }
+      }
+    }
+    lsSet("phul_logs", logs);
+  }
+
+  // Drop makeup drafts with nothing actually logged in them — these are the
+  // residue of a catch-up that was opened and never started.
+  const drafts = lsGet("phul_makeup_draft");
+  if (drafts && typeof drafts === "object") {
+    const kept = {};
+    for (const [k, d] of Object.entries(drafts)) {
+      const touched = Object.values(d?.data || {}).some(sets =>
+        Array.isArray(sets) && sets.some(s => s?.done || String(s?.weight || "").trim() || String(s?.reps || "").trim()));
+      if (touched) kept[k] = d; else report.drafts++;
+    }
+    lsSet("phul_makeup_draft", Object.keys(kept).length ? kept : null);
+  }
+
+  lsSet(MIGRATION_KEY, MIGRATION_VERSION);
+  const total = report.commas + report.zeroReps + report.drafts;
+  return total ? report : null;
+}
+const MIGRATION_REPORT = runMigrations();
+
 // ─── EQUIPMENT & PROGRESSION ──────────────────────────────────────────────────
 function getEquipmentType(exName) {
   const barbell = ["Bench Press","OHP","Bent Over Row","Squat","Deadlift","Incline Barbell Press","Skull Crushers","EZ Bar Curl","Romanian Deadlift","Front Squat"];
-  const machine  = ["Leg Press","Lat Pulldown","Seated Cable Row","Leg Curl","Leg Extension","Calf Raise","Cable Fly","Face Pull","Tricep Pushdown","Hip Thrust","Hack Squat / Leg Press","Seated Calf Raise"];
+  const machine  = ["Leg Press","Lat Pulldown","Seated Cable Row","Leg Curl","Leg Extension","Calf Raise","Cable Fly","Face Pull","Tricep Pushdown","Hip Thrust","Hack Squat / Leg Press","Seated Calf Raise","Overhead Triceps Extension"];
   const dbLight  = ["DB Lateral Raise","Incline DB Curl","Rear Delt Fly","Hammer Curl","DB Curl"];
   if (barbell.includes(exName)) return "barbell";
   if (machine.includes(exName)) return "machine";
@@ -2892,6 +3210,27 @@ function avgReps(sets) {
   if (!f.length) return null;
   return f.reduce((s, x) => s + parseInt(x.reps), 0) / f.length;
 }
+// How much to discount an old result. A weight you last touched four months ago
+// is not a weight you can walk in and hit today — but it isn't gone either.
+// Retraining literature is consistent: restart at roughly 50–70% and the gap
+// closes in weeks, not months, because the muscle keeps its myonuclei.
+function stalenessFactor(days) {
+  if (days <= 21)  return 1;
+  if (days <= 35)  return 0.90;
+  if (days <= 60)  return 0.82;
+  if (days <= 120) return 0.72;
+  return 0.65;
+}
+
+// Position of an exercise within its session, 0 (first) → 1 (last). Used to tell
+// "this weight is too heavy" apart from "you did this at minute 85 of a 95-minute
+// session." The two look identical in the rep data and are not the same problem.
+function sessionPosition(session, exName) {
+  const names = Object.keys(session?.exercises || {});
+  const i = names.indexOf(exName);
+  return (i < 0 || names.length < 2) ? 0 : i / (names.length - 1);
+}
+
 function calcNextWeight(exercise, logs) {
   const eq = getEquipmentType(exercise.name);
   const baseInc = getBaseIncrement(eq);
@@ -2910,56 +3249,67 @@ function calcNextWeight(exercise, logs) {
     if (session.day === exercise.day) {
       if (session.abandoned?.includes(exercise.name)) continue;
       const sets = session.exercises?.[exercise.name];
-      if (sets?.length > 0 && sets.some(s => s.weight && s.reps)) {
-        history.push(sets);
+      if (sets?.length > 0 && sets.some(isScorable)) {
+        history.push({ sets, ts: session.ts, pos: sessionPosition(session, exercise.name) });
       }
       if (history.length >= 3) break;
     }
   }
 
   if (!history.length) {
-    // No clean (non-abandoned) history exists. Before falling back to the
-    // original startWeight, check if an abandoned session has a last weight
-    // we can remember — partial data shouldn't drive progression (handled
-    // above by the skip), but it IS still a signal of "this is the weight
-    // you last used on this exercise." Return that weight with HOLD status.
+    // No history on this exercise in this session type. If the exercise declares
+    // where it came from (seedFrom), carry the load across from the old program
+    // instead of dumping the lifter back on a generic startWeight.
+    const seeded = computeRestartWeight(exercise, logs);
+    if (seeded) return seeded;
+
+    // Otherwise check whether an abandoned session remembers a weight. Partial
+    // data shouldn't drive progression, but it IS a record of "this is what you
+    // last had loaded."
     for (const [, session] of Object.entries(logs).sort((a,b) => b[1].ts - a[1].ts)) {
       if (session.day !== exercise.day) continue;
       const sets = session.exercises?.[exercise.name];
       if (!sets?.length) continue;
-      const filled = sets.filter(s => s.weight);
+      const filled = sets.filter(s => num(s.weight) > 0);
       if (!filled.length) continue;
-      const lastWeight = parseFloat(filled[0].weight);
-      if (isNaN(lastWeight) || lastWeight <= 0) continue;
-      const w = snap(lastWeight, eq);
+      const w = snap(num(filled[0].weight), eq);
       return {
         weight: w, status: "hold-partial", increment: baseInc, eq,
-        note: `→ hold ${w}kg — partial data last time, complete all sets this round.`
+        note: `→ ${w}kg — you only got partway through this last time. Finish the sets this round.`
       };
     }
     return { weight: exercise.startWeight, status: "start", increment: baseInc, eq, note: `Start: ${exercise.startWeight}kg` };
   }
 
-  const lastSets    = history[0];
-  const filledLast  = lastSets.filter(s => s.weight && s.reps);
+  const lastSets    = history[0].sets;
+  const filledLast  = lastSets.filter(isScorable);
   if (!filledLast.length) {
     return { weight: exercise.startWeight, status: "start", increment: baseInc, eq, note: "No data yet" };
   }
 
-  const lastWeight  = parseFloat(filledLast[0].weight);
+  // ─── Working weight = the weight actually WORKED at ─────────────────────
+  // Not the first set's weight. Anchoring on set 1 misreads both common patterns:
+  // ramping up (40, 50, 50 → judged as 40) and dropping down after a failed top
+  // set (60, 50, 50 → judged only on the 60 that got missed). The weight that
+  // appears on the most sets is the working weight; heaviest breaks ties.
+  const weightCounts = new Map();
+  for (const s of filledLast) {
+    const w = num(s.weight);
+    weightCounts.set(w, (weightCounts.get(w) || 0) + 1);
+  }
+  let lastWeight = NaN, bestCount = -1;
+  for (const [w, c] of weightCounts) {
+    if (c > bestCount || (c === bestCount && w > lastWeight)) { lastWeight = w; bestCount = c; }
+  }
   if (!(lastWeight > 0)) { // non-numeric / ≤0 weight — don't propagate NaN into a suggestion
     return { weight: exercise.startWeight, status: "start", increment: baseInc, eq, note: `Start: ${exercise.startWeight}kg` };
   }
-  // Judge progression only on sets done AT the working (top) weight, so a
-  // mid-exercise back-off / drop set isn't credited against the heavier load.
-  const workingSets = filledLast.filter(s =>
-    Math.abs(parseFloat(s.weight) - lastWeight) < 1e-9 && Number.isFinite(parseInt(s.reps)));
-  const judgeSets   = workingSets.length ? workingSets : filledLast;
-  const reps        = judgeSets.map(s => parseInt(s.reps)).filter(Number.isFinite);
-  const setCount    = reps.length;
+  const judgeSets = filledLast.filter(s => Math.abs(num(s.weight) - lastWeight) < 1e-9);
+  const reps      = judgeSets.map(s => num(s.reps)).filter(Number.isFinite);
+  const setCount  = reps.length;
   if (!setCount) {
     const w = snap(lastWeight, eq);
-    return { weight: w, status: "same", increment: baseInc, eq, note: `→ hold ${w}kg — log clean sets at this weight.` };
+    return { weight: w, status: "same", increment: baseInc, eq, note: `→ ${w}kg — log clean sets at this weight.` };
   }
 
   // ─── Performance metrics ───────────────────────────────────────────────
@@ -2972,7 +3322,25 @@ function calcNextWeight(exercise, logs) {
   const worstDeficit     = Math.max(0, minR - worstReps);
   const failedSets       = reps.filter(r => r < minR).length;
   const allTop           = reps.every(r => r >= maxR);
-  const totalOverTop     = reps.reduce((sum, r) => sum + Math.max(0, r - maxR), 0);
+  // Excess measured on the WEAKEST set, not the total. A single big last set is
+  // a burnout/AMRAP set, not evidence the load was light: 5,5,12 on a 3-5 range
+  // used to sum to "+7 over top" and fire a double-increment every session,
+  // which walked the weight up far past what three honest sets could hold.
+  const minOverTop       = Math.max(0, worstReps - maxR);
+  // A wide rep spread across sets at the same weight means the last set was a
+  // burnout, not a working set. When that's the pattern, average RPE stops being
+  // a trustworthy "was this easy?" signal — the prescribed sets can read as easy
+  // purely because the finisher inflated the rep count.
+  const repSpread        = Math.max(...reps) - worstReps;
+  const burnoutPattern   = repSpread >= Math.max(3, (maxR - minR) + 2);
+
+  // ─── Fatigue context ────────────────────────────────────────────────────
+  // An exercise done at the end of a long session is being judged on a tired
+  // body. Failing reps there is a scheduling fact, not a strength fact, and
+  // deloading for it walks accessory weights down session after session while
+  // the compounds at the front keep climbing.
+  const lateInSession    = history[0].pos >= 0.5;
+  const fatigueSuspect   = lateInSession && (exercise.tier || 3) >= 2;
 
   // ─── RPE signal (optional) ──────────────────────────────────────────────
   // RPE is logged per set but may be absent (older logs, or you didn't tap it).
@@ -2983,18 +3351,25 @@ function calcNextWeight(exercise, logs) {
   const avgRpe  = rpeVals.length ? rpeVals.reduce((a, b) => a + b, 0) / rpeVals.length : null;
   const rpeShow = avgRpe !== null ? Math.round(avgRpe * 2) / 2 : null; // nearest 0.5, for notes
   const rpeEasy = avgRpe !== null && avgRpe <= 7;    // ≈3+ reps left — clear room to progress
-  const rpeMax  = avgRpe !== null && avgRpe >= 9.5;  // grinding, ~0 reps left — back off pushing
+  // Target band is RIR 1–3 (RPE 7–9). Meta-analysis is clear that sets taken to
+  // momentary failure don't grow more muscle than sets left 1–3 short, they just
+  // cost more fatigue — which is the thing that ends training blocks.
+  const grinding = avgRpe !== null && avgRpe >= 9.5; // ~0 reps left — back off pushing
 
   // ─── Stall counter: consecutive sessions at same weight without hitting top ──
   let stallCount = 0;
-  for (const sessionSets of history) {
-    const sFilled = sessionSets.filter(s => s.weight && s.reps);
+  for (const h of history) {
+    const sFilled = h.sets.filter(isScorable);
     if (!sFilled.length) break;
-    if (parseFloat(sFilled[0].weight) !== lastWeight) break;
-    const sReps = sFilled.map(s => parseInt(s.reps));
+    if (Math.abs(num(sFilled[0].weight) - lastWeight) > 1e-9) break;
+    const sReps = sFilled.map(s => num(s.reps));
     if (sReps.every(r => r >= maxR)) break; // crushed it — not a stall
     stallCount++;
   }
+
+  // ─── Layoff detection ───────────────────────────────────────────────────
+  const daysSince = Math.max(0, Math.floor((Date.now() - (history[0].ts || Date.now())) / 86400000));
+  const stale     = daysSince > 21;
 
   // ─── Deload helper ───────────────────────────────────────────────────────
   // A deload must actually reduce the load: at light weights a raw -7/-10/-15%
@@ -3004,23 +3379,25 @@ function calcNextWeight(exercise, logs) {
     Math.max(minWeight, Math.min(snap(lastWeight * p, eq), snap(lastWeight - baseInc, eq)));
 
   // ─── DECISION TREE (priority order, first match wins) ──────────────────
+  const decide = () => {
 
-  // 1. CRUSH — all sets ≥ maxR AND cumulative excess ≥ setCount (~1 extra rep per set)
-  if (allTop && totalOverTop >= setCount) {
-    const inc  = rpeMax ? baseInc : baseInc * 2;   // near-max effort → temper the jump
+  // 1. CRUSH — EVERY set beat the top of the range. Measured on the weakest set
+  //    so one big finisher set can't manufacture a double jump on its own.
+  if (allTop && minOverTop >= 1) {
+    const inc  = grinding ? baseInc : baseInc * 2;   // near-max effort → temper the jump
     const next = snap(lastWeight + inc, eq);
     return {
       weight: next, status: "crush", increment: inc, eq,
-      note: rpeMax
-        ? `↑ +${inc}kg — beat the top (+${totalOverTop} reps) but RPE ~${rpeShow}. Solid bump.`
-        : `↑↑ +${inc}kg — crushed it (+${totalOverTop} reps over top). Big jump.`
+      note: grinding
+        ? `↑ +${inc}kg — every set beat ${maxR} reps, but at RPE ~${rpeShow}. Solid bump.`
+        : `↑↑ +${inc}kg — every set beat ${maxR} reps. Big jump.`
     };
   }
 
   // 2. PROGRESS — all sets hit top
   if (allTop) {
     // Hit every top rep AND it felt easy → there's clear headroom, jump harder.
-    if (rpeEasy) {
+    if (rpeEasy && !burnoutPattern) {
       const next = snap(lastWeight + baseInc * 2, eq);
       return {
         weight: next, status: "crush", increment: baseInc * 2, eq,
@@ -3030,7 +3407,22 @@ function calcNextWeight(exercise, logs) {
     const next = snap(lastWeight + baseInc, eq);
     return {
       weight: next, status: "increase", increment: baseInc, eq,
-      note: `↑ +${baseInc}kg — all sets hit ${maxR} reps.`
+      note: grinding
+        ? `↑ +${baseInc}kg — all sets hit ${maxR}. You're at RPE ~${rpeShow} though — stop a rep earlier this time.`
+        : `↑ +${baseInc}kg — all sets hit ${maxR} reps.`
+    };
+  }
+
+  // 2b. FATIGUE HOLD — this exercise sits late in the session and had a bad
+  //     round, but only one. Almost always the session catching up with you
+  //     rather than the load being wrong. Hold once; if it repeats, the deload
+  //     branches below still fire on the next pass.
+  // stallCount includes the session being judged, so it is already ≥1 whenever
+  // this round fell short — "< 2" is the first-offence test, not "< 1".
+  if (fatigueSuspect && failedSets >= 1 && stallCount < 2) {
+    return {
+      weight: lastWeight, status: "fatigue-hold", increment: baseInc, eq,
+      note: `→ ${lastWeight}kg — rough round, but this comes late in the session. Same weight, fresher legs.`
     };
   }
 
@@ -3039,7 +3431,7 @@ function calcNextWeight(exercise, logs) {
     const drop = dropTo(0.85);
     return {
       weight: drop, status: "deload", increment: baseInc, eq,
-      note: `↓↓ -15% deload — ${failedSets} sets well below ${minR}. Full reset.`
+      note: `↓ ${drop}kg — ${failedSets} sets came up short. Back off, rebuild, come back through it.`
     };
   }
 
@@ -3048,7 +3440,7 @@ function calcNextWeight(exercise, logs) {
     const drop = dropTo(0.90);
     return {
       weight: drop, status: "deload", increment: baseInc, eq,
-      note: `↓ -10% deload — ${failedSets} sets below ${minR}. Rebuild.`
+      note: `↓ ${drop}kg — ${failedSets} sets under ${minR}. Small back-off.`
     };
   }
 
@@ -3057,7 +3449,7 @@ function calcNextWeight(exercise, logs) {
     const drop = Math.max(minWeight, snap(lastWeight - baseInc, eq));
     return {
       weight: drop, status: "step-down", increment: baseInc, eq,
-      note: `↓ -${baseInc}kg — one set hit ${worstReps} (${worstDeficit} below min). Small step back.`
+      note: `↓ -${baseInc}kg — one set hit ${worstReps}. One step back.`
     };
   }
 
@@ -3066,7 +3458,7 @@ function calcNextWeight(exercise, logs) {
     const drop = dropTo(0.93);
     return {
       weight: drop, status: "stall-reset", increment: baseInc, eq,
-      note: `↓ -7% stall reset — same weight for ${stallCount+1} sessions. Reset to build back stronger.`
+      note: `↓ ${drop}kg — ${stallCount+1} sessions at the same weight. Reset and run it back up.`
     };
   }
 
@@ -3074,7 +3466,7 @@ function calcNextWeight(exercise, logs) {
   if (failedSets === 1 && worstDeficit === 1) {
     return {
       weight: lastWeight, status: "grind", increment: baseInc, eq,
-      note: `→ hold ${lastWeight}kg — one set hit ${worstReps}. Grind through it.`
+      note: `→ ${lastWeight}kg — one set hit ${worstReps}. One more rep and it's yours.`
     };
   }
 
@@ -3092,10 +3484,10 @@ function calcNextWeight(exercise, logs) {
       }
     }
     // Near-max effort already → consolidate this weight before adding load.
-    if (rpeMax) {
+    if (grinding) {
       return {
         weight: lastWeight, status: "same", increment: baseInc, eq,
-        note: `→ hold ${lastWeight}kg — ${Math.round(perf*100)}% of target at RPE ~${rpeShow}. Consolidate, then push for top.`
+        note: `→ ${lastWeight}kg — ${Math.round(perf*100)}% of target at RPE ~${rpeShow}. Own this weight before adding.`
       };
     }
     // Micro-progression for light dumbbells (rep-only default).
@@ -3111,14 +3503,127 @@ function calcNextWeight(exercise, logs) {
     }
     return {
       weight: lastWeight, status: "same", increment: baseInc, eq,
-      note: `→ hold ${lastWeight}kg — ${Math.round(perf*100)}% of target. Push for top.`
+      note: `→ ${lastWeight}kg — ${Math.round(perf*100)}% of target. Push for top.`
     };
   }
 
   // 9. HOLD — catchall for "not all top, but no failures"
   return {
     weight: lastWeight, status: "same", increment: baseInc, eq,
-    note: `→ hold ${lastWeight}kg — ${Math.round(perf*100)}% of target.`
+    note: `→ ${lastWeight}kg — ${Math.round(perf*100)}% of target.`
+  };
+  };
+
+  const result = decide();
+
+  // ─── Layoff override ────────────────────────────────────────────────────
+  // Everything above assumes the last session was recent. It wasn't. Handing
+  // back a weight from months ago is how a comeback session turns into a failed
+  // session turns into another month off — so scale the suggestion to the gap
+  // and say plainly that it's deliberate.
+  if (stale) {
+    const scaled = Math.max(minWeight, snap(result.weight * stalenessFactor(daysSince), eq));
+    if (scaled < result.weight) {
+      const wks = Math.round(daysSince / 7);
+      return {
+        ...result,
+        weight: scaled,
+        status: "return",
+        note: `→ ${scaled}kg — ${wks} weeks since you last did this. Starting light on purpose; you'll be back past it inside a month.`
+      };
+    }
+  }
+  return result;
+}
+
+// ─── RESTART SEEDING ──────────────────────────────────────────────────────────
+// A new program shouldn't throw away what the old one proved. When an exercise
+// declares `seedFrom` (names it maps to in prior history), carry the load across
+// — discounted for how long it's been, and adjusted for what the lift was doing
+// when it stopped:
+//   climbing  → it was working, stay close to it
+//   stalled   → it was already too heavy, cut deeper
+//   declining → almost always accumulated fatigue rather than lost strength
+//               (the old algorithm deloaded end-of-session accessories for being
+//               tired), so seed from the PEAK, not from the depressed last value
+function computeRestartWeight(exercise, logs) {
+  const names = exercise.seedFrom;
+  if (!names || !names.length) return null;
+  const eq = getEquipmentType(exercise.name);
+  const minWeight = exercise.barbell ? (exercise.barWeight || BAR.olympic) : getBaseIncrement(eq);
+
+  const mid = (range) => {
+    const [a, b] = String(range || "").split("-").map(Number);
+    return (Number.isFinite(a) && Number.isFinite(b)) ? (a + b) / 2 : null;
+  };
+  const targetMid = mid(exercise.repRange);
+
+  // Every appearance of any seed name, newest first, as {ts, weight, repMid}.
+  // repMid comes from whatever plan that session belonged to, so a lift that
+  // moves between rep ranges can be compared honestly.
+  const hits = [];
+  for (const [, session] of Object.entries(logs).sort((a,b) => b[1].ts - a[1].ts)) {
+    for (const n of names) {
+      const sets = session.exercises?.[n];
+      if (!sets?.length) continue;
+      const ws = sets.filter(isScorable).map(s => num(s.weight));
+      if (!ws.length) continue;
+      const srcEx = lookupDay(session.day)?.exercises?.find(e => e.name === n);
+      hits.push({ ts: session.ts, weight: Math.max(...ws), repMid: mid(srcEx?.repRange), name: n });
+    }
+  }
+  if (!hits.length) return null;
+
+  // "How long since you trained this movement" is a movement-level question —
+  // answer it from every source before any filtering, so a variation you did
+  // last week still counts as recent work.
+  const days   = Math.max(0, Math.floor((Date.now() - hits[0].ts) / 86400000));
+  const factor = stalenessFactor(days);
+
+  // "What weight" is not movement-level. The same exercise NAME can mean two
+  // different things across a program — the old plan ran Leg Curl at 6-10 on
+  // power days and 10-15 on hypertrophy days, at wildly different loads.
+  // Pooling those produces a fake trend ("climbing!") out of pure alternation,
+  // so trend and peak are read only from the closest-matching rep range.
+  if (targetMid && hits.some(h => h.repMid != null)) {
+    const dist = h => (h.repMid == null ? Infinity : Math.abs(h.repMid - targetMid));
+    const best = Math.min(...hits.map(dist));
+    const filtered = hits.filter(h => dist(h) === best);
+    if (filtered.length) { hits.length = 0; hits.push(...filtered); }
+  }
+
+  const last  = hits[0].weight;
+  const peak  = Math.max(...hits.map(h => h.weight));
+
+  // Trend over the last three appearances
+  const recent = hits.slice(0, 3).map(h => h.weight);
+  const climbing  = recent.length >= 2 && recent[0] > recent[recent.length - 1];
+  const declining = recent.length >= 2 && recent[0] < recent[recent.length - 1];
+
+  let base = last, trendAdj = 1, why = "";
+  if (climbing)        { trendAdj = 1.00; why = "was climbing"; }
+  else if (declining)  { base = peak; trendAdj = 0.90; why = `was drifting down (peak ${peak}kg)`; }
+  else                 { trendAdj = 0.90; why = "had stalled"; }
+
+  // Rep-range translation. A weight you hit for 4 reps is not a weight you hit
+  // for 7 — carrying it across a range change unchanged guarantees a failed
+  // first session. ~2.5% per rep, which is the usual rule of thumb, clamped so
+  // an odd source range can't produce a wild number.
+  const srcMid = hits[0].repMid;
+  let rangeAdj = 1;
+  if (srcMid && targetMid && srcMid !== targetMid) {
+    rangeAdj = Math.min(1.1, Math.max(0.8, 1 - 0.025 * (targetMid - srcMid)));
+  }
+
+  const w = Math.max(minWeight, snap(base * factor * trendAdj * rangeAdj, eq));
+  const wks = Math.round(days / 7);
+  const when = wks <= 1 ? "last week" : `${wks}w ago`;
+  const from = hits[0].name; // the lift actually drawn on, not just the first alias
+  return {
+    weight: w, status: "restart", increment: getBaseIncrement(eq), eq,
+    note: from === exercise.name
+      ? `→ ${w}kg — from your own numbers (${why}, ${when}). Starts light by design. Earn it back.`
+      : `→ ${w}kg — carried over from ${from} (${why}, ${when}). Starts light by design. Earn it back.`
   };
 }
 
@@ -3133,6 +3638,50 @@ function getRestSeconds(exName, dayType) {
   if (heavy.includes(exName)) return dayType === "power" ? 240 : 150;
   if (med.includes(exName))   return dayType === "power" ? 180 : 120;
   return dayType === "power" ? 150 : 90; // isolations — still ≥ 90s for effective hypertrophy
+}
+
+// ─── WARM-UP RAMP ─────────────────────────────────────────────────────────────
+// The app used to open an exercise by showing the working weight and a "Start
+// set 1" button, with no acknowledgement that you don't walk up to a top set
+// cold. These are shown as a checklist before the first working set — they are
+// deliberately NOT logged, because warm-ups aren't performance data and feeding
+// them to the progression tree would drag the working weight down.
+function warmupSets(working, ex) {
+  if (!(working > 0)) return [];
+  const eq = getEquipmentType(ex.name);
+  if (ex.barbell) {
+    const bar = ex.barWeight || BAR.olympic;
+    if (working <= bar + 5) return [{ weight: bar, reps: 10, label: "bar" }];
+    const out = [{ weight: bar, reps: 10, label: "bar" }];
+    for (const [pct, reps] of [[0.55, 5], [0.75, 3], [0.9, 1]]) {
+      const w = Math.max(bar, snap(working * pct, eq));
+      if (w > out[out.length - 1].weight && w < working) {
+        out.push({ weight: w, reps, label: `${Math.round(pct*100)}%` });
+      }
+    }
+    return out;
+  }
+  // Machines / dumbbells — lighter ramp, two steps is plenty.
+  const out = [];
+  for (const [pct, reps] of [[0.5, 10], [0.75, 5]]) {
+    const w = snap(working * pct, eq);
+    if (w > 0 && w < working && (!out.length || w > out[out.length - 1].weight)) {
+      out.push({ weight: w, reps, label: `${Math.round(pct*100)}%` });
+    }
+  }
+  return out;
+}
+
+// Colour for a suggestion note. "restart" and "return" are deliberately neutral
+// info rather than red: coming back lighter after time off is the plan working,
+// not the lifter failing, and it shouldn't be rendered as a warning.
+function sugNoteClass(status) {
+  if (status === "increase" || status === "crush" || status === "micro-up") return "ok";
+  if (status === "deload" || status === "step-down") return "bad";
+  if (status === "stall-reset") return "warn";
+  if (status === "grind" || status === "hold-partial" || status === "fatigue-hold") return "hold";
+  if (status === "restart" || status === "return") return "info";
+  return "";
 }
 
 function getBetweenExerciseRest(previousExName, dayType) {
@@ -3250,6 +3799,81 @@ const PHUL = {
   }
 };
 const DAYS = ["Upper Power","Lower Power","Upper Hypertrophy","Lower Hypertrophy"];
+
+// ─── FULL BODY A/B ────────────────────────────────────────────────────────────
+// A 4-way split assumes you train 4x/week. Below that it quietly breaks: at ~1.25
+// sessions/week a 4-day rotation puts 23 days between repeats of any given
+// session, so every muscle waits ~11 days for a stimulus — against a guideline of
+// twice weekly. Two full-body sessions fix the frequency problem structurally:
+// whatever you manage in a week, everything got trained.
+//
+// Six exercises, one movement pattern each, ~55 minutes. Selection reflects
+// current evidence where it actually differs from the old plan:
+//   · Overhead triceps extension over pushdowns (+28.5% vs +19.6% long-head
+//     volume — the long head is stretched overhead and never in a pushdown)
+//   · Lateral raises in BOTH sessions — side delts were the acknowledged weak
+//     point and were also the first thing dropped when sessions ran long
+//   · Dumbbell (not cable) lateral raises — a 2025 8-week trial found no
+//     meaningful difference, so use whatever's free
+//   · Rep ranges pulled off the floor: 5-8 rather than 3-5 on the main lifts,
+//     because sub-5 work is where the AMRAP habit and the RPE-10 habit both live
+//
+// `seedFrom` maps each slot to prior history so the restart inherits real
+// numbers instead of generic defaults. `optional: true` marks finishers — work
+// that counts if you do it and costs nothing if you don't.
+const FULLBODY = {
+  "Full Body A": {
+    type: "fullbody", color: "#4a9eff", icon: "◈",
+    description: "Squat · press · pull. Six lifts, ~55 min. Leave 1–2 reps in the tank.",
+    exercises: [
+      { name: "Squat",              day: "Full Body A", tier: 1, sets: 3, repRange: "5-8",   startWeight: 30, barbell: true, barWeight: BAR.olympic, seedFrom: ["Squat","Front Squat"], note: "Deep as your hips allow — the stretched position is where the growth is." },
+      { name: "Bench Press",        day: "Full Body A", tier: 1, sets: 3, repRange: "5-8",   startWeight: 30, barbell: true, barWeight: BAR.olympic, seedFrom: ["Bench Press"], note: "Stop with 1–2 clean reps left. Not to failure." },
+      { name: "Lat Pulldown",       day: "Full Body A", tier: 1, sets: 3, repRange: "8-12",  startWeight: 40, seedFrom: ["Lat Pulldown"], note: "Full stretch at the top, elbows to ribs." },
+      { name: "Romanian Deadlift",  day: "Full Body A", tier: 2, sets: 3, repRange: "8-12",  startWeight: 20, barbell: true, barWeight: BAR.olympic, seedFrom: ["Romanian Deadlift"], note: "Hinge, don't squat. Feel the hamstring stretch." },
+      { name: "DB Lateral Raise",   day: "Full Body A", tier: 3, sets: 3, repRange: "12-15", startWeight: 6,  seedFrom: ["DB Lateral Raise"], note: "Lead with the elbows. Per dumbbell." },
+      { name: "Overhead Triceps Extension", day: "Full Body A", tier: 3, sets: 3, repRange: "10-15", startWeight: 20, seedFrom: ["Tricep Pushdown","Skull Crushers"], note: "Overhead, not a pushdown — that's where the long head gets stretched." },
+      // ── Finishers — optional, never counted against you ──
+      { name: "Calf Raise",         day: "Full Body A", tier: 3, sets: 3, repRange: "10-15", startWeight: 60, optional: true, seedFrom: ["Calf Raise"], note: "Optional. Only if you've got gas left." },
+      { name: "Face Pull",          day: "Full Body A", tier: 3, sets: 3, repRange: "12-20", startWeight: 20, optional: true, seedFrom: ["Face Pull"], note: "Optional. Good for shoulders if you've got time." },
+    ]
+  },
+  "Full Body B": {
+    type: "fullbody", color: "#4a9eff", icon: "◈",
+    description: "Hinge · press · pull. Six lifts, ~55 min. Leave 1–2 reps in the tank.",
+    exercises: [
+      { name: "Deadlift",           day: "Full Body B", tier: 1, sets: 3, repRange: "5-8",   startWeight: 35, barbell: true, barWeight: BAR.olympic, seedFrom: ["Deadlift"], note: "Brace, push the floor away. Reset each rep." },
+      { name: "Incline Barbell Press", day: "Full Body B", tier: 1, sets: 3, repRange: "8-12", startWeight: 15, barbell: true, barWeight: BAR.olympic, seedFrom: ["Incline Barbell Press"], note: "Slow down the descent. Stretch at the bottom." },
+      { name: "Seated Cable Row",   day: "Full Body B", tier: 1, sets: 3, repRange: "8-12",  startWeight: 40, seedFrom: ["Seated Cable Row","One Arm DB Row"], note: "Elbows tight, squeeze the blades together." },
+      { name: "Leg Press",          day: "Full Body B", tier: 2, sets: 3, repRange: "10-12", startWeight: 70, seedFrom: ["Leg Press","Hack Squat / Leg Press"], note: "Go deeper than feels natural. Full ROM." },
+      { name: "DB Lateral Raise",   day: "Full Body B", tier: 3, sets: 3, repRange: "12-15", startWeight: 6,  seedFrom: ["DB Lateral Raise"], note: "Second dose this week. Per dumbbell." },
+      { name: "Incline DB Curl",    day: "Full Body B", tier: 3, sets: 3, repRange: "10-15", startWeight: 8,  seedFrom: ["Incline DB Curl","Hammer Curl"], note: "Elbow behind the torso — biceps at full length. Per dumbbell." },
+      // ── Finishers — optional, never counted against you ──
+      { name: "Seated Calf Raise",  day: "Full Body B", tier: 3, sets: 3, repRange: "12-20", startWeight: 25, optional: true, seedFrom: ["Seated Calf Raise"], note: "Optional. Soleus loves volume." },
+      { name: "Leg Curl",           day: "Full Body B", tier: 3, sets: 3, repRange: "10-15", startWeight: 25, optional: true, seedFrom: ["Leg Curl"], note: "Optional. Seated if the gym has it — longer hamstring stretch." },
+    ]
+  }
+};
+const FB_DAYS = ["Full Body A","Full Body B"];
+
+// ─── PROGRAM REGISTRY ─────────────────────────────────────────────────────────
+// The active program drives the rotation and the day picker. Historical logs
+// still reference days from whichever program was active when they were written,
+// so anything reading OLD logs must go through lookupDay() rather than indexing
+// the active program — otherwise switching programs orphans your history.
+const PROGRAMS = {
+  fullbody: { id:"fullbody", name:"Full Body A/B", tagline:"2-day rotation · every session trains everything", days: FULLBODY, order: FB_DAYS },
+  phul:     { id:"phul",     name:"PHUL",          tagline:"4-day power / hypertrophy split",                 days: PHUL,     order: DAYS },
+};
+const DEFAULT_PROGRAM = "fullbody";
+const ALL_PLAN_DAYS = { ...PHUL, ...FULLBODY };
+function lookupDay(name) { return ALL_PLAN_DAYS[name] || null; }
+function getProgram(id) { return PROGRAMS[id] || PROGRAMS[DEFAULT_PROGRAM]; }
+// CSS class + short tag for a day, tolerant of days from any program (including
+// ones no longer active) and of custom sessions.
+function dayTypeClass(t) { return t === "power" ? "power" : t === "fullbody" ? "fullbody" : "hyper"; }
+function dayTypeTag(t)   { return t === "power" ? "PWR"   : t === "fullbody" ? "FULL"     : "HYP"; }
+// Core (non-optional) exercises for a plan — what "finishing" a session means.
+function coreExercises(plan) { return (plan?.exercises || []).filter(e => !e.optional); }
 const BULK_KCAL = 2900, CUT_KCAL = 2200, PROTEIN_G = 155;
 const INIT_STATS = { weight: 74.1, height: 180, bodyFat: 14.3, bmr: 2200, date: "2026-03-23" };
 
@@ -3287,6 +3911,7 @@ function App() {
   const [tab, setTab]               = useState("dash");
   const [phase, setPhase]           = useState(() => lsGet("phul_phase") || "bulk");
   const [theme, setTheme]           = useState(() => lsGet("phul_theme") || "carbon");
+  const [programId, setProgramId]   = useState(() => lsGet("phul_program") || DEFAULT_PROGRAM);
   const [stats, setStats]           = useState(() => { const s = lsGet("phul_stats"); return (Array.isArray(s) && s.length) ? s : [INIT_STATS]; });
   const [workoutLogs, setWorkoutLogs] = useState(() => lsGet("phul_logs") || {});
   const [dietLogs, setDietLogs]     = useState(() => lsGet("phul_diet") || {});
@@ -3314,14 +3939,17 @@ function App() {
 
   useEffect(() => { lsSet("phul_phase", phase); }, [phase]);
   useEffect(() => { lsSet("phul_theme", theme); }, [theme]);
+  useEffect(() => { lsSet("phul_program", programId); }, [programId]);
+  const program = getProgram(programId);
   useEffect(() => { lsSet("phul_stats", stats); }, [stats]);
   useEffect(() => { lsSet("phul_logs", workoutLogs); }, [workoutLogs]);
   useEffect(() => { lsSet("phul_diet", dietLogs); }, [dietLogs]);
   useEffect(() => { lsSet("phul_custom_sessions", customSessions); }, [customSessions]);
   useEffect(() => { lsSet("phul_dismissed_makeups", dismissedMakeups); }, [dismissedMakeups]);
 
-  // Plan lookup — checks PHUL first, then custom sessions by id
-  const resolvePlan = (key) => PHUL[key] || customSessions.find(s => s.id === key) || null;
+  // Plan lookup — checks every known program day (so old logs from a program you
+  // switched away from still resolve), then custom sessions by id.
+  const resolvePlan = (key) => lookupDay(key) || customSessions.find(s => s.id === key) || null;
 
   // Keep iOS status-bar / browser chrome color in sync with theme bg
   useEffect(() => {
@@ -3441,7 +4069,7 @@ function App() {
           setWorkoutLogs(prev => ({ ...prev, [key]: {
             day: activeSession,
             dayLabel: activePlan.name || activeSession,
-            isCustom: !PHUL[activeSession],
+            isCustom: !lookupDay(activeSession),
             isMakeup: !!activeSessionFilter,
             makeupFrom: activeSessionFilter || null,
             type: rawPlan.type,
@@ -3516,8 +4144,8 @@ function App() {
       </header>
 
       <main className="app-main">
-        {tab==="dash"    && <Dashboard latest={latest} phase={phase} kcalTarget={kcalTarget} todayDiet={todayDiet} workoutLogs={workoutLogs} setTab={setTab} setActiveSession={setActiveSession} startSession={startSession} draftSession={draftSession} pendingMakeups={pendingMakeups} startMakeup={startMakeup} dismissMakeup={dismissMakeup} />}
-        {tab==="workout" && <WorkoutTab workoutLogs={workoutLogs} setWorkoutLogs={setWorkoutLogs} setActiveSession={setActiveSession} startSession={startSession} draftSession={draftSession} customSessions={customSessions} setCustomSessions={setCustomSessions} />}
+        {tab==="dash"    && <Dashboard latest={latest} phase={phase} kcalTarget={kcalTarget} todayDiet={todayDiet} workoutLogs={workoutLogs} setTab={setTab} setActiveSession={setActiveSession} startSession={startSession} draftSession={draftSession} pendingMakeups={pendingMakeups} startMakeup={startMakeup} dismissMakeup={dismissMakeup} program={program} />}
+        {tab==="workout" && <WorkoutTab workoutLogs={workoutLogs} setWorkoutLogs={setWorkoutLogs} setActiveSession={setActiveSession} startSession={startSession} draftSession={draftSession} customSessions={customSessions} setCustomSessions={setCustomSessions} program={program} programId={programId} setProgramId={setProgramId} />}
         {tab==="diet"    && <DietTab today={today} todayDiet={todayDiet} kcalTarget={kcalTarget} dietLogs={dietLogs} setDietLogs={setDietLogs} phase={phase} stats={stats} />}
         {tab==="stats"   && <StatsTab stats={stats} setStats={setStats} phase={phase} theme={theme} setTheme={setTheme} />}
       </main>
@@ -3557,7 +4185,7 @@ function computePendingMakeups(workoutLogs, dismissedMakeups = [], windowDays = 
   const cutoff = Date.now() - windowDays * 86400000;
   const dismissedSet = new Set(dismissedMakeups);
   const allLogs = Object.entries(workoutLogs)
-    .filter(([, log]) => PHUL[log.day])
+    .filter(([, log]) => lookupDay(log.day))
     .sort((a, b) => a[1].ts - b[1].ts);
 
   const pendingByDay = {}; // dayType → [{ exName, sourceLogKey, sourceDate, abandonedAt }]
@@ -3619,9 +4247,12 @@ function mesocycleDelta(workoutLogs, dayType) {
   const deltaPct = ((last - avg) / avg) * 100;
   return { last, avg, deltaPct };
 }
-function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, setActiveSession, startSession, draftSession, pendingMakeups = [], startMakeup, dismissMakeup }) {
+function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, setActiveSession, startSession, draftSession, pendingMakeups = [], startMakeup, dismissMakeup, program }) {
   // When a pending group is tapped, this holds it for the choice modal.
   const [catchupOpen, setCatchupOpen] = useState(null);
+  // Shown once if the one-time data repair actually changed anything. Silently
+  // rewriting someone's training history would not be OK — say what was touched.
+  const [migShown, setMigShown] = useState(!!MIGRATION_REPORT);
   // Convert a ts → relative "3 days ago" / "today" / "2w ago"
   const relTime = (ts) => {
     const diff = Date.now() - ts;
@@ -3633,20 +4264,48 @@ function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, 
     return w === 1 ? "1w ago" : `${w}w ago`;
   };
   const recent = Object.values(workoutLogs).sort((a,b) => b.ts-a.ts);
-  // Pick the most recent PHUL session to determine next day in rotation —
-  // custom sessions don't advance the PHUL cycle.
-  const lastDay = recent.find(s => PHUL[s.day])?.day;
-  const nextIdx = lastDay ? (DAYS.indexOf(lastDay)+1)%DAYS.length : 0;
-  const nextDay = DAYS[nextIdx];
-  const nextPlan = PHUL[nextDay];
-  const nextTypeCls = nextPlan.type === "power" ? "power" : "hyper";
+  // Pick the most recent session belonging to the ACTIVE program to determine the
+  // next day in rotation — custom sessions, and sessions from a program you've
+  // since switched away from, don't advance the cycle.
+  const order = program.order;
+  const lastDay = recent.find(s => program.days[s.day])?.day;
+  const nextIdx = lastDay ? (order.indexOf(lastDay)+1)%order.length : 0;
+  const nextDay = order[nextIdx];
+  const nextPlan = program.days[nextDay];
+  const nextTypeCls = dayTypeClass(nextPlan.type);
   const meso = mesocycleDelta(workoutLogs, nextDay);
 
   // Last session of the SAME day type — to show "volume last time"
   const lastSame = recent.find(r => r.day === nextDay);
   const lastVol = lastSame ? sessionVolume(lastSame) : null;
 
-  const weekSessions = recent.filter(s => (Date.now()-s.ts) < 7*86400000).length;
+  // ─── Consistency, measured honestly ────────────────────────────────────
+  // Sessions per rolling week, newest first. A "week" here is a 7-day bucket
+  // counting back from now, not a calendar week — a Sunday session and the
+  // following Saturday one shouldn't land in different buckets just because a
+  // calendar boundary fell between them.
+  const weekDots = (() => {
+    const buckets = new Array(8).fill(0);
+    for (const s of recent) {
+      const wk = Math.floor((Date.now() - s.ts) / (7*86400000));
+      if (wk >= 0 && wk < 8) buckets[wk]++;
+    }
+    return buckets.reverse(); // oldest → newest, so the row reads left to right
+  })();
+  const last30 = recent.filter(s => (Date.now()-s.ts) < 30*86400000).length;
+  // Consecutive 7-day windows ending now that contain at least one session.
+  const weekStreak = (() => {
+    let n = 0;
+    for (let i = weekDots.length - 1; i >= 0; i--) {
+      if (weekDots[i] > 0) n++; else break;
+    }
+    return n;
+  })();
+  const streakNote =
+    weekStreak === 0 ? "Nothing logged in the last week. One session puts you back on the board."
+    : weekStreak === 1 ? "One week in. The second one is the one that counts."
+    : weekStreak >= 6  ? `${weekStreak} straight weeks. This is just what you do now.`
+    : `${weekStreak} weeks without missing one. Keep it boring.`;
 
   // Recent PRs — derived from workoutLogs: highest weight per exercise with reps >= minR
   const prLifts = (() => {
@@ -3716,7 +4375,7 @@ function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, 
           </div>
           {pendingMakeups.map(group => {
             const mostRecent = Math.max(...group.items.map(i => i.abandonedAt));
-            const typeCls = PHUL[group.dayType]?.type === "power" ? "power" : "hyper";
+            const typeCls = dayTypeClass(lookupDay(group.dayType)?.type);
             return (
               <button
                 key={group.dayType}
@@ -3835,27 +4494,70 @@ function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, 
         </button>
       </div>
 
+      {migShown && MIGRATION_REPORT && (
+        <div className="card mig-card">
+          <div className="section-head">
+            <span className="eyebrow">Data repaired</span>
+            <button className="more" onClick={() => setMigShown(false)}>Dismiss</button>
+          </div>
+          <div className="mig-body">
+            Cleaned up some old logging damage so your weights calculate correctly:
+            <ul>
+              {MIGRATION_REPORT.commas > 0 && <li><b>{MIGRATION_REPORT.commas}</b> weights typed with a comma (<i>"17,5"</i>) were being read as whole numbers — now {MIGRATION_REPORT.commas === 1 ? "it reads" : "they read"} correctly.</li>}
+              {MIGRATION_REPORT.zeroReps > 0 && <li><b>{MIGRATION_REPORT.zeroReps}</b> sets logged with 0 reps were counting as total failures and triggering deloads. They're still in your history, they just don't score.</li>}
+              {MIGRATION_REPORT.drafts > 0 && <li><b>{MIGRATION_REPORT.drafts}</b> empty catch-up drafts cleared out.</li>}
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {/* ── Consistency ──
+          Deliberately NOT "1/4 sessions this week." A weekly quota you rarely hit
+          renders a failure notice every time you open the app, and a bad week
+          reads as a broken streak rather than a normal week — which is exactly
+          how one missed session turns into a missed month. What's measured here
+          instead is the thing that actually predicts progress: did you show up
+          this week at all, and how many weeks in a row have you done that. */}
       <div className="card">
         <div className="section-head">
-          <span className="eyebrow">This week</span>
-          <span className="eyebrow" style={{color: weekSessions>=4?"var(--ok)":"var(--ink-4)"}}>{weekSessions}/4 sessions</span>
+          <span className="eyebrow">Consistency</span>
+          <span className="eyebrow" style={{color: weekStreak>0?"var(--ok)":"var(--ink-4)"}}>
+            {last30} session{last30===1?"":"s"} · 30d
+          </span>
+        </div>
+        <div className="streak-row">
+          <div className="streak-big">
+            <span className="sb-n tnum">{weekStreak}</span>
+            <span className="sb-l">week{weekStreak===1?"":"s"} running</span>
+          </div>
+          <div className="streak-weeks">
+            {weekDots.map((n, i) => (
+              <div key={i} className={`sw-dot ${n>0?"on":""}`} title={`${n} session${n===1?"":"s"}`}>
+                {n > 1 && <span className="sw-n">{n}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="streak-note">{streakNote}</div>
+      </div>
+
+      {/* Rotation position — replaces the weekly grid. Shows where you are in the
+          cycle rather than how much of an assumed week you've missed. */}
+      <div className="card">
+        <div className="section-head">
+          <span className="eyebrow">{program.name}</span>
+          <span className="eyebrow" style={{color:"var(--ink-4)"}}>{program.tagline}</span>
         </div>
         <div className="week-strip">
-          {DAYS.map(d => {
-            const doneSession = recent.find(s => s.day===d && (Date.now()-s.ts)<7*86400000);
-            const typeCls = PHUL[d].type === "power" ? "power" : "hyper";
-            const shortLabel = d.split(" ").map(w => w[0]).join("");
+          {order.map(d => {
+            const p = program.days[d];
+            const isNext = d === nextDay;
+            const lastDone = recent.find(s => s.day===d);
             return (
-              <div key={d} className={`week-cell ${typeCls} ${doneSession?"done":""}`}>
-                <span className="wc-dow">{shortLabel}</span>
-                <span className="wc-mark">
-                  {doneSession ? (
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M2.5 7l3 3 6-7"/>
-                    </svg>
-                  ) : PHUL[d].icon}
-                </span>
-                <span className="wc-tag">{PHUL[d].type === "power" ? "PWR" : "HYP"}</span>
+              <div key={d} className={`week-cell ${dayTypeClass(p.type)} ${isNext?"next":""}`}>
+                <span className="wc-dow">{d.replace("Full Body ","").split(" ").map(w => w[0]).join("")}</span>
+                <span className="wc-mark">{p.icon}</span>
+                <span className="wc-tag">{isNext ? "NEXT" : lastDone ? relTime(lastDone.ts) : "—"}</span>
               </div>
             );
           })}
@@ -3935,10 +4637,10 @@ function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, 
             <span className="eyebrow">Recent sessions</span>
           </div>
           {recent.slice(0,3).map((s,i) => {
-            const p = PHUL[s.day];
+            const p = lookupDay(s.day);
             const t = s.type || p?.type;
-            const pillCls = t === "power" ? "power" : t === "hypertrophy" ? "hyper" : "";
-            const pillLabel = t === "power" ? "PWR" : t === "hypertrophy" ? "HYP" : "CUS";
+            const pillCls = t === "power" ? "power" : t === "hypertrophy" ? "hyper" : t === "fullbody" ? "fullbody" : "";
+            const pillLabel = t === "power" ? "PWR" : t === "hypertrophy" ? "HYP" : t === "fullbody" ? "FULL" : "CUS";
             const displayName = s.dayLabel || p?.name || s.day;
             return (
               <div key={i} style={{display:"flex", justifyContent:"space-between", padding:"10px 0", borderTop: i>0?"1px solid var(--line)":"none"}}>
@@ -3958,8 +4660,8 @@ function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, 
 
 // ─── SESSION LOGGER ───────────────────────────────────────────────────────────
 function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCancel, onDiscard, savedSession, onSaveSession }) {
-  // plan may be passed directly (handles custom sessions) or looked up from PHUL
-  const plan = planProp || PHUL[dayName];
+  // plan may be passed directly (handles custom sessions) or looked up by day name
+  const plan = planProp || lookupDay(dayName);
   // Rest-time resolvers — check per-exercise override first (custom sessions
   // can specify `rest: { set, betweenEx }`), fall back to the global helpers.
   const resolveSetRest = (ex, dayType) =>
@@ -3988,7 +4690,13 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
   // Two-tap confirm for the direct "Skip" button on the active exercise card.
   // Distinct from confirmAbandon (which is for the hold-chips abandon flow).
   const [confirmSkipActive, setConfirmSkipActive] = useState(false);
-  useEffect(() => { setConfirmSkipActive(false); }, [activeEx, phase]);
+  // NOTE: the effect that resets this on [activeEx, phase] lives further down,
+  // AFTER `phase` is declared. It used to sit here, reading `phase` from its own
+  // temporal dead zone — harmless only because Babel Standalone downlevels
+  // const→var, which silently turned it into `undefined` on first render.
+  // Exercises whose warm-up ramp has been dismissed this session. Not persisted
+  // to the log — warm-ups are guidance, not data.
+  const [warmedUp, setWarmedUp] = useState(() => savedSession?.warmedUp || []);
 
   // Helpers
   const isExDone      = (exName) => data[exName]?.every(s => s.done);
@@ -4032,6 +4740,9 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
   const savedRestDur = savedSession?.restDuration || 0;
   const restoredLeft = savedRestAt ? Math.max(0, savedRestDur - Math.floor((Date.now() - savedRestAt) / 1000)) : 0;
   const [phase, setPhase]           = useState(() => restoredLeft > 0 ? "resting" : "ready");
+  // Clear the two-tap skip confirm whenever the exercise or the phase changes,
+  // so a half-tapped "Skip" never carries over into the next thing you look at.
+  useEffect(() => { setConfirmSkipActive(false); }, [activeEx, phase]);
   const [restLeft, setRestLeft]     = useState(() => restoredLeft);
   const [restDuration, setRestDuration] = useState(() => savedRestDur || 0);
   const [restType, setRestType]     = useState("set"); // "set" | "exercise"
@@ -4042,7 +4753,7 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
 
   useEffect(() => {
     if (isFirst.current) { isFirst.current = false; return; }
-    onSaveSession({ data, activeEx, activeIdx, exerciseHolds, sessionStartedAt: sessionStartedAt.current });
+    onSaveSession({ data, activeEx, activeIdx, exerciseHolds, warmedUp, sessionStartedAt: sessionStartedAt.current });
   }, [data, activeEx, activeIdx, exerciseHolds]);
 
   useEffect(() => {
@@ -4050,7 +4761,7 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
     if (restLeft <= 0) {
       setPhase("ready");
       restStartedAtRef.current = 0;
-      onSaveSession({ data, activeEx, activeIdx, exerciseHolds, sessionStartedAt: sessionStartedAt.current, restStartedAt: null, restDuration: 0 });
+      onSaveSession({ data, activeEx, activeIdx, exerciseHolds, warmedUp, sessionStartedAt: sessionStartedAt.current, restStartedAt: null, restDuration: 0 });
       return;
     }
     const interval = setInterval(() => {
@@ -4059,7 +4770,7 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
           clearInterval(interval);
           setPhase("ready");
           restStartedAtRef.current = 0;
-          onSaveSession({ data, activeEx, activeIdx, exerciseHolds, sessionStartedAt: sessionStartedAt.current, restStartedAt: null, restDuration: 0 });
+          onSaveSession({ data, activeEx, activeIdx, exerciseHolds, warmedUp, sessionStartedAt: sessionStartedAt.current, restStartedAt: null, restDuration: 0 });
           // Long buzz at rest-end — tells you to get back to the bar
           if (navigator.vibrate) navigator.vibrate([240, 80, 240]);
           return 0;
@@ -4088,7 +4799,7 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
       if (newLeft === 0) {
         setPhase("ready");
         restStartedAtRef.current = 0;
-        onSaveSession({ data, activeEx, activeIdx, exerciseHolds, sessionStartedAt: sessionStartedAt.current, restStartedAt: null, restDuration: 0 });
+        onSaveSession({ data, activeEx, activeIdx, exerciseHolds, warmedUp, sessionStartedAt: sessionStartedAt.current, restStartedAt: null, restDuration: 0 });
       }
     };
     document.addEventListener("visibilitychange", onVis);
@@ -4107,12 +4818,22 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
   const curEx     = plan.exercises[curIdx];
   const sug       = curEx ? calcNextWeight(curEx, workoutLogs) : null;
   const restTime  = curEx ? resolveSetRest(curEx, plan.type) : 60;
+  // Optional finishers are extra credit — they never gate finishing, never count
+  // toward the denominator, and skipping one is not "abandoning" anything.
+  const coreEx      = coreExercises(plan);
+  const isOptional  = (name) => !!plan.exercises.find(e => e.name === name)?.optional;
   // "Resolved" = done OR abandoned. Held exercises still block finishing.
-  const allResolved = plan.exercises.every(ex => isExDone(ex.name) || isExAbandoned(ex.name));
+  const allResolved = coreEx.every(ex => isExDone(ex.name) || isExAbandoned(ex.name));
   const allDone     = allResolved;
-  const doneCount   = plan.exercises.filter(ex => isExDone(ex.name)).length;
-  const heldList    = plan.exercises.filter(ex => isExHeld(ex.name));
-  const abandonedList = plan.exercises.filter(ex => isExAbandoned(ex.name));
+  const doneCount   = coreEx.filter(ex => isExDone(ex.name)).length;
+  const heldList    = coreEx.filter(ex => isExHeld(ex.name));
+  const abandonedList = coreEx.filter(ex => isExAbandoned(ex.name));
+  // ── Minimum viable session ──
+  // The single most useful thing this app can do for someone whose failure mode
+  // is missing whole months is make a short session a real outcome instead of a
+  // quit. Three core lifts is a session. Say so, out loud, in the UI.
+  const MIN_SESSION = 3;
+  const minSessionMet = doneCount >= Math.min(MIN_SESSION, coreEx.length);
 
   // ─── SESSION ETA ──────────────────────────────────────────────────────
   // Goal: project when the session will finish (wall-clock HH:MM).
@@ -4161,7 +4882,7 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
     };
     const all = Object.values(workoutLogs);
     return calc(all.filter(s => s.day === dayName))
-        || calc(all.filter(s => PHUL[s.day]?.type === plan.type))
+        || calc(all.filter(s => lookupDay(s.day)?.type === plan.type))
         || null;
   })();
 
@@ -4342,7 +5063,7 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
     if (!hasNext) {
       setPhase("ready");
       setRestLeft(0);
-      onSaveSession({ data: newData, activeEx: newActiveEx, activeIdx: newActiveIdx, exerciseHolds, sessionStartedAt: sessionStartedAt.current, restStartedAt: null, restDuration: 0 });
+      onSaveSession({ data: newData, activeEx: newActiveEx, activeIdx: newActiveIdx, exerciseHolds, warmedUp, sessionStartedAt: sessionStartedAt.current, restStartedAt: null, restDuration: 0 });
     } else {
       // activeEx here is the exercise that just finished its last set.
       // Use its rest overrides if it's a custom session, else defaults.
@@ -4355,7 +5076,7 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
       setPhase("resting");
       setRestLeft(rt);
       restStartedAtRef.current = now;
-      onSaveSession({ data: newData, activeEx: newActiveEx, activeIdx: newActiveIdx, exerciseHolds, sessionStartedAt: sessionStartedAt.current, restStartedAt: now, restDuration: rt });
+      onSaveSession({ data: newData, activeEx: newActiveEx, activeIdx: newActiveIdx, exerciseHolds, warmedUp, sessionStartedAt: sessionStartedAt.current, restStartedAt: now, restDuration: rt });
     }
   };
 
@@ -4498,7 +5219,7 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
         </div>
         <div className="session-top-row" style={{marginTop:10}}>
           <span className="session-progress">
-            <span className="done-n">{doneCount}</span>/{plan.exercises.length} exercises
+            <span className="done-n">{doneCount}</span>/{coreEx.length} exercises
           </span>
           {!allDone && etaMin > 0 && finishLabel && (
             <span className={`eta-chip ${closeInfo.state}`}>
@@ -4513,7 +5234,7 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
           )}
         </div>
         <div className="session-progress-bar">
-          <i style={{width:`${(doneCount/plan.exercises.length)*100}%`, background: planAccentVar}}/>
+          <i style={{width:`${(doneCount/Math.max(1,coreEx.length))*100}%`, background: planAccentVar}}/>
         </div>
       </div>
 
@@ -4563,7 +5284,7 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
             )}
             <button className="rest-skip" onClick={() => {
               setRestLeft(0); setPhase("ready"); restStartedAtRef.current = 0;
-              onSaveSession({ data, activeEx, activeIdx, exerciseHolds, sessionStartedAt: sessionStartedAt.current, restStartedAt: null, restDuration: 0 });
+              onSaveSession({ data, activeEx, activeIdx, exerciseHolds, warmedUp, sessionStartedAt: sessionStartedAt.current, restStartedAt: null, restDuration: 0 });
             }}>Skip rest →</button>
           </div>
         )}
@@ -4678,7 +5399,7 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
                 );
               })()}
               {sug?.note && (
-                <div className={`sug-note ${sug.status==="increase"||sug.status==="crush"?"ok":sug.status==="deload"||sug.status.includes("step-down")?"bad":sug.status==="stall-reset"?"warn":sug.status==="grind"||sug.status==="hold-partial"?"hold":""}`}>
+                <div className={`sug-note ${sugNoteClass(sug.status)}`}>
                   {sug.note}
                 </div>
               )}
@@ -4696,6 +5417,36 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
             <div className="ex-action">
               {phase==="ready" && (
                 <>
+                  {/* Warm-up ramp — first working set only, and only where it
+                      matters (main lifts / anything on a bar). */}
+                  {(() => {
+                    if (activeIdx !== 0 || warmedUp.includes(activeEx)) return null;
+                    if (!(curEx.tier === 1 || curEx.barbell)) return null;
+                    const ramp = warmupSets(sug?.weight, curEx);
+                    if (!ramp.length) return null;
+                    return (
+                      <div className="warmup">
+                        <div className="warmup-head">
+                          <span className="wu-k">Warm up first</span>
+                          <button className="wu-skip" onClick={() => setWarmedUp(p => [...p, activeEx])}>Done →</button>
+                        </div>
+                        <div className="warmup-rows">
+                          {ramp.map((w, i) => (
+                            <div key={i} className="wu-row">
+                              <span className="wu-tag">{w.label}</span>
+                              <span className="wu-w tnum">{w.weight}<em>kg</em></span>
+                              <span className="wu-r">× {w.reps}</span>
+                            </div>
+                          ))}
+                          <div className="wu-row target">
+                            <span className="wu-tag">work</span>
+                            <span className="wu-w tnum">{sug?.weight}<em>kg</em></span>
+                            <span className="wu-r">× {curEx.repRange}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                   <button className="btn huge accent" onClick={startSet}>
                     Start set {activeIdx+1}
                   </button>
@@ -4894,8 +5645,29 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
             ? (abandonedList.length > 0 ? `Finish ✓  (${abandonedList.length} skipped)` : "Finish session ✓")
             : heldList.length > 0
                 ? `${heldList.length} on hold — retry or skip`
-                : `${plan.exercises.length - doneCount - abandonedList.length} exercises remaining`}
+                : `${coreEx.length - doneCount - abandonedList.length} exercises remaining`}
         </button>
+
+        {/* ── MINIMUM SESSION ──
+            Once the main lifts are in, stopping is a legitimate way to end a
+            session, not a failure to complete one. Offering it explicitly (and
+            only once it's actually earned) is the difference between "I bailed"
+            and "I got the important part done" — and the second one is the story
+            that gets someone back through the door next week. */}
+        {!allDone && minSessionMet && (
+          <button
+            className="finish-btn min-session"
+            onClick={() => {
+              const skipped = coreEx
+                .filter(ex => !isExDone(ex.name) && !isExAbandoned(ex.name))
+                .map(ex => ex.name);
+              onFinish(data, sessionStartedAt.current, [...abandonedList.map(e => e.name), ...skipped]);
+            }}
+          >
+            <span className="ms-main">Good enough — log it ✓</span>
+            <span className="ms-sub">{doneCount} lifts done. The main work is in.</span>
+          </button>
+        )}
       </div>
     </div>
   );
@@ -4947,6 +5719,13 @@ function validateCustomSession(obj, existingIds) {
       norm.barWeight = ex.barWeight;
     }
     if (typeof ex.supersetWith === "string") norm.supersetWith = ex.supersetWith;
+    // Optional finishers — never gate finishing, never counted as abandoned.
+    if (ex.optional === true) norm.optional = true;
+    // Carry load across from prior history instead of using startWeight cold.
+    if (Array.isArray(ex.seedFrom)) {
+      const seeds = ex.seedFrom.filter(n => typeof n === "string" && n.trim());
+      if (seeds.length) norm.seedFrom = seeds;
+    }
     if (ex.rest && typeof ex.rest === "object") {
       const rest = {};
       if (typeof ex.rest.set === "number" && ex.rest.set >= 0) rest.set = ex.rest.set;
@@ -4958,7 +5737,7 @@ function validateCustomSession(obj, existingIds) {
   return [normalized, null];
 }
 
-function WorkoutTab({ workoutLogs, setWorkoutLogs, setActiveSession, startSession, draftSession, customSessions, setCustomSessions }) {
+function WorkoutTab({ workoutLogs, setWorkoutLogs, setActiveSession, startSession, draftSession, customSessions, setCustomSessions, program, programId, setProgramId }) {
   const [view, setView] = useState("plan");
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [confirmDelCustom, setConfirmDelCustom] = useState(null);
@@ -5010,21 +5789,37 @@ function WorkoutTab({ workoutLogs, setWorkoutLogs, setActiveSession, startSessio
 
       {view==="plan" && (
         <>
-          <div className="eyebrow" style={{padding:"0 2px"}}>PHUL · 4-day split</div>
-          {DAYS.map(day => {
-            const p = PHUL[day];
-            const typeCls = p.type === "power" ? "power" : "hyper";
+          {/* Program switcher — PHUL stays available; switching doesn't touch any
+              history, because logs resolve their day through lookupDay() across
+              every program rather than through whichever one is active. */}
+          <div className="prog-switch">
+            {Object.values(PROGRAMS).map(pg => (
+              <button key={pg.id} className={programId===pg.id?"on":""} onClick={() => setProgramId(pg.id)}>
+                <span className="ps-name">{pg.name}</span>
+                <span className="ps-tag">{pg.tagline}</span>
+              </button>
+            ))}
+          </div>
+
+          {program.order.map(day => {
+            const p = program.days[day];
+            const typeCls = dayTypeClass(p.type);
+            const core = coreExercises(p);
+            const extras = p.exercises.filter(e => e.optional);
             return (
               <div key={day} className={`day-card ${typeCls}`}>
                 <div className="day-card-head">
                   <div className="day-card-head-l">
-                    <span className={`eyebrow eyebrow-${typeCls}`}>{p.type === "power" ? "Power" : "Hypertrophy"}</span>
+                    <span className={`eyebrow eyebrow-${typeCls}`}>
+                      {p.type === "power" ? "Power" : p.type === "fullbody" ? `Full body · ${core.length} lifts` : "Hypertrophy"}
+                    </span>
                     <div className="day-card-name">{day}</div>
+                    {p.description && <div className="day-card-desc">{p.description}</div>}
                   </div>
                   <button className="day-card-start" onClick={() => startSession(day)}>Start</button>
                 </div>
                 <div className="day-card-ex-list">
-                  {p.exercises.map(ex => (
+                  {core.map(ex => (
                     <div key={ex.name} className="day-ex-row">
                       <div className="ex-left">
                         {ex.name}
@@ -5033,6 +5828,17 @@ function WorkoutTab({ workoutLogs, setWorkoutLogs, setActiveSession, startSessio
                       <div className="ex-right">{ex.sets}×{ex.repRange}</div>
                     </div>
                   ))}
+                  {extras.length > 0 && (
+                    <>
+                      <div className="day-ex-divider">Finishers · optional</div>
+                      {extras.map(ex => (
+                        <div key={ex.name} className="day-ex-row optional">
+                          <div className="ex-left">{ex.name}</div>
+                          <div className="ex-right">{ex.sets}×{ex.repRange}</div>
+                        </div>
+                      ))}
+                    </>
+                  )}
                 </div>
               </div>
             );
@@ -5093,8 +5899,9 @@ function WorkoutTab({ workoutLogs, setWorkoutLogs, setActiveSession, startSessio
           <div className="eyebrow" style={{padding:"0 2px"}}>Session history</div>
           {history.length===0 && <div style={{color:"var(--ink-3)", fontSize:13, padding:"6px 2px"}}>No sessions logged yet.</div>}
           {history.map(([key,log]) => {
-            const p = PHUL[log.day];
-            const typeCls = (log.type || p?.type) === "power" ? "power" : (log.type || p?.type) === "hypertrophy" ? "hyper" : "";
+            const p = lookupDay(log.day);
+            const lt = log.type || p?.type;
+            const typeCls = lt === "power" ? "power" : lt === "hypertrophy" ? "hyper" : lt === "fullbody" ? "fullbody" : "";
             const filled = Object.entries(log.exercises||{}).filter(([,sets]) => sets.some(s => s.weight||s.reps));
             const displayName = log.dayLabel || p?.name || log.day;
             return (
@@ -6268,7 +7075,7 @@ function StatsTab({ stats, setStats, phase, theme, setTheme }) {
             </button>
           ))}
         </div>
-        <div className="app-version">PHUL Tracker · v7.1</div>
+        <div className="app-version">Gym Tracker · v8.0 — Restart</div>
       </div>
 
       <DataBackup />
@@ -6279,7 +7086,7 @@ function StatsTab({ stats, setStats, phase, theme, setTheme }) {
 // ─── DATA BACKUP ─────────────────────────────────────────────────────────────
 function DataBackup() {
   const [status, setStatus] = useState("");
-  const keys = ["phul_phase","phul_stats","phul_logs","phul_diet","phul_draft","phul_makeup_draft","phul_meals","phul_custom_sessions","phul_theme","phul_dismissed_makeups"];
+  const keys = ["phul_phase","phul_stats","phul_logs","phul_diet","phul_draft","phul_makeup_draft","phul_meals","phul_custom_sessions","phul_theme","phul_dismissed_makeups","phul_program","phul_migration_v"];
 
   const exportData = () => {
     const data = {};
@@ -6356,7 +7163,7 @@ class ErrorBoundary extends React.Component {
   componentDidCatch(error, info) { console.error("PHUL crashed during render:", error, info); }
   exportBackup() {
     try {
-      const keys = ["phul_phase","phul_stats","phul_logs","phul_diet","phul_draft","phul_makeup_draft","phul_meals","phul_custom_sessions","phul_theme","phul_dismissed_makeups"];
+      const keys = ["phul_phase","phul_stats","phul_logs","phul_diet","phul_draft","phul_makeup_draft","phul_meals","phul_custom_sessions","phul_theme","phul_dismissed_makeups","phul_program","phul_migration_v"];
       const data = {};
       keys.forEach(k => { try { const v = localStorage.getItem(k); if (v != null) data[k] = JSON.parse(v); } catch {} });
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });

@@ -25,6 +25,13 @@ Paste the resulting JSON into the app: **Train tab → Import session**.
       "barbell": true,              // optional — enables plate-loading diagram
       "barWeight": 20,              // optional — 20 (olympic), 10 (EZ), 15 (short). Needed if barbell=true.
       "supersetWith": "Other Ex",   // optional — name of paired exercise (must exist in this session)
+      "optional": true,             // optional — marks a FINISHER: never gates finishing the
+                                    //   session, never counted in the done/total denominator,
+                                    //   and skipping it is not recorded as abandoning anything.
+      "seedFrom": ["Bent Over Row"],// optional — carry the starting load across from prior
+                                    //   history on these exercises instead of using startWeight
+                                    //   cold. Discounted for time since, and translated if the
+                                    //   rep range differs. First name is the canonical match.
       "rest": {                     // optional — overrides default getRestSeconds/getBetweenExerciseRest
         "set": 90,                  //   seconds between sets of THIS exercise
         "betweenEx": 120            //   seconds after this exercise before moving to next
