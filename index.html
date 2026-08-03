@@ -3291,7 +3291,7 @@ const MIGRATION_REPORT = runMigrations();
 // ─── EQUIPMENT & PROGRESSION ──────────────────────────────────────────────────
 function getEquipmentType(exName) {
   const barbell = ["Bench Press","OHP","Bent Over Row","Squat","Deadlift","Incline Barbell Press","Skull Crushers","EZ Bar Curl","Romanian Deadlift","Front Squat"];
-  const machine  = ["Leg Press","Lat Pulldown","Seated Cable Row","Leg Curl","Leg Extension","Calf Raise","Cable Fly","Face Pull","Tricep Pushdown","Hip Thrust","Hack Squat / Leg Press","Seated Calf Raise","Overhead Triceps Extension"];
+  const machine  = ["Leg Press","Lat Pulldown","Seated Cable Row","Leg Curl","Leg Extension","Calf Raise","Cable Fly","Face Pull","Tricep Pushdown","Hip Thrust","Hack Squat / Leg Press","Seated Calf Raise"];
   const dbLight  = ["DB Lateral Raise","Incline DB Curl","Rear Delt Fly","Hammer Curl","DB Curl"];
   if (barbell.includes(exName)) return "barbell";
   if (machine.includes(exName)) return "machine";
@@ -3943,11 +3943,13 @@ const FULLBODY = {
       { name: "Lat Pulldown",       day: "Full Body A", tier: 1, sets: 3, repRange: "8-12",  startWeight: 40, seedFrom: ["Lat Pulldown"], note: "Full stretch at the top, elbows to ribs." },
       { name: "Romanian Deadlift",  day: "Full Body A", tier: 2, sets: 3, repRange: "8-12",  startWeight: 20, barbell: true, barWeight: BAR.olympic, seedFrom: ["Romanian Deadlift"], note: "Hinge, don't squat. Feel the hamstring stretch." },
       { name: "DB Lateral Raise",   day: "Full Body A", tier: 3, sets: 3, repRange: "12-15", startWeight: 6,  seedFrom: ["DB Lateral Raise"], note: "Lead with the elbows. Per dumbbell." },
-      // Arm pair — supersetted. Antagonists share no equipment and don't fatigue
-      // each other, so alternating them costs ~2 min rather than a full extra
-      // exercise slot. This is how both arms get trained in BOTH sessions.
-      { name: "Overhead Triceps Extension", day: "Full Body A", tier: 3, sets: 3, repRange: "10-15", startWeight: 20, supersetWith: "EZ Bar Curl", seedFrom: ["Tricep Pushdown","Skull Crushers"], note: "Overhead, not a pushdown — that's where the long head gets stretched." },
-      { name: "EZ Bar Curl",        day: "Full Body A", tier: 3, sets: 3, repRange: "8-12",  startWeight: 15, barbell: true, barWeight: BAR.ez, supersetWith: "Overhead Triceps Extension", seedFrom: ["EZ Bar Curl"], note: "Superset with the extensions. 3sec on the way down." },
+      // Arm pair — supersetted, and paired by EQUIPMENT as well as by antagonist.
+      // Both of these are the EZ bar: you load it once, alternate curl and
+      // extension without moving, and rack it. Pairing antagonists that live at
+      // different stations technically works but means walking back and forth or
+      // occupying two things at once, which is worse than not supersetting.
+      { name: "EZ Bar Curl",        day: "Full Body A", tier: 3, sets: 3, repRange: "8-12", startWeight: 15, barbell: true, barWeight: BAR.ez, supersetWith: "Skull Crushers", seedFrom: ["EZ Bar Curl"], note: "Same bar as the skulls — alternate straight between them. 3sec on the way down." },
+      { name: "Skull Crushers",     day: "Full Body A", tier: 3, sets: 3, repRange: "8-12", startWeight: 15, barbell: true, barWeight: BAR.ez, supersetWith: "EZ Bar Curl", seedFrom: ["Skull Crushers"], note: "Elbows tucked, don't flare. Straight back to the curls." },
       // ── Finishers — optional, never counted against you ──
       { name: "Calf Raise",         day: "Full Body A", tier: 3, sets: 3, repRange: "10-15", startWeight: 60, optional: true, seedFrom: ["Calf Raise"], note: "Optional. Only if you've got gas left." },
       { name: "Face Pull",          day: "Full Body A", tier: 3, sets: 3, repRange: "12-20", startWeight: 20, optional: true, seedFrom: ["Face Pull"], note: "Optional. Good for shoulders if you've got time." },
@@ -3962,11 +3964,12 @@ const FULLBODY = {
       { name: "Seated Cable Row",   day: "Full Body B", tier: 1, sets: 3, repRange: "8-12",  startWeight: 40, seedFrom: ["Seated Cable Row","One Arm DB Row"], note: "Elbows tight, squeeze the blades together." },
       { name: "Leg Press",          day: "Full Body B", tier: 2, sets: 3, repRange: "10-12", startWeight: 70, seedFrom: ["Leg Press","Hack Squat / Leg Press"], note: "Go deeper than feels natural. Full ROM." },
       { name: "DB Lateral Raise",   day: "Full Body B", tier: 3, sets: 3, repRange: "12-15", startWeight: 6,  seedFrom: ["DB Lateral Raise"], note: "Second dose this week. Per dumbbell." },
-      // Arm pair, session two. Different angle on each head from session A:
-      // incline curl puts the biceps at long length (vs the EZ bar's mid range),
-      // skull crushers hit the long head from a different joint position.
-      { name: "Incline DB Curl",    day: "Full Body B", tier: 3, sets: 3, repRange: "10-15", startWeight: 8,  supersetWith: "Skull Crushers", seedFrom: ["Incline DB Curl","Hammer Curl"], note: "Elbow behind the torso — biceps at full length. Per dumbbell." },
-      { name: "Skull Crushers",     day: "Full Body B", tier: 3, sets: 3, repRange: "8-12",  startWeight: 15, barbell: true, barWeight: BAR.ez, supersetWith: "Incline DB Curl", seedFrom: ["Skull Crushers"], note: "Superset with the curls. Elbows tucked, don't flare." },
+      // Arm pair, session two — the dumbbell pair, same logic. Different angle on
+      // each head than session A: incline curl puts the biceps at long length
+      // (vs the EZ bar's mid range), overhead extension is the most stretched
+      // position for the triceps long head (+28.5% vs pushdowns).
+      { name: "Incline DB Curl",    day: "Full Body B", tier: 3, sets: 3, repRange: "10-15", startWeight: 8, supersetWith: "Overhead DB Extension", seedFrom: ["Incline DB Curl","Hammer Curl"], note: "Elbow behind the torso — biceps at full length. Per dumbbell." },
+      { name: "Overhead DB Extension", day: "Full Body B", tier: 3, sets: 3, repRange: "10-15", startWeight: 12.5, supersetWith: "Incline DB Curl", seedFrom: ["Tricep Pushdown"], note: "One dumbbell, both hands, elbows in. Overhead is where the long head actually stretches." },
       // ── Finishers — optional, never counted against you ──
       { name: "Seated Calf Raise",  day: "Full Body B", tier: 3, sets: 3, repRange: "12-20", startWeight: 25, optional: true, seedFrom: ["Seated Calf Raise"], note: "Optional. Soleus loves volume." },
       { name: "Leg Curl",           day: "Full Body B", tier: 3, sets: 3, repRange: "10-15", startWeight: 25, optional: true, seedFrom: ["Leg Curl"], note: "Optional. Seated if the gym has it — longer hamstring stretch." },
@@ -7482,7 +7485,7 @@ function StatsTab({ stats, setStats, phase, theme, setTheme }) {
             </button>
           ))}
         </div>
-        <div className="app-version">Gym Tracker · v8.1 — Restart</div>
+        <div className="app-version">Gym Tracker · v8.2 — Restart</div>
       </div>
 
       <DataBackup />

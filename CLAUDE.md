@@ -90,6 +90,7 @@ There are two built-in programs, registered in `PROGRAMS` and selected by `phul_
 Each exercise entry carries `{ name, day, tier, sets, repRange, startWeight, barbell?, barWeight?, note, seedFrom?, optional? }`.
 - `tier` (1/2/3) drives `SessionLogger`'s skip-gating: you cannot skip past an unresolved lower-tier exercise without explicit confirmation via `tierGuardModal`.
 - `seedFrom` — ordered list of prior exercise names to carry load across from (see `computeRestartWeight`).
+- `supersetWith` — pair exercises so they alternate. **Pair by equipment as well as by antagonist**: the arm pairs are EZ-bar/EZ-bar (session A) and dumbbell/dumbbell (session B), so each pair is one station you load once. An antagonist pair split across two stations is worse than not supersetting at all — it means walking back and forth or occupying two things.
 - `optional: true` — a **finisher**. Excluded from `coreExercises(plan)`, so it never gates finishing, never counts in the `doneCount / coreEx.length` denominator, and skipping it is not "abandoning."
 
 **Switching programs never orphans history.** Logs store their `day` name, and anything reading old logs must resolve it via `lookupDay(name)` (which unions every program's days) rather than indexing the *active* program. Grep for `lookupDay` before adding a new read path over `workoutLogs`.
