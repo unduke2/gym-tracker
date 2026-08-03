@@ -74,6 +74,12 @@ Three invariants worth not regressing, each of which fixed an observed real-data
 
 **Body analysis (`analyseProgress`, lines ~1857–1913)** — 2×3 decision table over `(wDelta, bfDelta)` thresholds (`WEIGHT_NOISE = 0.5kg`, `BF_NOISE = 0.4%`), branching on `phase`. Output is the scenario text shown in `StatsTab`.
 
+**Calorie / protein targets (`computeTargets`)** — targets are derived from body composition and real training frequency, not the legacy `BULK_KCAL`/`CUT_KCAL` constants (which survive only as a no-stats fallback). BMR uses Katch-McArdle when lean mass is known, Mifflin-St Jeor otherwise. Maintenance is `bmr × 1.30 + sessionsPerWeek × 350/7` — **deliberately not a tier ladder keyed on training frequency**, because a ladder collapses toward sedentary during a bad stretch, quietly lowering the calorie target exactly when someone is already under-eating. Validated against the user's own logged intake and weight change (within 1.4%).
+
+Two numbers come back, not one: `floor` (below this the phase stops working — on a bulk that's maintenance) and `target`. A single target that gets missed most days just renders a daily failure notice; a floor is passable, so it's worth aiming at. `Dashboard` and `DietTab` shadow the module-level `kcalTarget`/`PROTEIN_G` with the computed values, so existing references pick them up unchanged.
+
+**Body trend alarm (`bodyTrendAlarm`, `daysSinceWeighIn`)** — surfaced on both the Dashboard and the Diet tab. Losing lean mass is a silent failure: the training log looks great while the result goes backwards. This is what went unnoticed for four months in early 2026 (−1.0 kg lean during a "bulk"), because `analyseProgress` lived one tab away and nothing prompted a weigh-in. Prompts to measure past 14 days.
+
 **Diet phase scaling (`getMealKcal`)** — `carbHeavy: true` meals scale their calories by phase (bulk up, cut down); protein is unchanged. When editing `DEFAULT_MEALS`, setting `carbHeavy` correctly matters for the calorie math.
 
 ### Programs (`PROGRAMS`, `PHUL`, `FULLBODY`)
@@ -93,6 +99,8 @@ These are deliberate product decisions, not styling accidents — don't "fix" th
 - The Dashboard shows a **consistency streak** (consecutive 7-day windows containing ≥1 session), not a weekly quota. A quota you rarely hit renders a failure notice on every app open.
 - `SessionLogger` offers a **minimum session** ("Good enough — log it") once `MIN_SESSION` (3) core lifts are done. A short session is a real outcome, not a quit.
 - Deload/hold notes are written to be non-punitive. `sugNoteClass` renders `restart`/`return` as neutral `info`, not red.
+- The Diet tab judges a **rolling 7-day average**, not the single day. Daily intake swings far too much (820 → 3160 kcal in one month) for a per-day verdict to mean anything, and bodyweight responds to the weekly average anyway. Unlogged days are excluded from the average rather than counted as zero — counting them would punish not-logging twice.
+- **Quick-add buttons are mined from repeated freeform `extras`**, not from the meal library. The library wants per-ingredient detail; the real logging pattern is coarse and repetitive ("Lunch ~1200"). Build for the observed behaviour, not the intended one.
 
 ### Versioning convention
 Recent commits follow `vX.Y update` / `vX.Y-<Theme>`. The version string is rendered in the footer (`.app-version`) and should be bumped in the JSX when shipping user-visible changes.

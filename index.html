@@ -1863,6 +1863,118 @@ button { cursor: pointer; }
   border-top: 1px solid var(--line);
 }
 
+/* ── Body-trend alarm ── */
+.trend-alarm {
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  border: 1px solid var(--line-2);
+  background: var(--card);
+}
+.trend-alarm.bad {
+  border-color: color-mix(in oklab, var(--bad) 50%, var(--line-2));
+  background: color-mix(in oklab, var(--bad) 9%, var(--card));
+}
+.trend-alarm.warn {
+  border-color: color-mix(in oklab, var(--accent-hold) 50%, var(--line-2));
+  background: color-mix(in oklab, var(--accent-hold) 8%, var(--card));
+}
+.trend-alarm.measure {
+  border-color: color-mix(in oklab, var(--accent-full) 42%, var(--line-2));
+  background: color-mix(in oklab, var(--accent-full) 7%, var(--card));
+}
+.ta-head { display: flex; align-items: center; gap: 9px; margin-bottom: 7px; }
+.ta-mark {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+}
+.trend-alarm.bad .ta-mark { color: var(--bad); }
+.trend-alarm.warn .ta-mark { color: var(--accent-hold); }
+.trend-alarm.measure .ta-mark { color: var(--accent-full); }
+.ta-title { font-size: 14px; font-weight: 800; color: var(--ink); letter-spacing: -0.01em; }
+.ta-body { font-size: 12px; color: var(--ink-3); line-height: 1.6; }
+.ta-nums {
+  display: flex; gap: 14px; flex-wrap: wrap;
+  margin-top: 10px; padding-top: 9px;
+  border-top: 1px solid var(--line);
+  font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-4);
+}
+.ta-nums b { color: var(--ink-2); font-size: 12px; margin-left: 4px; }
+.ta-btn {
+  margin-top: 11px;
+  width: 100%;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in oklab, var(--accent-full) 50%, var(--line-2));
+  background: transparent;
+  color: var(--accent-full);
+  font-family: var(--font-mono);
+  font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+}
+
+/* ── Rolling 7-day average ── */
+.roll-card, .quick-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+.roll-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; }
+.roll-big { display: flex; flex-direction: column; line-height: 1; }
+.roll-big .rb-n {
+  font-family: var(--font-mono); font-size: 30px; font-weight: 800;
+  color: var(--ink); font-variant-numeric: tabular-nums;
+}
+.roll-big.under .rb-n { color: var(--bad); }
+.roll-big.floor .rb-n { color: var(--accent-hold); }
+.roll-big.target .rb-n { color: var(--ok); }
+.roll-big .rb-u {
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--ink-4); margin-top: 6px;
+}
+.roll-marks { display: flex; flex-direction: column; gap: 3px; text-align: right; }
+.rm { display: flex; gap: 8px; justify-content: flex-end; align-items: baseline; }
+.rm-k {
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--ink-4);
+}
+.rm-v { font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.rm-v em { font-style: normal; color: var(--ink-4); font-size: 10px; }
+.roll-track {
+  position: relative;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--line);
+  margin: 12px 0 9px;
+  overflow: hidden;
+}
+.roll-track .fill { position: absolute; left: 0; top: 0; height: 100%; background: var(--ink-3); border-radius: 3px; }
+.roll-track .floor-mark { position: absolute; top: -2px; width: 2px; height: 9px; background: var(--accent-hold); z-index: 2; }
+.roll-note { font-size: 12px; line-height: 1.55; color: var(--ink-3); }
+.roll-note.under { color: var(--bad); }
+.roll-note.floor { color: var(--accent-hold); }
+.roll-note.target { color: var(--ok); }
+
+/* ── Quick add ── */
+.quick-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.quick-btn {
+  display: flex; flex-direction: column; gap: 4px; align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line-2);
+  background: transparent;
+  color: var(--ink-2);
+  text-align: left;
+}
+.quick-btn:active { transform: scale(0.97); border-color: var(--accent); }
+.qb-name { font-size: 12px; font-weight: 700; }
+.qb-nums { font-family: var(--font-mono); font-size: 10px; color: var(--ink-4); font-variant-numeric: tabular-nums; }
+.qb-nums em { font-style: normal; font-size: 8px; margin-left: 1px; letter-spacing: 0.06em; }
+
 /* ── One-time data-repair notice ── */
 .mig-card { border-color: color-mix(in oklab, var(--accent-full) 40%, var(--line)); }
 .mig-body { font-size: 12px; color: var(--ink-3); line-height: 1.6; }
@@ -3824,14 +3936,18 @@ const DAYS = ["Upper Power","Lower Power","Upper Hypertrophy","Lower Hypertrophy
 const FULLBODY = {
   "Full Body A": {
     type: "fullbody", color: "#4a9eff", icon: "◈",
-    description: "Squat · press · pull. Six lifts, ~55 min. Leave 1–2 reps in the tank.",
+    description: "Squat · press · pull · arms. Seven lifts, ~60 min. Leave 1–2 reps in the tank.",
     exercises: [
       { name: "Squat",              day: "Full Body A", tier: 1, sets: 3, repRange: "5-8",   startWeight: 30, barbell: true, barWeight: BAR.olympic, seedFrom: ["Squat","Front Squat"], note: "Deep as your hips allow — the stretched position is where the growth is." },
       { name: "Bench Press",        day: "Full Body A", tier: 1, sets: 3, repRange: "5-8",   startWeight: 30, barbell: true, barWeight: BAR.olympic, seedFrom: ["Bench Press"], note: "Stop with 1–2 clean reps left. Not to failure." },
       { name: "Lat Pulldown",       day: "Full Body A", tier: 1, sets: 3, repRange: "8-12",  startWeight: 40, seedFrom: ["Lat Pulldown"], note: "Full stretch at the top, elbows to ribs." },
       { name: "Romanian Deadlift",  day: "Full Body A", tier: 2, sets: 3, repRange: "8-12",  startWeight: 20, barbell: true, barWeight: BAR.olympic, seedFrom: ["Romanian Deadlift"], note: "Hinge, don't squat. Feel the hamstring stretch." },
       { name: "DB Lateral Raise",   day: "Full Body A", tier: 3, sets: 3, repRange: "12-15", startWeight: 6,  seedFrom: ["DB Lateral Raise"], note: "Lead with the elbows. Per dumbbell." },
-      { name: "Overhead Triceps Extension", day: "Full Body A", tier: 3, sets: 3, repRange: "10-15", startWeight: 20, seedFrom: ["Tricep Pushdown","Skull Crushers"], note: "Overhead, not a pushdown — that's where the long head gets stretched." },
+      // Arm pair — supersetted. Antagonists share no equipment and don't fatigue
+      // each other, so alternating them costs ~2 min rather than a full extra
+      // exercise slot. This is how both arms get trained in BOTH sessions.
+      { name: "Overhead Triceps Extension", day: "Full Body A", tier: 3, sets: 3, repRange: "10-15", startWeight: 20, supersetWith: "EZ Bar Curl", seedFrom: ["Tricep Pushdown","Skull Crushers"], note: "Overhead, not a pushdown — that's where the long head gets stretched." },
+      { name: "EZ Bar Curl",        day: "Full Body A", tier: 3, sets: 3, repRange: "8-12",  startWeight: 15, barbell: true, barWeight: BAR.ez, supersetWith: "Overhead Triceps Extension", seedFrom: ["EZ Bar Curl"], note: "Superset with the extensions. 3sec on the way down." },
       // ── Finishers — optional, never counted against you ──
       { name: "Calf Raise",         day: "Full Body A", tier: 3, sets: 3, repRange: "10-15", startWeight: 60, optional: true, seedFrom: ["Calf Raise"], note: "Optional. Only if you've got gas left." },
       { name: "Face Pull",          day: "Full Body A", tier: 3, sets: 3, repRange: "12-20", startWeight: 20, optional: true, seedFrom: ["Face Pull"], note: "Optional. Good for shoulders if you've got time." },
@@ -3839,14 +3955,18 @@ const FULLBODY = {
   },
   "Full Body B": {
     type: "fullbody", color: "#4a9eff", icon: "◈",
-    description: "Hinge · press · pull. Six lifts, ~55 min. Leave 1–2 reps in the tank.",
+    description: "Hinge · press · pull · arms. Seven lifts, ~60 min. Leave 1–2 reps in the tank.",
     exercises: [
       { name: "Deadlift",           day: "Full Body B", tier: 1, sets: 3, repRange: "5-8",   startWeight: 35, barbell: true, barWeight: BAR.olympic, seedFrom: ["Deadlift"], note: "Brace, push the floor away. Reset each rep." },
       { name: "Incline Barbell Press", day: "Full Body B", tier: 1, sets: 3, repRange: "8-12", startWeight: 15, barbell: true, barWeight: BAR.olympic, seedFrom: ["Incline Barbell Press"], note: "Slow down the descent. Stretch at the bottom." },
       { name: "Seated Cable Row",   day: "Full Body B", tier: 1, sets: 3, repRange: "8-12",  startWeight: 40, seedFrom: ["Seated Cable Row","One Arm DB Row"], note: "Elbows tight, squeeze the blades together." },
       { name: "Leg Press",          day: "Full Body B", tier: 2, sets: 3, repRange: "10-12", startWeight: 70, seedFrom: ["Leg Press","Hack Squat / Leg Press"], note: "Go deeper than feels natural. Full ROM." },
       { name: "DB Lateral Raise",   day: "Full Body B", tier: 3, sets: 3, repRange: "12-15", startWeight: 6,  seedFrom: ["DB Lateral Raise"], note: "Second dose this week. Per dumbbell." },
-      { name: "Incline DB Curl",    day: "Full Body B", tier: 3, sets: 3, repRange: "10-15", startWeight: 8,  seedFrom: ["Incline DB Curl","Hammer Curl"], note: "Elbow behind the torso — biceps at full length. Per dumbbell." },
+      // Arm pair, session two. Different angle on each head from session A:
+      // incline curl puts the biceps at long length (vs the EZ bar's mid range),
+      // skull crushers hit the long head from a different joint position.
+      { name: "Incline DB Curl",    day: "Full Body B", tier: 3, sets: 3, repRange: "10-15", startWeight: 8,  supersetWith: "Skull Crushers", seedFrom: ["Incline DB Curl","Hammer Curl"], note: "Elbow behind the torso — biceps at full length. Per dumbbell." },
+      { name: "Skull Crushers",     day: "Full Body B", tier: 3, sets: 3, repRange: "8-12",  startWeight: 15, barbell: true, barWeight: BAR.ez, supersetWith: "Incline DB Curl", seedFrom: ["Skull Crushers"], note: "Superset with the curls. Elbows tucked, don't flare." },
       // ── Finishers — optional, never counted against you ──
       { name: "Seated Calf Raise",  day: "Full Body B", tier: 3, sets: 3, repRange: "12-20", startWeight: 25, optional: true, seedFrom: ["Seated Calf Raise"], note: "Optional. Soleus loves volume." },
       { name: "Leg Curl",           day: "Full Body B", tier: 3, sets: 3, repRange: "10-15", startWeight: 25, optional: true, seedFrom: ["Leg Curl"], note: "Optional. Seated if the gym has it — longer hamstring stretch." },
@@ -3874,7 +3994,107 @@ function dayTypeClass(t) { return t === "power" ? "power" : t === "fullbody" ? "
 function dayTypeTag(t)   { return t === "power" ? "PWR"   : t === "fullbody" ? "FULL"     : "HYP"; }
 // Core (non-optional) exercises for a plan — what "finishing" a session means.
 function coreExercises(plan) { return (plan?.exercises || []).filter(e => !e.optional); }
+// Legacy fixed targets. Kept only as a fallback for when there are no body
+// stats to compute from — computeTargets() supersedes them everywhere else.
 const BULK_KCAL = 2900, CUT_KCAL = 2200, PROTEIN_G = 155;
+
+// ─── CALORIE / PROTEIN TARGETS ────────────────────────────────────────────────
+// Derived from body composition and ACTUAL training frequency, not hardcoded.
+// Two numbers are returned rather than one, deliberately:
+//   floor  — the intake below which the phase stops working (on a bulk that's
+//            maintenance: eat less and you lose lean mass, which is exactly what
+//            happened over Mar–Apr 2026 while the app displayed "bulk")
+//   target — where you actually want to land
+// A single target you miss most days just renders a failure notice every day.
+// A floor is passable, which makes it worth aiming at.
+function computeTargets(stats, workoutLogs, phase) {
+  const latest = (stats && stats[stats.length - 1]) || INIT_STATS;
+  const weight = num(latest.weight) > 0 ? num(latest.weight) : 72;
+  const height = num(latest.height) > 0 ? num(latest.height) : 180;
+  const bf     = num(latest.bodyFat);
+  // Prefer a measured lean mass; else derive it from body fat %; else nothing.
+  const lean = num(latest.leanMass) > 0 ? num(latest.leanMass)
+             : num(latest.muscleMass) > 0 ? num(latest.muscleMass)
+             : (bf > 0 && bf < 60) ? weight * (1 - bf / 100)
+             : null;
+  // Katch-McArdle where lean mass is known — materially more accurate than
+  // bodyweight formulas for lean lifters. Mifflin-St Jeor otherwise.
+  const bmr = lean ? 370 + 21.6 * lean
+                   : 10 * weight + 6.25 * height - 5 * 25 + 5;
+
+  // Activity: a base multiplier for ordinary daily life, PLUS the measured cost
+  // of sessions actually logged over the last 8 weeks. Deliberately not a tier
+  // ladder keyed on training frequency — that makes the multiplier collapse
+  // toward sedentary during a bad stretch, which quietly lowers the calorie
+  // target exactly when someone is already under-eating, and makes the lowered
+  // target easier to "hit". Non-training life doesn't stop when the gym does.
+  const BASE_ACTIVITY = 1.30;   // daily living, non-training
+  const KCAL_PER_SESSION = 350; // ~55 min of lifting including EPOC
+  const since = Date.now() - 56 * 86400000;
+  const perWk = Object.values(workoutLogs || {}).filter(s => s.ts >= since).length / 8;
+
+  const r10 = n => Math.round(n / 10) * 10;
+  const maintenance = r10(bmr * BASE_ACTIVITY + perWk * KCAL_PER_SESSION / 7);
+  const activity = Math.round((maintenance / bmr) * 100) / 100; // effective, for display
+  // ~+400 is the lean-bulk surplus that yields 0.25–0.5 kg/month for an
+  // intermediate. Faster is mostly fat.
+  const target = r10(phase === "bulk" ? maintenance + 400 : maintenance - 400);
+  const floor  = phase === "bulk" ? maintenance : r10(maintenance - 650);
+  return {
+    bmr: Math.round(bmr), lean: lean ? Math.round(lean * 10) / 10 : null,
+    weight, perWk: Math.round(perWk * 10) / 10, activity, maintenance,
+    target, floor,
+    proteinMin: Math.round(weight * 1.6),   // established lower bound
+    protein:    Math.round(weight * 2.0),   // upper end of the useful range
+    hasStats: !!lean,
+  };
+}
+
+// Days since the most recent body measurement, or null if there are none.
+function daysSinceWeighIn(stats) {
+  const last = stats && stats[stats.length - 1];
+  if (!last?.date) return null;
+  const t = new Date(last.date + "T12:00:00").getTime();
+  return Number.isFinite(t) ? Math.max(0, Math.floor((Date.now() - t) / 86400000)) : null;
+}
+
+// ─── BODY TREND ALARM ─────────────────────────────────────────────────────────
+// The app had every number needed to catch a 1kg lean-mass loss during a "bulk"
+// and never said a word, because the analysis lived one tab away and the weigh-in
+// prompt didn't exist. This returns a dashboard-level verdict instead.
+function bodyTrendAlarm(stats, phase, targets) {
+  const stale = daysSinceWeighIn(stats);
+  if (stale === null) return { level: "none", stale };
+  if (!stats || stats.length < 2) return { level: stale > 14 ? "measure" : "none", stale };
+
+  const a = stats[0], b = stats[stats.length - 1];
+  const wDelta = num(b.weight) - num(a.weight);
+  const leanOf = s => num(s.leanMass) > 0 ? num(s.leanMass) : num(s.muscleMass);
+  const lDelta = (Number.isFinite(leanOf(a)) && Number.isFinite(leanOf(b)))
+    ? leanOf(b) - leanOf(a) : null;
+
+  // Losing lean mass is the one outcome worth interrupting someone over,
+  // regardless of phase — it means the training is being undone by the eating.
+  if (lDelta !== null && lDelta <= -0.5) {
+    return { level: "bad", stale, wDelta, lDelta,
+      headline: `Lean mass down ${Math.abs(lDelta).toFixed(1)}kg`,
+      body: phase === "bulk"
+        ? `You're set to bulk but eating below maintenance (~${targets.floor} kcal). That's training hard and going backwards — add roughly ${Math.max(200, targets.target - Math.round(targets.maintenance * 0.88))} kcal a day.`
+        : `A cut costs some lean mass, but this is more than it should. Raise intake toward ${targets.maintenance} kcal and keep protein at ${targets.proteinMin}g+.` };
+  }
+  if (phase === "bulk" && wDelta <= -0.5) {
+    return { level: "warn", stale, wDelta, lDelta,
+      headline: `Weight down ${Math.abs(wDelta).toFixed(1)}kg on a bulk`,
+      body: `You're eating under maintenance (~${targets.maintenance} kcal). Nothing will grow until that flips.` };
+  }
+  if (phase === "cut" && wDelta >= 0.5) {
+    return { level: "warn", stale, wDelta, lDelta,
+      headline: `Weight up ${wDelta.toFixed(1)}kg on a cut`,
+      body: `Intake is above maintenance (~${targets.maintenance} kcal).` };
+  }
+  if (stale > 14) return { level: "measure", stale, wDelta, lDelta };
+  return { level: "ok", stale, wDelta, lDelta };
+}
 const INIT_STATS = { weight: 74.1, height: 180, bodyFat: 14.3, bmr: 2200, date: "2026-03-23" };
 
 // Personal gym schedule — used to warn when the session ETA will overshoot
@@ -3959,7 +4179,9 @@ function App() {
   }, [theme]);
 
   const latest = stats[stats.length - 1] || INIT_STATS;
-  const kcalTarget = phase === "bulk" ? BULK_KCAL : CUT_KCAL;
+  const targets = computeTargets(stats, workoutLogs, phase);
+  const kcalTarget = targets.target;
+  const trend = bodyTrendAlarm(stats, phase, targets);
   const today = todayStr();
   const todayDiet = dietLogs[today] || { kcal:0, protein:0, notes:"" };
 
@@ -4144,9 +4366,9 @@ function App() {
       </header>
 
       <main className="app-main">
-        {tab==="dash"    && <Dashboard latest={latest} phase={phase} kcalTarget={kcalTarget} todayDiet={todayDiet} workoutLogs={workoutLogs} setTab={setTab} setActiveSession={setActiveSession} startSession={startSession} draftSession={draftSession} pendingMakeups={pendingMakeups} startMakeup={startMakeup} dismissMakeup={dismissMakeup} program={program} />}
+        {tab==="dash"    && <Dashboard latest={latest} phase={phase} kcalTarget={kcalTarget} todayDiet={todayDiet} workoutLogs={workoutLogs} setTab={setTab} setActiveSession={setActiveSession} startSession={startSession} draftSession={draftSession} pendingMakeups={pendingMakeups} startMakeup={startMakeup} dismissMakeup={dismissMakeup} program={program} targets={targets} trend={trend} />}
         {tab==="workout" && <WorkoutTab workoutLogs={workoutLogs} setWorkoutLogs={setWorkoutLogs} setActiveSession={setActiveSession} startSession={startSession} draftSession={draftSession} customSessions={customSessions} setCustomSessions={setCustomSessions} program={program} programId={programId} setProgramId={setProgramId} />}
-        {tab==="diet"    && <DietTab today={today} todayDiet={todayDiet} kcalTarget={kcalTarget} dietLogs={dietLogs} setDietLogs={setDietLogs} phase={phase} stats={stats} />}
+        {tab==="diet"    && <DietTab today={today} todayDiet={todayDiet} dietLogs={dietLogs} setDietLogs={setDietLogs} phase={phase} stats={stats} targets={targets} trend={trend} setTab={setTab} />}
         {tab==="stats"   && <StatsTab stats={stats} setStats={setStats} phase={phase} theme={theme} setTheme={setTheme} />}
       </main>
 
@@ -4247,7 +4469,8 @@ function mesocycleDelta(workoutLogs, dayType) {
   const deltaPct = ((last - avg) / avg) * 100;
   return { last, avg, deltaPct };
 }
-function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, setActiveSession, startSession, draftSession, pendingMakeups = [], startMakeup, dismissMakeup, program }) {
+function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, setActiveSession, startSession, draftSession, pendingMakeups = [], startMakeup, dismissMakeup, program, targets, trend }) {
+  const PROTEIN_G = targets.protein; // shadow the legacy constant — see computeTargets
   // When a pending group is tapped, this holds it for the choice modal.
   const [catchupOpen, setCatchupOpen] = useState(null);
   // Shown once if the one-time data repair actually changed anything. Silently
@@ -4493,6 +4716,30 @@ function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, 
           </svg>
         </button>
       </div>
+
+      {/* Body-trend alarm, mirrored onto the dashboard — a lean-mass loss during
+          a bulk is worth interrupting for, and burying it in a tab is how four
+          months of it went unnoticed. */}
+      {(trend.level === "bad" || trend.level === "warn") && (
+        <div className={`trend-alarm ${trend.level}`} onClick={() => setTab("diet")}>
+          <div className="ta-head">
+            <span className="ta-mark">{trend.level === "bad" ? "▲" : "!"}</span>
+            <span className="ta-title">{trend.headline}</span>
+          </div>
+          <div className="ta-body">{trend.body}</div>
+        </div>
+      )}
+      {trend.level === "measure" && (
+        <div className="trend-alarm measure" onClick={() => setTab("stats")}>
+          <div className="ta-head">
+            <span className="ta-mark">◷</span>
+            <span className="ta-title">
+              {trend.stale === null ? "No body measurements yet" : `Last weigh-in was ${trend.stale} days ago`}
+            </span>
+          </div>
+          <div className="ta-body">Tap to log one — the diet targets need it to mean anything.</div>
+        </div>
+      )}
 
       {migShown && MIGRATION_REPORT && (
         <div className="card mig-card">
@@ -6009,7 +6256,11 @@ const CAT_LABELS = { breakfast:"☀️ Breakfast", post:"💪 Post-Workout", lun
 const CAT_ORDER  = ["breakfast","post","lunch","snack","dinner"];
 
 // ─── DIET TAB ─────────────────────────────────────────────────────────────────
-function DietTab({ today, todayDiet, kcalTarget, dietLogs, setDietLogs, phase, stats }) {
+function DietTab({ today, todayDiet, dietLogs, setDietLogs, phase, stats, targets, trend, setTab }) {
+  // Shadow the legacy module constants with the computed values, so every
+  // existing reference below picks up the personalised numbers unchanged.
+  const kcalTarget = targets.target;
+  const PROTEIN_G  = targets.protein;
   const [view, setView] = useState("today"); // today | library | history
   // Which date the "Today" view is currently editing. Defaults to today but can
   // walk backwards via the date nav — handles the "forgot to log yesterday" /
@@ -6147,6 +6398,75 @@ function DietTab({ today, todayDiet, kcalTarget, dietLogs, setDietLogs, phase, s
   const avgProt = recent14.length ? Math.round(recent14.reduce((s,[,d])=>s+(d.protein||0),0)/recent14.length) : 0;
   const surplus = avgKcal - kcalTarget;
 
+  // ─── ROLLING 7-DAY AVERAGE ─────────────────────────────────────────────
+  // Single-day intake swings enormously (820 → 3160 kcal in the same month),
+  // so a daily pass/fail verdict is mostly noise and reads as constant failure.
+  // Bodyweight responds to the weekly average, so that's what gets judged.
+  // Unlogged days inside the window are excluded rather than counted as zero —
+  // counting them as zero would punish not-logging twice.
+  const roll7 = (() => {
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      const log = dietLogs[isoLocal(d)];
+      days.push(log && (log.kcal || log.protein) ? log : null);
+    }
+    const logged = days.filter(Boolean);
+    if (!logged.length) return { kcal: 0, protein: 0, n: 0, days };
+    return {
+      kcal: Math.round(logged.reduce((s, d) => s + (d.kcal || 0), 0) / logged.length),
+      protein: Math.round(logged.reduce((s, d) => s + (d.protein || 0), 0) / logged.length),
+      n: logged.length, days,
+    };
+  })();
+  const rollState = roll7.n === 0 ? "none"
+    : roll7.kcal >= targets.target ? "target"
+    : roll7.kcal >= targets.floor  ? "floor"
+    : "under";
+
+  // ─── QUICK ADD, BUILT FROM YOUR OWN HISTORY ────────────────────────────
+  // The meal library asks for per-ingredient detail; the actual logging pattern
+  // is coarse and repetitive ("Lunch ~1200", "Dinner ~1200", "Shake"). Rather
+  // than fight that, mine the freeform extras for repeated names and offer them
+  // as one-tap buttons at the median calories/protein actually entered.
+  const quickAdds = (() => {
+    const byName = new Map();
+    for (const log of Object.values(dietLogs)) {
+      for (const e of (log.extras || [])) {
+        const key = String(e.name || "").trim();
+        if (!key) continue;
+        if (!byName.has(key)) byName.set(key, []);
+        byName.get(key).push({ kcal: num(e.kcal) || 0, prot: num(e.prot) || 0 });
+      }
+    }
+    const median = (arr) => {
+      const s = [...arr].sort((a, b) => a - b);
+      return s.length % 2 ? s[(s.length-1)/2] : Math.round((s[s.length/2-1] + s[s.length/2]) / 2);
+    };
+    return [...byName.entries()]
+      .filter(([, uses]) => uses.length >= 2)          // repeated at least once
+      .map(([name, uses]) => ({
+        name, uses: uses.length,
+        kcal: median(uses.map(u => u.kcal)),
+        prot: median(uses.map(u => u.prot)),
+      }))
+      .filter(q => q.kcal > 0)
+      .sort((a, b) => b.uses - a.uses)
+      .slice(0, 6);
+  })();
+
+  // Mirrors the extras-edit path: append, then recompute totals from meals +
+  // extras rather than incrementing a stored total (which would drift).
+  const addQuick = (q) => {
+    const updated = [...(editDiet.extras || []), { name: q.name, kcal: q.kcal, prot: q.prot }];
+    const exK = updated.reduce((s, e) => s + e.kcal, 0);
+    const exP = updated.reduce((s, e) => s + e.prot, 0);
+    setDietLogs(prev => ({ ...prev, [editDate]: {
+      ...(prev[editDate] || {}), meals: dayMeals, extras: updated,
+      kcal: mealKcal + exK, protein: mealProt + exP,
+    }}));
+  };
+
   const kcalPct = Math.min(100, (totalKcal/kcalTarget)*100);
   const protPct = Math.min(100, (totalProt/PROTEIN_G)*100);
   const kcalCls = totalKcal >= kcalTarget ? "ok" : totalKcal >= kcalTarget*0.8 ? "warn" : "bad";
@@ -6164,6 +6484,93 @@ function DietTab({ today, todayDiet, kcalTarget, dietLogs, setDietLogs, phase, s
 
       {view==="today" && (
         <>
+          {/* ── Body-trend alarm ──
+              The single most useful thing this tab can say. Losing lean mass on
+              a bulk is a silent failure: the training log looks great while the
+              result goes backwards, and nothing else in the app surfaces it. */}
+          {(trend.level === "bad" || trend.level === "warn") && (
+            <div className={`trend-alarm ${trend.level}`}>
+              <div className="ta-head">
+                <span className="ta-mark">{trend.level === "bad" ? "▲" : "!"}</span>
+                <span className="ta-title">{trend.headline}</span>
+              </div>
+              <div className="ta-body">{trend.body}</div>
+              <div className="ta-nums">
+                <span>maintenance <b className="tnum">{targets.maintenance}</b></span>
+                <span>target <b className="tnum">{targets.target}</b></span>
+                <span>7-day avg <b className="tnum">{roll7.n ? roll7.kcal : "—"}</b></span>
+              </div>
+            </div>
+          )}
+          {trend.level === "measure" && (
+            <div className="trend-alarm measure">
+              <div className="ta-head">
+                <span className="ta-mark">◷</span>
+                <span className="ta-title">
+                  {trend.stale === null ? "No body measurements yet"
+                    : `Last weigh-in was ${trend.stale} days ago`}
+                </span>
+              </div>
+              <div className="ta-body">
+                Without a recent measurement none of this can tell you whether it's working.
+              </div>
+              <button className="ta-btn" onClick={() => setTab("stats")}>Log a weigh-in →</button>
+            </div>
+          )}
+
+          {/* ── Rolling 7-day average ──
+              Judged instead of the single day: bodyweight responds to the weekly
+              average, and daily numbers swing far too much to mean anything. */}
+          <div className="roll-card">
+            <div className="section-head">
+              <span className="eyebrow">7-day average</span>
+              <span className="eyebrow" style={{color:"var(--ink-4)"}}>
+                {roll7.n ? `${roll7.n} day${roll7.n===1?"":"s"} logged` : "nothing logged"}
+              </span>
+            </div>
+            <div className="roll-row">
+              <div className={`roll-big ${rollState}`}>
+                <span className="rb-n tnum">{roll7.n ? roll7.kcal : "—"}</span>
+                <span className="rb-u">kcal / day</span>
+              </div>
+              <div className="roll-marks">
+                <div className="rm"><span className="rm-k">floor</span><span className="rm-v tnum">{targets.floor}</span></div>
+                <div className="rm"><span className="rm-k">target</span><span className="rm-v tnum">{targets.target}</span></div>
+                <div className="rm"><span className="rm-k">protein</span><span className="rm-v tnum">{roll7.n ? roll7.protein : "—"}<em>/{targets.proteinMin}g</em></span></div>
+              </div>
+            </div>
+            <div className="roll-track">
+              <i className="floor-mark" style={{left:`${Math.min(97,(targets.floor/(targets.target*1.25))*100)}%`}}/>
+              <i className="fill" style={{width:`${Math.min(100,(roll7.kcal/(targets.target*1.25))*100)}%`}}/>
+            </div>
+            <div className={`roll-note ${rollState}`}>
+              {rollState === "none"   ? "Log a few days and this becomes the number that matters."
+             : rollState === "under"  ? `${targets.floor - roll7.kcal} kcal/day under your floor — you're eating below maintenance.`
+             : rollState === "floor"  ? `Above maintenance. ${targets.target - roll7.kcal} more per day to actually grow.`
+             : `On target. This is the number that moves the scale.`}
+            </div>
+          </div>
+
+          {/* ── Quick add ──
+              Generated from repeated freeform entries rather than the meal
+              library, because that's how this actually gets logged. */}
+          {quickAdds.length > 0 && (
+            <div className="quick-card">
+              <div className="section-head">
+                <span className="eyebrow">Quick add</span>
+                <span className="eyebrow" style={{color:"var(--ink-4)"}}>from what you usually eat</span>
+              </div>
+              <div className="quick-grid">
+                {quickAdds.map(q => (
+                  <button key={q.name} className="quick-btn" onClick={() => addQuick(q)}>
+                    <span className="qb-name">{q.name}</span>
+                    <span className="qb-nums tnum">{q.kcal}<em>kcal</em>{q.prot ? <> · {q.prot}<em>p</em></> : null}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Date nav — defaults to today, walks back for "forgot to log" days */}
           <div className="date-nav">
             <button className="date-nav-arrow" onClick={() => shiftDate(-1)} aria-label="Previous day">←</button>
@@ -7075,7 +7482,7 @@ function StatsTab({ stats, setStats, phase, theme, setTheme }) {
             </button>
           ))}
         </div>
-        <div className="app-version">Gym Tracker · v8.0 — Restart</div>
+        <div className="app-version">Gym Tracker · v8.1 — Restart</div>
       </div>
 
       <DataBackup />
