@@ -108,6 +108,24 @@ has("warm-up ramp starts from an empty bar", normal["Full Body A"], "bar only");
 has("diet shows the 7-day average", dietOut, "7-day average");
 has("diet quick-add is mined from logged meals", dietOut, "Dinner");
 
+console.log("\n── Effort target is visible on every exercise ──");
+{
+  const plan = M.FULLBODY["Full Body A"];
+  const at = (exName) => {
+    const data = {};
+    for (const e of plan.exercises) data[e.name] = Array.from({length:e.sets}, () => ({weight:"",reps:"",rpe:null,done:false}));
+    return renderToString(h(M.SessionLogger, { dayName:"Full Body A", plan, workoutLogs: logs,
+      onFinish:noop, onCancel:noop, onDiscard:noop, onSaveSession:noop,
+      savedSession:{ data, activeEx:exName, activeIdx:0, exerciseHolds:{}, warmedUp:[exName], sessionStartedAt:Date.now() } }));
+  };
+  const compound = at("Bench Press"), isolation = at("EZ Bar Curl");
+  has("compound shows the hold-back target", compound, "Stop at RPE 8");
+  has("compound explains it", compound, "leave 2 clean reps");
+  hasnt("compound is not told to go to failure", compound, "Last set to failure");
+  has("isolation is told to go to failure", isolation, "Last set to failure");
+  hasnt("isolation is not capped at RPE 8", isolation, "Stop at RPE 8");
+}
+
 console.log("\n── Ending a session early requires confirmation ──");
 {
   // Regression: this button was green, sat under the set-logging controls, said

@@ -1889,6 +1889,39 @@ button { cursor: pointer; }
 .pg-body { font-size: 12px; color: var(--ink-3); line-height: 1.6; }
 .phase-gate.on .pg-body { color: var(--ink-2); }
 
+/* ── Effort target chip ── */
+.effort-chip {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 9px 12px;
+  border-radius: 10px;
+  margin-bottom: 10px;
+  border: 1px solid var(--line-2);
+  background: transparent;
+}
+.effort-chip.hold-back { border-color: color-mix(in oklab, var(--info, var(--accent-full)) 40%, var(--line-2)); }
+.effort-chip.to-failure { border-color: color-mix(in oklab, var(--bad) 38%, var(--line-2)); }
+.ec-mark { font-size: 12px; line-height: 1; }
+.effort-chip.hold-back .ec-mark { color: var(--accent-full); }
+.effort-chip.to-failure .ec-mark { color: var(--bad); }
+.ec-label {
+  font-family: var(--font-mono);
+  font-size: 10px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase;
+}
+.effort-chip.hold-back .ec-label { color: var(--accent-full); }
+.effort-chip.to-failure .ec-label { color: var(--bad); }
+.ec-detail { font-size: 11px; color: var(--ink-4); }
+.rpe-over {
+  margin-top: 9px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--accent-hold);
+}
+
 /* ── Technique cue (AMRAP / myo-reps) ── */
 .finisher-note {
   border: 1px solid color-mix(in oklab, var(--accent) 45%, var(--line-2));
@@ -3608,6 +3641,23 @@ function calcNextWeight(exercise, logs) {
     };
   }
 
+  // 2a. CLEAN PROGRESS — every set landed inside the range, nothing failed, and
+  //     it was done at or under the effort target. Under the leave-2-reps
+  //     protocol for compounds this IS the success condition: without this
+  //     branch the only route to more weight is hitting the top of the range on
+  //     every set, which can only be done by training to failure — so the
+  //     algorithm would be quietly punishing the exact behaviour it asks for.
+  //     Requires mid-range or better, so it builds reps before it adds load.
+  if (failedSets === 0 && (exercise.tier || 3) <= 2 && avgRpe !== null && avgRpe <= 8 && perf >= 0.5) {
+    const next = snap(lastWeight + baseInc, eq);
+    if (next > lastWeight) {
+      return {
+        weight: next, status: "increase", increment: baseInc, eq,
+        note: `↑ +${baseInc}kg — all sets in range at RPE ~${rpeShow}, nothing forced. That's how it should look.`
+      };
+    }
+  }
+
   // 2b. FATIGUE HOLD — this exercise sits late in the session and had a bad
   //     round, but only one. Almost always the session catching up with you
   //     rather than the load being wrong. Hold once; if it repeats, the deload
@@ -3871,6 +3921,31 @@ function warmupSets(working, ex) {
     }
   }
   return out;
+}
+
+// ─── EFFORT TARGET ────────────────────────────────────────────────────────────
+// How close to failure this specific exercise should be taken. A blanket rule
+// is wrong in both directions, so it splits on tier:
+//
+//   tier 1-2 (compounds)  → stop ~2 reps short, RPE 8.
+//     Strength gains actually favour staying further from failure; technique
+//     degrades under a fatigued CNS on loaded spinal work; and failing set 1
+//     costs reps on sets 2-3, which costs total volume — the thing that
+//     actually drives growth. Observed directly: bench 8/5/4 = 17 reps, where
+//     stopping set 1 at 6 would have given ~6/6/6 = 18.
+//
+//   tier 3 (isolations)   → last set to failure, freely.
+//     Near-zero systemic cost, fast recovery, no technique to lose. This is
+//     where an appetite for suffering belongs, and hard mode's myo-reps take
+//     these past failure on purpose.
+//
+// Displayed in the session so the rule lives in the app rather than in someone's
+// memory — the app previously showed a bare rep range, which reads as "get the
+// top number" and quietly taught training every set to failure.
+function effortTarget(ex) {
+  return (ex?.tier || 3) <= 2
+    ? { kind:"hold-back", rpeCap: 8, label: "Stop at RPE 8", detail: "leave 2 clean reps in the tank" }
+    : { kind:"to-failure", rpeCap: 10, label: "Last set to failure", detail: "cheap to recover from — spend it here" };
 }
 
 // Colour for a suggestion note. "restart" and "return" are deliberately neutral
@@ -5862,6 +5937,20 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
               );
             })()}
 
+            {/* Effort target — how hard THIS lift should be taken. Sits next to
+                the weight because it's half the prescription; a rep range on its
+                own reads as "get the top number". */}
+            {(() => {
+              const et = effortTarget(curEx);
+              return (
+                <div className={`effort-chip ${et.kind}`}>
+                  <span className="ec-mark">⌁</span>
+                  <span className="ec-label">{et.label}</span>
+                  <span className="ec-detail">{et.detail}</span>
+                </div>
+              );
+            })()}
+
             {/* Coach note */}
             {curEx.note && (
               <div className="coach-note">
@@ -5966,6 +6055,21 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
                         );
                       })}
                     </div>
+                    {/* Feedback at the moment it's logged, not a lecture afterwards.
+                        Only fires when the target is actually overshot, and only on
+                        the lifts where overshooting has a cost. */}
+                    {(() => {
+                      const et = effortTarget(curEx);
+                      if (et.kind !== "hold-back" || !pendingRpe || pendingRpe <= et.rpeCap) return null;
+                      const more = activeIdx < (data[activeEx]?.length || 1) - 1;
+                      return (
+                        <div className="rpe-over">
+                          {pendingRpe >= 10
+                            ? `That was failure on a main lift.${more ? " Expect the next sets to drop 30-40% — that costs more total reps than it buys." : " Next time stop around 8."}`
+                            : `A rep past target.${more ? " Watch what it does to your next set." : ""}`}
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   <button className={`btn huge ${pendingR?"ok":""}`} onClick={finishSet} disabled={!pendingR}>
@@ -7717,7 +7821,7 @@ function StatsTab({ stats, setStats, phase, theme, setTheme }) {
             </button>
           ))}
         </div>
-        <div className="app-version">Gym Tracker · v8.5 — Restart</div>
+        <div className="app-version">Gym Tracker · v8.6 — Restart</div>
       </div>
 
       <DataBackup />

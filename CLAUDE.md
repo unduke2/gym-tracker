@@ -132,6 +132,15 @@ Hard mode is **earned, not chosen**: `consistency(logs).streak >= HARD_MODE_WEEK
 
 Technique selection is narrow on purpose. Volume-controlled trials show intensity techniques yield the *same* hypertrophy as straight sets, just in less time, so they're included only where they buy density (myo-reps) or drive progression (AMRAP). **Past-failure lengthened partials are deliberately excluded**: rep-matched they grow no more than extra full-ROM sets, and they cost additional recovery. Don't add them back without new evidence.
 
+### Effort targets (`effortTarget`)
+Proximity to failure is prescribed **per exercise, split on tier** — a blanket rule is wrong in both directions:
+- **tier 1–2 (compounds)** → stop at RPE 8, ~2 reps in reserve. Strength gains measurably favour staying further from failure; technique degrades under a fatigued CNS on loaded spinal work; and failing set 1 costs reps on sets 2–3, which costs total volume. Observed directly in real data: bench 8/5/4 = 17 reps, where stopping set 1 at 6 would have yielded ~6/6/6 = 18.
+- **tier 3 (isolations)** → last set to failure. Near-zero systemic cost, fast recovery, no technique to lose. Hard mode's myo-reps take these past failure deliberately.
+
+This is **displayed in the session**, not left to memory. The app previously showed a bare rep range, which reads as "get the top number" and quietly taught training every set to failure — the user said so explicitly ("when I see 8-12 I always go for 12, that seems like what I have to do"). An overshoot note also fires in the RPE picker, but only on hold-back lifts and only when the cap is actually exceeded.
+
+**Branch 2a of `calcNextWeight` exists to keep the algorithm honest about this.** Without it, the only route to more load is hitting the top of the range on *every* set, which can only be done by training to failure — so the tree would punish the exact behaviour the guidance asks for. Clean work (no failed sets, tier ≤2, avgRpe ≤8, `perf >= 0.5`) now earns one increment. The `perf >= 0.5` floor makes it build reps before adding load.
+
 ### Adherence-first UI rules
 These are deliberate product decisions, not styling accidents — don't "fix" them back:
 - The Dashboard shows a **consistency streak** (consecutive 7-day windows containing ≥1 session), not a weekly quota. A quota you rarely hit renders a failure notice on every app open.

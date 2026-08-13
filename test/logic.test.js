@@ -112,6 +112,49 @@ console.log("\n── Restart seeding ──");
     climbing.weight < 50 && stalled.weight < 45 && declining.weight < 50);
 }
 
+console.log("\n── Effort targets: compounds hold back, isolations go to failure ──");
+{
+  const fb = [...A.FULLBODY["Full Body A"].exercises, ...A.FULLBODY["Full Body B"].exercises];
+  const compounds  = ["Squat","Bench Press","Lat Pulldown","Romanian Deadlift","Deadlift","Incline Barbell Press","Seated Cable Row","Leg Press"];
+  const isolations = ["DB Lateral Raise","EZ Bar Curl","Skull Crushers","Incline DB Curl","Overhead DB Extension"];
+  for (const n of compounds)
+    check(`${n} → hold back`, A.effortTarget(fb.find(e => e.name === n)).kind === "hold-back");
+  for (const n of isolations)
+    check(`${n} → to failure`, A.effortTarget(fb.find(e => e.name === n)).kind === "to-failure");
+  check("compound cap is RPE 8", A.effortTarget({tier:1}).rpeCap === 8);
+  check("isolation cap is RPE 10", A.effortTarget({tier:3}).rpeCap === 10);
+  check("an unclassified exercise defaults to isolation, not compound",
+    A.effortTarget({}).kind === "to-failure");
+}
+
+console.log("\n── Leaving reps in the tank still earns progression ──");
+{
+  // The point of the guidance: all sets in range, nothing forced, RPE <= 8 must
+  // move the weight. Otherwise the only route up is training to failure and the
+  // algorithm contradicts the coaching.
+  const bench = ex("FULLBODY", "Full Body A", "Bench Press");   // 3 x 5-8
+  const s3 = (w, r, rpe) => sess("Full Body A", "Bench Press", [S(w,r,rpe), S(w,r,rpe), S(w,r,rpe)]);
+  const clean = A.calcNextWeight(bench, s3(30, 7, 8));
+  console.log(`   30kg x7,7,7 @ RPE 8  ⇒  ${clean.weight}kg (${clean.status})`);
+  check("mid-range at RPE 8 progresses", clean.status === "increase" && clean.weight === 32.5, `${clean.weight} ${clean.status}`);
+  // Bottom of the range should build reps first, not add load.
+  const bottom = A.calcNextWeight(bench, s3(30, 5, 8));
+  console.log(`   30kg x5,5,5 @ RPE 8  ⇒  ${bottom.weight}kg (${bottom.status})`);
+  check("bottom of the range holds and builds reps first", bottom.weight === 30, `${bottom.weight}`);
+  // Grinding must not be MORE rewarded than clean work at the same reps.
+  const ground = A.calcNextWeight(bench, s3(30, 7, 10));
+  check("same reps at RPE 10 does not progress faster than at RPE 8",
+    ground.weight <= clean.weight, `RPE10 → ${ground.weight}, RPE8 → ${clean.weight}`);
+  // Isolations are tier 3 and must NOT get the hold-back branch.
+  const raise = ex("FULLBODY", "Full Body A", "DB Lateral Raise");
+  const iso = A.calcNextWeight(raise, sess("Full Body A","DB Lateral Raise",[S(5,13,8),S(5,13,8),S(5,13,8)]));
+  check("isolations are unaffected by the compound branch", iso.weight >= 5, `${iso.weight}`);
+  // And the real observed pattern still behaves: 8/5/4 with a failed set holds.
+  const real = A.calcNextWeight(bench, sess("Full Body A","Bench Press",[S(35,8,10),S(35,5,10),S(35,4,10)]));
+  check("last night's 8/5/4 still holds rather than progressing",
+    real.weight === 35 && real.status === "grind", `${real.weight} ${real.status}`);
+}
+
 console.log("\n── Machines carry no bar (only `barbell` lifts do) ──");
 {
   const machines = ["Lat Pulldown", "Seated Cable Row", "Leg Press"];
