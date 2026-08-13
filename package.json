@@ -1,0 +1,15 @@
+{
+  "name": "gym-tracker",
+  "version": "8.4.0",
+  "private": true,
+  "description": "Personal gym + diet + body-comp tracker. The app has no runtime dependencies \u2014 index.html runs standalone in any browser. These devDependencies exist only for the optional production build (build.mjs) and the test suite (test/).",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "sh test/run.sh"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  }
+}

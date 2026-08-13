@@ -8,11 +8,39 @@ There is no build step. The entire app lives in `index.html` — React 18 and Ba
 
 Because Babel runs client-side, there is **no type-check, no lint, no test command** — syntax errors only surface when the page is loaded. After any edit, verify by reloading the page and exercising the affected UI path.
 
-**Pre-flight checking without a build step.** You can still validate changes headlessly, and should for anything touching progression logic:
-1. Extract the `<script type="text/babel">` block to a `.jsx` file, then `npx esbuild --outfile=/dev/null app.jsx` for a syntax check.
-2. For runtime checks, transpile with esbuild to CJS, strip the trailing `ReactDOM.createRoot(...)` line, shim `localStorage`/`document`/`window`, and `require()` the result — you can then call `calcNextWeight` etc. directly against a real backup JSON, or `renderToString` any component with `react-dom/server`.
+## Tests
 
-Caveat worth knowing: **Babel Standalone downlevels `const`/`let` to `var`**, so temporal-dead-zone errors (using a `const` above its declaration) are silently invisible in the browser but throw under esbuild. If a headless render fails with "Cannot access X before initialization" and the browser seems fine, the browser is wrong — fix the ordering.
+```sh
+sh test/run.sh      # or: npm test
+```
+
+Syntax check → 90 logic assertions → render every screen. **Run this before claiming any change works**, especially anything touching progression. First run installs devDependencies.
+
+- `test/build.js` — extracts the babel block, transpiles it, shims `localStorage`/`document`/`window`, and returns the app's real functions and components. `load(false)` for logic, `load(true)` for `renderToString`.
+- `test/fixtures/sample-backup.json` — **synthetic**, not real user data (`Backup/` is gitignored). Every entry reproduces a bug that was actually observed: AMRAP burnout sets, comma decimals, 0-rep sets, late-session collapse, lean-mass loss on a bulk. Dates are `daysAgo` and hydrated to absolute timestamps at load, so the fixture never ages into staleness. Don't "tidy" the messy values — they're the test.
+- `test/logic.test.js` / `test/render.test.js` — the render suite is the only thing that catches temporal-dead-zone bugs (see below) and missing props.
+
+When adding a plan, exercise, or progression branch, add the assertion too. The program-integrity block already checks superset reciprocity, rep-range parsing, `lookupDay` resolution, and that no exercise silently falls through `getEquipmentType`.
+
+Caveat worth knowing: **Babel Standalone downlevels `const`/`let` to `var`**, so temporal-dead-zone errors (using a `const` above its declaration) are silently invisible in the browser but throw under esbuild. If a headless render fails with "Cannot access X before initialization" and the browser seems fine, the browser is wrong — fix the ordering. (v7.1 shipped one of these in `SessionLogger`.)
+
+## Production build
+
+```sh
+npm run build       # → dist/
+```
+
+Optional, and `index.html` remains the single source of truth — it still opens directly in a browser with no build. `build.mjs` exists solely to get Babel out of the runtime path, which is worth far more than it sounds:
+
+| | cost per launch |
+|---|---|
+| `babel.min.js` parse + eval | ~83 ms |
+| in-browser JSX transform | **~1664 ms** (desktop V8) |
+| | ≈ **5–9 s on a mid-range phone**, every open |
+
+The build pre-transpiles to `dist/app.js` (es2018, minified), drops the 2.8 MB Babel bundle, and rewrites `sw.js`'s precache list and `CACHE_VERSION` to match. ~3.0 MB and ~1.7 s of parse saved per cold load. It throws rather than shipping if any Babel reference survives the rewrite.
+
+**Cloudflare Pages**: build command `npm run build`, output directory `dist`. If the build ever fails, Pages keeps serving the last good deploy and `index.html` still works unbuilt.
 
 ## Architecture
 
@@ -69,6 +97,8 @@ Three invariants worth not regressing, each of which fixed an observed real-data
 **Equipment-aware weight snapping** — `getEquipmentType` → `snap` → `getBaseIncrement` / `snapDB` / `dbIncrement`. Four equipment classes (`barbell`, `machine`, `dumbbell_heavy`, `dumbbell_light`) with different increments and rounding. Dumbbells under 10kg use 1kg steps, otherwise 2.5kg. When adding a new exercise to any plan, also add it to the appropriate list inside `getEquipmentType` or it will default to `dumbbell_heavy`.
 
 **Rest times (`getRestSeconds`, `getBetweenExerciseRest`)** — classified as heavy / med / isolation, with power-day multiplier. Same caveat: new exercises must be categorized here or they fall through to the isolation default.
+
+**Barbell weights are PLATE weight — the bar is excluded.** This convention runs through the whole app (`platesPerSide(totalPlateWeight)`, and the "65kg plates" notes in `PHUL`). A logged Bench of `42.5` means 42.5kg of plates on a 20kg bar = **62.5kg actually lifted**. Two bugs came from conflating the two, both fixed: `minWeight` clamped deloads at `barWeight` (a 20kg-of-*plates* floor, i.e. 60kg total, making a real deload impossible on lighter lifts), and `warmupSets` took its percentages of plate weight, so a "55%" ramp step was really 68% of true load. Warm-up percentages now convert to total, take the percentage, and convert back. **Machines and dumbbells are logged as-is** — the bar adjustment applies only to `barbell: true`.
 
 **Plate calculator (`platesPerSide`, `formatPlateBreakdown`)** — greedy allocation from `PLATE_SET = [25, 20, 15, 10, 5, 2.5, 1.25]`. Uses `1e-9` float safety and reports any leftover with `kg ?`. `BAR.olympic = 20`, `BAR.ez = 10`, `BAR.short = 15`; barbell exercises carry `barWeight` in their plan entry.
 

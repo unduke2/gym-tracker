@@ -3392,9 +3392,11 @@ function sessionPosition(session, exName) {
 function calcNextWeight(exercise, logs) {
   const eq = getEquipmentType(exercise.name);
   const baseInc = getBaseIncrement(eq);
-  // Lowest sane suggestion: empty bar for barbells, one increment otherwise.
-  // Clamps deloads so they never round back up or bottom out at 0kg.
-  const minWeight = exercise.barbell ? (exercise.barWeight || BAR.olympic) : baseInc;
+  // Lowest sane suggestion: one increment. NOT the bar weight — barbell loads
+  // here are PLATE weight with the bar excluded, so clamping at barWeight would
+  // put a floor of 20kg of plates (60kg total) under every barbell lift and make
+  // a genuine deload impossible on the lighter ones.
+  const minWeight = baseInc;
   const [minR, maxR] = exercise.repRange.split("-").map(Number);
 
   // ─── Pull last 3 same-day sessions (only those with actual logged data for this exercise) ──
@@ -3708,7 +3710,7 @@ function computeRestartWeight(exercise, logs) {
   const names = exercise.seedFrom;
   if (!names || !names.length) return null;
   const eq = getEquipmentType(exercise.name);
-  const minWeight = exercise.barbell ? (exercise.barWeight || BAR.olympic) : getBaseIncrement(eq);
+  const minWeight = getBaseIncrement(eq); // plate weight — see calcNextWeight
 
   const mid = (range) => {
     const [a, b] = String(range || "").split("-").map(Number);
@@ -3808,13 +3810,19 @@ function warmupSets(working, ex) {
   if (!(working > 0)) return [];
   const eq = getEquipmentType(ex.name);
   if (ex.barbell) {
+    // IMPORTANT: barbell weights in this app are PLATE weight — the bar is not
+    // included (see platesPerSide, and the "65kg plates" notes in PHUL). Warm-up
+    // percentages have to be taken against the TRUE load (plates + bar) and then
+    // converted back to plates for display, or the ramp is badly skewed: 55% of
+    // 42.5 plates is 42.5kg on the bar, which is 68% of the real 62.5kg — a jump
+    // straight from an empty bar to two-thirds of the working set.
     const bar = ex.barWeight || BAR.olympic;
-    if (working <= bar + 5) return [{ weight: bar, reps: 10, label: "bar" }];
-    const out = [{ weight: bar, reps: 10, label: "bar" }];
-    for (const [pct, reps] of [[0.55, 5], [0.75, 3], [0.9, 1]]) {
-      const w = Math.max(bar, snap(working * pct, eq));
-      if (w > out[out.length - 1].weight && w < working) {
-        out.push({ weight: w, reps, label: `${Math.round(pct*100)}%` });
+    const total = working + bar;
+    const out = [{ weight: 0, reps: 10, label: "bar" }]; // 0 plates = empty bar
+    for (const [pct, reps] of [[0.5, 5], [0.7, 3], [0.87, 1]]) {
+      const plates = Math.max(0, snap(total * pct - bar, eq));
+      if (plates > out[out.length - 1].weight && plates < working) {
+        out.push({ weight: plates, reps, label: `${Math.round(pct*100)}%` });
       }
     }
     return out;
@@ -5831,7 +5839,7 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
                       matters (main lifts / anything on a bar). */}
                   {(() => {
                     if (activeIdx !== 0 || warmedUp.includes(activeEx)) return null;
-                    if (!(curEx.tier === 1 || curEx.barbell)) return null;
+                    if (!(curEx.tier === 1 || (curEx.barbell && (curEx.tier || 3) <= 2))) return null;
                     const ramp = warmupSets(sug?.weight, curEx);
                     if (!ramp.length) return null;
                     return (
@@ -5844,7 +5852,7 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
                           {ramp.map((w, i) => (
                             <div key={i} className="wu-row">
                               <span className="wu-tag">{w.label}</span>
-                              <span className="wu-w tnum">{w.weight}<em>kg</em></span>
+                              <span className="wu-w tnum">{w.weight > 0 ? <>{w.weight}<em>kg</em></> : <em>bar only</em>}</span>
                               <span className="wu-r">× {w.reps}</span>
                             </div>
                           ))}
@@ -7645,7 +7653,7 @@ function StatsTab({ stats, setStats, phase, theme, setTheme }) {
             </button>
           ))}
         </div>
-        <div className="app-version">Gym Tracker · v8.3 — Restart</div>
+        <div className="app-version">Gym Tracker · v8.4 — Restart</div>
       </div>
 
       <DataBackup />
