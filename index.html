@@ -1863,6 +1863,52 @@ button { cursor: pointer; }
   border-top: 1px solid var(--line);
 }
 
+/* ── Intensity phase gate ── */
+.phase-gate {
+  margin-top: 12px;
+  padding-top: 11px;
+  border-top: 1px solid var(--line);
+}
+.pg-head { display: flex; align-items: baseline; gap: 9px; margin-bottom: 7px; }
+.pg-tag {
+  font-family: var(--font-mono);
+  font-size: 10px; font-weight: 800; letter-spacing: 0.16em;
+  color: var(--accent);
+}
+.pg-tag.locked { color: var(--ink-4); }
+.pg-sub {
+  font-family: var(--font-mono);
+  font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-4);
+}
+.pg-track { display: flex; gap: 5px; margin-bottom: 8px; }
+.pg-track i {
+  flex: 1; height: 4px; border-radius: 2px;
+  background: var(--line-2);
+}
+.pg-track i.on { background: var(--ok); }
+.pg-body { font-size: 12px; color: var(--ink-3); line-height: 1.6; }
+.phase-gate.on .pg-body { color: var(--ink-2); }
+
+/* ── Technique cue (AMRAP / myo-reps) ── */
+.finisher-note {
+  border: 1px solid color-mix(in oklab, var(--accent) 45%, var(--line-2));
+  background: color-mix(in oklab, var(--accent) 9%, transparent);
+  border-radius: 12px;
+  padding: 11px 13px;
+  margin-bottom: 10px;
+}
+.fn-head { display: flex; align-items: baseline; gap: 9px; margin-bottom: 6px; }
+.fn-tag {
+  font-family: var(--font-mono);
+  font-size: 11px; font-weight: 800; letter-spacing: 0.14em;
+  color: var(--accent);
+}
+.fn-set {
+  font-family: var(--font-mono);
+  font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-4);
+}
+.fn-cue { font-size: 12px; color: var(--ink-2); line-height: 1.6; }
+
 /* ── Body-trend alarm ── */
 .trend-alarm {
   border-radius: 14px;
@@ -3938,18 +3984,18 @@ const FULLBODY = {
     type: "fullbody", color: "#4a9eff", icon: "◈",
     description: "Squat · press · pull · arms. Seven lifts, ~60 min. Leave 1–2 reps in the tank.",
     exercises: [
-      { name: "Squat",              day: "Full Body A", tier: 1, sets: 3, repRange: "5-8",   startWeight: 30, barbell: true, barWeight: BAR.olympic, seedFrom: ["Squat","Front Squat"], note: "Deep as your hips allow — the stretched position is where the growth is." },
-      { name: "Bench Press",        day: "Full Body A", tier: 1, sets: 3, repRange: "5-8",   startWeight: 30, barbell: true, barWeight: BAR.olympic, seedFrom: ["Bench Press"], note: "Stop with 1–2 clean reps left. Not to failure." },
-      { name: "Lat Pulldown",       day: "Full Body A", tier: 1, sets: 3, repRange: "8-12",  startWeight: 40, seedFrom: ["Lat Pulldown"], note: "Full stretch at the top, elbows to ribs." },
-      { name: "Romanian Deadlift",  day: "Full Body A", tier: 2, sets: 3, repRange: "8-12",  startWeight: 20, barbell: true, barWeight: BAR.olympic, seedFrom: ["Romanian Deadlift"], note: "Hinge, don't squat. Feel the hamstring stretch." },
-      { name: "DB Lateral Raise",   day: "Full Body A", tier: 3, sets: 3, repRange: "12-15", startWeight: 6,  seedFrom: ["DB Lateral Raise"], note: "Lead with the elbows. Per dumbbell." },
+      { name: "Squat",              day: "Full Body A", tier: 1, sets: 3, repRange: "5-8",   startWeight: 30, barbell: true, barWeight: BAR.olympic, seedFrom: ["Squat","Front Squat"], hardMode: { sets: 4, finish: "amrap" }, note: "Deep as your hips allow — the stretched position is where the growth is." },
+      { name: "Bench Press",        day: "Full Body A", tier: 1, sets: 3, repRange: "5-8",   startWeight: 30, barbell: true, barWeight: BAR.olympic, seedFrom: ["Bench Press"], hardMode: { sets: 4, finish: "amrap" }, note: "Stop with 1–2 clean reps left. Not to failure." },
+      { name: "Lat Pulldown",       day: "Full Body A", tier: 1, sets: 3, repRange: "8-12",  startWeight: 40, seedFrom: ["Lat Pulldown"], hardMode: { sets: 4, finish: "amrap" }, note: "Full stretch at the top, elbows to ribs." },
+      { name: "Romanian Deadlift",  day: "Full Body A", tier: 2, sets: 3, repRange: "8-12",  startWeight: 20, barbell: true, barWeight: BAR.olympic, seedFrom: ["Romanian Deadlift"], hardMode: { finish: "amrap" }, note: "Hinge, don't squat. Feel the hamstring stretch." },
+      { name: "DB Lateral Raise",   day: "Full Body A", tier: 3, sets: 3, repRange: "12-15", startWeight: 6,  seedFrom: ["DB Lateral Raise"], hardMode: { finish: "myo" }, note: "Lead with the elbows. Per dumbbell." },
       // Arm pair — supersetted, and paired by EQUIPMENT as well as by antagonist.
       // Both of these are the EZ bar: you load it once, alternate curl and
       // extension without moving, and rack it. Pairing antagonists that live at
       // different stations technically works but means walking back and forth or
       // occupying two things at once, which is worse than not supersetting.
-      { name: "EZ Bar Curl",        day: "Full Body A", tier: 3, sets: 3, repRange: "8-12", startWeight: 15, barbell: true, barWeight: BAR.ez, supersetWith: "Skull Crushers", seedFrom: ["EZ Bar Curl"], note: "Same bar as the skulls — alternate straight between them. 3sec on the way down." },
-      { name: "Skull Crushers",     day: "Full Body A", tier: 3, sets: 3, repRange: "8-12", startWeight: 15, barbell: true, barWeight: BAR.ez, supersetWith: "EZ Bar Curl", seedFrom: ["Skull Crushers"], note: "Elbows tucked, don't flare. Straight back to the curls." },
+      { name: "EZ Bar Curl",        day: "Full Body A", tier: 3, sets: 3, repRange: "8-12", startWeight: 15, barbell: true, barWeight: BAR.ez, supersetWith: "Skull Crushers", seedFrom: ["EZ Bar Curl"], hardMode: { finish: "myo" }, note: "Same bar as the skulls — alternate straight between them. 3sec on the way down." },
+      { name: "Skull Crushers",     day: "Full Body A", tier: 3, sets: 3, repRange: "8-12", startWeight: 15, barbell: true, barWeight: BAR.ez, supersetWith: "EZ Bar Curl", seedFrom: ["Skull Crushers"], hardMode: { finish: "myo" }, note: "Elbows tucked, don't flare. Straight back to the curls." },
       // ── Finishers — optional, never counted against you ──
       { name: "Calf Raise",         day: "Full Body A", tier: 3, sets: 3, repRange: "10-15", startWeight: 60, optional: true, seedFrom: ["Calf Raise"], note: "Optional. Only if you've got gas left." },
       { name: "Face Pull",          day: "Full Body A", tier: 3, sets: 3, repRange: "12-20", startWeight: 20, optional: true, seedFrom: ["Face Pull"], note: "Optional. Good for shoulders if you've got time." },
@@ -3959,17 +4005,17 @@ const FULLBODY = {
     type: "fullbody", color: "#4a9eff", icon: "◈",
     description: "Hinge · press · pull · arms. Seven lifts, ~60 min. Leave 1–2 reps in the tank.",
     exercises: [
-      { name: "Deadlift",           day: "Full Body B", tier: 1, sets: 3, repRange: "5-8",   startWeight: 35, barbell: true, barWeight: BAR.olympic, seedFrom: ["Deadlift"], note: "Brace, push the floor away. Reset each rep." },
-      { name: "Incline Barbell Press", day: "Full Body B", tier: 1, sets: 3, repRange: "8-12", startWeight: 15, barbell: true, barWeight: BAR.olympic, seedFrom: ["Incline Barbell Press"], note: "Slow down the descent. Stretch at the bottom." },
-      { name: "Seated Cable Row",   day: "Full Body B", tier: 1, sets: 3, repRange: "8-12",  startWeight: 40, seedFrom: ["Seated Cable Row","One Arm DB Row"], note: "Elbows tight, squeeze the blades together." },
-      { name: "Leg Press",          day: "Full Body B", tier: 2, sets: 3, repRange: "10-12", startWeight: 70, seedFrom: ["Leg Press","Hack Squat / Leg Press"], note: "Go deeper than feels natural. Full ROM." },
-      { name: "DB Lateral Raise",   day: "Full Body B", tier: 3, sets: 3, repRange: "12-15", startWeight: 6,  seedFrom: ["DB Lateral Raise"], note: "Second dose this week. Per dumbbell." },
+      { name: "Deadlift",           day: "Full Body B", tier: 1, sets: 3, repRange: "5-8",   startWeight: 35, barbell: true, barWeight: BAR.olympic, seedFrom: ["Deadlift"], hardMode: { sets: 4, finish: "amrap" }, note: "Brace, push the floor away. Reset each rep." },
+      { name: "Incline Barbell Press", day: "Full Body B", tier: 1, sets: 3, repRange: "8-12", startWeight: 15, barbell: true, barWeight: BAR.olympic, seedFrom: ["Incline Barbell Press"], hardMode: { sets: 4, finish: "amrap" }, note: "Slow down the descent. Stretch at the bottom." },
+      { name: "Seated Cable Row",   day: "Full Body B", tier: 1, sets: 3, repRange: "8-12",  startWeight: 40, seedFrom: ["Seated Cable Row","One Arm DB Row"], hardMode: { sets: 4, finish: "amrap" }, note: "Elbows tight, squeeze the blades together." },
+      { name: "Leg Press",          day: "Full Body B", tier: 2, sets: 3, repRange: "10-12", startWeight: 70, seedFrom: ["Leg Press","Hack Squat / Leg Press"], hardMode: { finish: "amrap" }, note: "Go deeper than feels natural. Full ROM." },
+      { name: "DB Lateral Raise",   day: "Full Body B", tier: 3, sets: 3, repRange: "12-15", startWeight: 6,  seedFrom: ["DB Lateral Raise"], hardMode: { finish: "myo" }, note: "Second dose this week. Per dumbbell." },
       // Arm pair, session two — the dumbbell pair, same logic. Different angle on
       // each head than session A: incline curl puts the biceps at long length
       // (vs the EZ bar's mid range), overhead extension is the most stretched
       // position for the triceps long head (+28.5% vs pushdowns).
-      { name: "Incline DB Curl",    day: "Full Body B", tier: 3, sets: 3, repRange: "10-15", startWeight: 8, supersetWith: "Overhead DB Extension", seedFrom: ["Incline DB Curl","Hammer Curl"], note: "Elbow behind the torso — biceps at full length. Per dumbbell." },
-      { name: "Overhead DB Extension", day: "Full Body B", tier: 3, sets: 3, repRange: "10-15", startWeight: 12.5, supersetWith: "Incline DB Curl", seedFrom: ["Tricep Pushdown"], note: "One dumbbell, both hands, elbows in. Overhead is where the long head actually stretches." },
+      { name: "Incline DB Curl",    day: "Full Body B", tier: 3, sets: 3, repRange: "10-15", startWeight: 8, supersetWith: "Overhead DB Extension", seedFrom: ["Incline DB Curl","Hammer Curl"], hardMode: { finish: "myo" }, note: "Elbow behind the torso — biceps at full length. Per dumbbell." },
+      { name: "Overhead DB Extension", day: "Full Body B", tier: 3, sets: 3, repRange: "10-15", startWeight: 12.5, supersetWith: "Incline DB Curl", seedFrom: ["Tricep Pushdown"], hardMode: { finish: "myo" }, note: "One dumbbell, both hands, elbows in. Overhead is where the long head actually stretches." },
       // ── Finishers — optional, never counted against you ──
       { name: "Seated Calf Raise",  day: "Full Body B", tier: 3, sets: 3, repRange: "12-20", startWeight: 25, optional: true, seedFrom: ["Seated Calf Raise"], note: "Optional. Soleus loves volume." },
       { name: "Leg Curl",           day: "Full Body B", tier: 3, sets: 3, repRange: "10-15", startWeight: 25, optional: true, seedFrom: ["Leg Curl"], note: "Optional. Seated if the gym has it — longer hamstring stretch." },
@@ -4050,6 +4096,73 @@ function computeTargets(stats, workoutLogs, phase) {
     proteinMin: Math.round(weight * 1.6),   // established lower bound
     protein:    Math.round(weight * 2.0),   // upper end of the useful range
     hasStats: !!lean,
+  };
+}
+
+// ─── CONSISTENCY ──────────────────────────────────────────────────────────────
+// Sessions per rolling week, oldest → newest. A "week" is a 7-day bucket counting
+// back from now, not a calendar week — a Sunday session and the following
+// Saturday one shouldn't land in different buckets because a calendar boundary
+// happened to fall between them. `streak` counts consecutive buckets containing
+// at least one session, which is the only training metric here that has ever
+// predicted anything for this user.
+function consistency(workoutLogs) {
+  const dots = new Array(8).fill(0);
+  let last30 = 0;
+  for (const s of Object.values(workoutLogs || {})) {
+    const age = Date.now() - s.ts;
+    const wk = Math.floor(age / (7 * 86400000));
+    if (wk >= 0 && wk < 8) dots[wk]++;
+    if (age < 30 * 86400000) last30++;
+  }
+  dots.reverse();
+  let streak = 0;
+  for (let i = dots.length - 1; i >= 0; i--) {
+    if (dots[i] > 0) streak++; else break;
+  }
+  return { dots, streak, last30 };
+}
+
+// ─── INTENSITY PHASING ────────────────────────────────────────────────────────
+// Hard mode is earned, not chosen. Every previous restart failed the same way:
+// come back, go hard immediately, disappear within a month. So the first three
+// weeks run deliberately submaximal and the intensity work unlocks only once
+// three consecutive weeks have actually been logged. The gate IS the point — the
+// skill trained in weeks 1–3 is showing up when it isn't exciting, which is the
+// one this user's data says is missing. Effort was never missing: 53% of his
+// logged sets were RPE 9–10.
+//
+// Technique selection is deliberately narrow. Volume-controlled trials show
+// intensity techniques produce the SAME hypertrophy as straight sets, just in
+// less time — so they're included where they buy density (myo-reps) or drive
+// progression (AMRAP), and excluded where they only add fatigue. Past-failure
+// lengthened partials are the notable omission: matched for total reps they
+// grow no more than additional full-ROM sets, and they cost extra recovery.
+const HARD_MODE_WEEKS = 3;
+const FINISHERS = {
+  amrap: {
+    label: "AMRAP",
+    cue: "Last set: max clean reps at this weight. Stop at RPE 9 — one good rep still in the tank, not zero.",
+  },
+  myo: {
+    label: "Myo-reps",
+    cue: "Take it to RPE 9. Then rest 15s → 3–5 reps, ×3 rounds. Log the total reps. Run this one on its own, not in the superset.",
+  },
+};
+function hardModeState(workoutLogs) {
+  const streak = consistency(workoutLogs).streak;
+  return { on: streak >= HARD_MODE_WEEKS, streak, need: HARD_MODE_WEEKS };
+}
+// Applies the per-exercise `hardMode` overrides. Returns the plan untouched when
+// hard mode is off, so the normal path is completely unaffected.
+function applyIntensity(plan, on) {
+  if (!plan?.exercises || !on) return plan;
+  return {
+    ...plan,
+    intense: true,
+    exercises: plan.exercises.map(e => e.hardMode
+      ? { ...e, sets: e.hardMode.sets ?? e.sets, finish: e.hardMode.finish || null }
+      : e),
   };
 }
 
@@ -4171,8 +4284,14 @@ function App() {
   useEffect(() => { lsSet("phul_dismissed_makeups", dismissedMakeups); }, [dismissedMakeups]);
 
   // Plan lookup — checks every known program day (so old logs from a program you
-  // switched away from still resolve), then custom sessions by id.
-  const resolvePlan = (key) => lookupDay(key) || customSessions.find(s => s.id === key) || null;
+  // switched away from still resolve), then custom sessions by id. Intensity
+  // overrides are layered on last, so a plan is always resolved before it's
+  // intensified and custom sessions are unaffected.
+  const hardMode = hardModeState(workoutLogs);
+  const resolvePlan = (key) => {
+    const base = lookupDay(key) || customSessions.find(s => s.id === key) || null;
+    return lookupDay(key) ? applyIntensity(base, hardMode.on) : base;
+  };
 
   // Keep iOS status-bar / browser chrome color in sync with theme bg
   useEffect(() => {
@@ -4369,7 +4488,7 @@ function App() {
       </header>
 
       <main className="app-main">
-        {tab==="dash"    && <Dashboard latest={latest} phase={phase} kcalTarget={kcalTarget} todayDiet={todayDiet} workoutLogs={workoutLogs} setTab={setTab} setActiveSession={setActiveSession} startSession={startSession} draftSession={draftSession} pendingMakeups={pendingMakeups} startMakeup={startMakeup} dismissMakeup={dismissMakeup} program={program} targets={targets} trend={trend} />}
+        {tab==="dash"    && <Dashboard latest={latest} phase={phase} kcalTarget={kcalTarget} todayDiet={todayDiet} workoutLogs={workoutLogs} setTab={setTab} setActiveSession={setActiveSession} startSession={startSession} draftSession={draftSession} pendingMakeups={pendingMakeups} startMakeup={startMakeup} dismissMakeup={dismissMakeup} program={program} targets={targets} trend={trend} hardMode={hardMode} />}
         {tab==="workout" && <WorkoutTab workoutLogs={workoutLogs} setWorkoutLogs={setWorkoutLogs} setActiveSession={setActiveSession} startSession={startSession} draftSession={draftSession} customSessions={customSessions} setCustomSessions={setCustomSessions} program={program} programId={programId} setProgramId={setProgramId} />}
         {tab==="diet"    && <DietTab today={today} todayDiet={todayDiet} dietLogs={dietLogs} setDietLogs={setDietLogs} phase={phase} stats={stats} targets={targets} trend={trend} setTab={setTab} />}
         {tab==="stats"   && <StatsTab stats={stats} setStats={setStats} phase={phase} theme={theme} setTheme={setTheme} />}
@@ -4472,7 +4591,7 @@ function mesocycleDelta(workoutLogs, dayType) {
   const deltaPct = ((last - avg) / avg) * 100;
   return { last, avg, deltaPct };
 }
-function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, setActiveSession, startSession, draftSession, pendingMakeups = [], startMakeup, dismissMakeup, program, targets, trend }) {
+function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, setActiveSession, startSession, draftSession, pendingMakeups = [], startMakeup, dismissMakeup, program, targets, trend, hardMode }) {
   const PROTEIN_G = targets.protein; // shadow the legacy constant — see computeTargets
   // When a pending group is tapped, this holds it for the choice modal.
   const [catchupOpen, setCatchupOpen] = useState(null);
@@ -4510,23 +4629,7 @@ function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, 
   // counting back from now, not a calendar week — a Sunday session and the
   // following Saturday one shouldn't land in different buckets just because a
   // calendar boundary fell between them.
-  const weekDots = (() => {
-    const buckets = new Array(8).fill(0);
-    for (const s of recent) {
-      const wk = Math.floor((Date.now() - s.ts) / (7*86400000));
-      if (wk >= 0 && wk < 8) buckets[wk]++;
-    }
-    return buckets.reverse(); // oldest → newest, so the row reads left to right
-  })();
-  const last30 = recent.filter(s => (Date.now()-s.ts) < 30*86400000).length;
-  // Consecutive 7-day windows ending now that contain at least one session.
-  const weekStreak = (() => {
-    let n = 0;
-    for (let i = weekDots.length - 1; i >= 0; i--) {
-      if (weekDots[i] > 0) n++; else break;
-    }
-    return n;
-  })();
+  const { dots: weekDots, streak: weekStreak, last30 } = consistency(workoutLogs);
   const streakNote =
     weekStreak === 0 ? "Nothing logged in the last week. One session puts you back on the board."
     : weekStreak === 1 ? "One week in. The second one is the one that counts."
@@ -4789,6 +4892,38 @@ function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, 
           </div>
         </div>
         <div className="streak-note">{streakNote}</div>
+
+        {/* Intensity phase — the streak above is literally the unlock condition,
+            so it lives in the same card rather than floating separately. */}
+        <div className={`phase-gate ${hardMode.on ? "on" : ""}`}>
+          {hardMode.on ? (
+            <>
+              <div className="pg-head">
+                <span className="pg-tag">HARD MODE</span>
+                <span className="pg-sub">unlocked · week {hardMode.streak}</span>
+              </div>
+              <div className="pg-body">
+                4 sets on the main lifts, AMRAP finish, myo-reps on isolations, 60s rest.
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="pg-head">
+                <span className="pg-tag locked">HARD MODE</span>
+                <span className="pg-sub">{hardMode.need - hardMode.streak} more week{hardMode.need-hardMode.streak===1?"":"s"}</span>
+              </div>
+              <div className="pg-track">
+                {Array.from({length: hardMode.need}, (_, i) => (
+                  <i key={i} className={i < hardMode.streak ? "on" : ""}/>
+                ))}
+              </div>
+              <div className="pg-body">
+                Build the habit first. Effort was never your problem — turning up on a
+                boring Tuesday is. Three straight weeks and the intensity work switches on.
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Rotation position — replaces the weekly grid. Shows where you are in the
@@ -4914,8 +5049,15 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
   const plan = planProp || lookupDay(dayName);
   // Rest-time resolvers — check per-exercise override first (custom sessions
   // can specify `rest: { set, betweenEx }`), fall back to the global helpers.
-  const resolveSetRest = (ex, dayType) =>
-    (typeof ex?.rest?.set === "number") ? ex.rest.set : getRestSeconds(ex.name, dayType);
+  // Hard mode compresses rest on ISOLATIONS only — density where it's cheap.
+  // The heavy compounds keep their full rest: cutting rest there just makes the
+  // next set lighter, which costs load progression, which is the actual goal.
+  const resolveSetRest = (ex, dayType) => {
+    if (typeof ex?.rest?.set === "number") return ex.rest.set;
+    const base = getRestSeconds(ex.name, dayType);
+    if (plan?.intense && (ex.tier || 3) >= 3) return Math.min(base, 60);
+    return base;
+  };
   const resolveBetweenExRest = (ex, dayType) =>
     (typeof ex?.rest?.betweenEx === "number") ? ex.rest.betweenEx : getBetweenExerciseRest(ex.name, dayType);
   const [data, setData] = useState(() => {
@@ -5654,6 +5796,24 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
                 </div>
               )}
             </div>
+
+            {/* Technique cue — only on the final set, only in hard mode. Shown
+                above the coach note because it changes what the set IS, not just
+                how to perform it. */}
+            {(() => {
+              const fin = curEx.finish && FINISHERS[curEx.finish];
+              const isLastSet = activeIdx === (data[activeEx]?.length || 1) - 1;
+              if (!fin || !isLastSet || phase === "resting") return null;
+              return (
+                <div className="finisher-note">
+                  <div className="fn-head">
+                    <span className="fn-tag">{fin.label}</span>
+                    <span className="fn-set">final set</span>
+                  </div>
+                  <div className="fn-cue">{fin.cue}</div>
+                </div>
+              );
+            })()}
 
             {/* Coach note */}
             {curEx.note && (
@@ -7485,7 +7645,7 @@ function StatsTab({ stats, setStats, phase, theme, setTheme }) {
             </button>
           ))}
         </div>
-        <div className="app-version">Gym Tracker · v8.2 — Restart</div>
+        <div className="app-version">Gym Tracker · v8.3 — Restart</div>
       </div>
 
       <DataBackup />

@@ -87,7 +87,7 @@ There are two built-in programs, registered in `PROGRAMS` and selected by `phul_
 - **`fullbody`** (default) — `FULLBODY`, a 2-day A/B rotation, 6 core lifts each. Built for real-world adherence: a 4-way split assumes 4x/week and degrades badly below that, because each session only recurs every *n* visits. Two full-body days mean whatever you manage in a week, everything got trained.
 - **`phul`** — the original 4-day split, kept intact.
 
-Each exercise entry carries `{ name, day, tier, sets, repRange, startWeight, barbell?, barWeight?, note, seedFrom?, optional? }`.
+Each exercise entry carries `{ name, day, tier, sets, repRange, startWeight, barbell?, barWeight?, note, seedFrom?, optional?, hardMode? }`.
 - `tier` (1/2/3) drives `SessionLogger`'s skip-gating: you cannot skip past an unresolved lower-tier exercise without explicit confirmation via `tierGuardModal`.
 - `seedFrom` — ordered list of prior exercise names to carry load across from (see `computeRestartWeight`).
 - `supersetWith` — pair exercises so they alternate. **Pair by equipment as well as by antagonist**: the arm pairs are EZ-bar/EZ-bar (session A) and dumbbell/dumbbell (session B), so each pair is one station you load once. An antagonist pair split across two stations is worse than not supersetting at all — it means walking back and forth or occupying two things.
@@ -95,10 +95,18 @@ Each exercise entry carries `{ name, day, tier, sets, repRange, startWeight, bar
 
 **Switching programs never orphans history.** Logs store their `day` name, and anything reading old logs must resolve it via `lookupDay(name)` (which unions every program's days) rather than indexing the *active* program. Grep for `lookupDay` before adding a new read path over `workoutLogs`.
 
+### Intensity phasing (`hardModeState`, `applyIntensity`, `FINISHERS`)
+Hard mode is **earned, not chosen**: `consistency(logs).streak >= HARD_MODE_WEEKS` (3) unlocks it, and a missed week resets the gate. Weeks 1–3 run deliberately submaximal because every prior restart failed the same way — come back, go hard, vanish within a month. Effort was never the missing input (53% of logged sets were RPE 9–10); turning up on an unexciting Tuesday was.
+
+`applyIntensity(plan, on)` layers per-exercise `hardMode: { sets?, finish? }` overrides onto a resolved plan and is a **no-op returning the identical object** when off, so the normal path is untouched. It's applied in `App.resolvePlan` and only to built-in program days, never to custom sessions. Hard mode: T1 → 4 sets + `amrap` finish, T2 → `amrap`, T3 → `myo`, isolation rest compressed to 60s via `resolveSetRest`. Compound rest is deliberately NOT compressed — cutting rest there just makes the next set lighter, costing the load progression that's the actual goal.
+
+Technique selection is narrow on purpose. Volume-controlled trials show intensity techniques yield the *same* hypertrophy as straight sets, just in less time, so they're included only where they buy density (myo-reps) or drive progression (AMRAP). **Past-failure lengthened partials are deliberately excluded**: rep-matched they grow no more than extra full-ROM sets, and they cost additional recovery. Don't add them back without new evidence.
+
 ### Adherence-first UI rules
 These are deliberate product decisions, not styling accidents — don't "fix" them back:
 - The Dashboard shows a **consistency streak** (consecutive 7-day windows containing ≥1 session), not a weekly quota. A quota you rarely hit renders a failure notice on every app open.
 - `SessionLogger` offers a **minimum session** ("Good enough — log it") once `MIN_SESSION` (3) core lifts are done. A short session is a real outcome, not a quit.
+- Hard mode is gated behind a 3-week streak rather than offered as a toggle. The gate is the intervention, not a limitation.
 - Deload/hold notes are written to be non-punitive. `sugNoteClass` renders `restart`/`return` as neutral `info`, not red.
 - The Diet tab judges a **rolling 7-day average**, not the single day. Daily intake swings far too much (820 → 3160 kcal in one month) for a per-day verdict to mean anything, and bodyweight responds to the weekly average anyway. Unlogged days are excluded from the average rather than counted as zero — counting them would punish not-logging twice.
 - **Quick-add buttons are mined from repeated freeform `extras`**, not from the meal library. The library wants per-ingredient detail; the real logging pattern is coarse and repetitive ("Lunch ~1200"). Build for the observed behaviour, not the intended one.
