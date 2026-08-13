@@ -108,5 +108,28 @@ has("warm-up ramp starts from an empty bar", normal["Full Body A"], "bar only");
 has("diet shows the 7-day average", dietOut, "7-day average");
 has("diet quick-add is mined from logged meals", dietOut, "Dinner");
 
+console.log("\n── Ending a session early requires confirmation ──");
+{
+  // Regression: this button was green, sat under the set-logging controls, said
+  // "Good enough — log it ✓" and fired on ONE tap. It ended a real workout
+  // mid-session. It must never be one-tap or read as a per-exercise action.
+  const plan = M.FULLBODY["Full Body A"];
+  const core = plan.exercises.filter(e => !e.optional);
+  const data = {};
+  for (const e of plan.exercises) data[e.name] = Array.from({length:e.sets}, () => ({weight:"",reps:"",rpe:null,done:false}));
+  for (const e of core.slice(0, 3)) data[e.name] = data[e.name].map(() => ({weight:"40",reps:"8",rpe:8,done:true}));
+  const out = renderToString(h(M.SessionLogger, { dayName:"Full Body A", plan, workoutLogs: logs,
+    onFinish:noop, onCancel:noop, onDiscard:noop, onSaveSession:noop,
+    savedSession:{ data, activeEx: core[3].name, activeIdx:0, exerciseHolds:{}, warmedUp:[], sessionStartedAt:Date.now() } }));
+  has("early-exit option appears once 3 lifts are done", out, "End session early");
+  hasnt("it no longer says 'log it', which read as logging one exercise", out, "log it");
+  hasnt("it is not styled as a positive/confirmed action", out, "Good enough");
+  has("it states what it costs", out, "still counts");
+  // The armed state must be reachable only after an explicit first tap, so the
+  // destructive copy must NOT be in the initial render.
+  hasnt("the destructive confirm is not shown unarmed", out, "This ends the session now");
+  hasnt("no one-tap End button in the unarmed state", out, ">End session<");
+}
+
 console.log(`\n${"─".repeat(52)}\n  ${fails ? fails + " FAILED" : "all render checks passed"}\n`);
 process.exit(fails ? 1 : 0);

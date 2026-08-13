@@ -2127,22 +2127,24 @@ button { cursor: pointer; }
 .wu-row.target .wu-w { color: var(--ink); font-size: 16px; }
 
 /* ── Minimum session ──
-   Styled as a real, affirmative option — not a muted "give up" link. */
+   Deliberately NOT green and deliberately not styled like a primary action.
+   Green reads as "save / go" and this ends the session; the first version was
+   green and cost a real workout. Neutral until armed, then explicitly a warning. */
 .finish-btn.min-session {
   display: flex;
   flex-direction: column;
   gap: 4px;
   margin-top: 8px;
-  padding: 14px 18px;
+  padding: 13px 18px;
   text-transform: none;
   letter-spacing: 0;
-  border-color: color-mix(in oklab, var(--ok) 45%, var(--line-2));
-  background: color-mix(in oklab, var(--ok) 8%, var(--card));
-  color: var(--ok);
+  border: 1px solid var(--line-2);
+  background: transparent;
+  color: var(--ink-3);
 }
 .finish-btn.min-session .ms-main {
-  font-size: 14px;
-  font-weight: 800;
+  font-size: 13px;
+  font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -2151,8 +2153,41 @@ button { cursor: pointer; }
   font-size: 10px;
   font-weight: 500;
   letter-spacing: 0.03em;
-  color: var(--ink-3);
+  color: var(--ink-4);
   text-transform: none;
+}
+.min-confirm {
+  margin-top: 8px;
+  padding: 13px 15px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in oklab, var(--accent-hold) 55%, var(--line-2));
+  background: color-mix(in oklab, var(--accent-hold) 9%, var(--card));
+}
+.mc-warn {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  margin-bottom: 11px;
+}
+.mc-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.mc-actions button {
+  padding: 12px;
+  border-radius: 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.mc-cancel {
+  border: 1px solid var(--line-2);
+  background: transparent;
+  color: var(--ink-2);
+}
+.mc-confirm {
+  border: 1px solid color-mix(in oklab, var(--bad) 55%, var(--line-2));
+  background: color-mix(in oklab, var(--bad) 14%, transparent);
+  color: var(--bad);
 }
 
 /* Session history rows */
@@ -5090,6 +5125,10 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
   // Two-tap confirm for the direct "Skip" button on the active exercise card.
   // Distinct from confirmAbandon (which is for the hold-chips abandon flow).
   const [confirmSkipActive, setConfirmSkipActive] = useState(false);
+  // Two-tap confirm for ending the session early. This button used to fire
+  // immediately, which ended a whole session on a single tap — see the comment
+  // at the button itself.
+  const [confirmMinSession, setConfirmMinSession] = useState(false);
   // NOTE: the effect that resets this on [activeEx, phase] lives further down,
   // AFTER `phase` is declared. It used to sit here, reading `phase` from its own
   // temporal dead zone — harmless only because Babel Standalone downlevels
@@ -6067,25 +6106,50 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
         </button>
 
         {/* ── MINIMUM SESSION ──
-            Once the main lifts are in, stopping is a legitimate way to end a
-            session, not a failure to complete one. Offering it explicitly (and
-            only once it's actually earned) is the difference between "I bailed"
-            and "I got the important part done" — and the second one is the story
-            that gets someone back through the door next week. */}
-        {!allDone && minSessionMet && (
-          <button
-            className="finish-btn min-session"
-            onClick={() => {
-              const skipped = coreEx
-                .filter(ex => !isExDone(ex.name) && !isExAbandoned(ex.name))
-                .map(ex => ex.name);
-              onFinish(data, sessionStartedAt.current, [...abandonedList.map(e => e.name), ...skipped]);
-            }}
-          >
-            <span className="ms-main">Good enough — log it ✓</span>
-            <span className="ms-sub">{doneCount} lifts done. The main work is in.</span>
-          </button>
-        )}
+            Once the main lifts are in, stopping early is a legitimate way to end
+            a session rather than a failure to complete one, and saying so keeps a
+            short day from reading as a quit.
+
+            BUT: this ENDS THE WHOLE SESSION. The first version was styled green,
+            sat directly under the set-logging controls, said "Good enough — log
+            it ✓", and fired on a single tap — so it read as "log this exercise"
+            and silently ended a session mid-workout. Destructive actions do not
+            get the affirmative colour, ambiguous verbs, or a one-tap path. It's
+            now neutral until armed, explicit about the consequence, and uses the
+            same two-tap confirm as the Skip button. */}
+        {!allDone && minSessionMet && (() => {
+          const remaining = coreEx.filter(ex => !isExDone(ex.name) && !isExAbandoned(ex.name));
+          if (!confirmMinSession) {
+            return (
+              <button className="finish-btn min-session" onClick={() => setConfirmMinSession(true)}>
+                <span className="ms-main">End session early</span>
+                <span className="ms-sub">
+                  {doneCount} of {coreEx.length} lifts done — a short session still counts
+                </span>
+              </button>
+            );
+          }
+          return (
+            <div className="min-confirm">
+              <div className="mc-warn">
+                This ends the session now. {remaining.length} lift{remaining.length===1?"":"s"} left
+                ({remaining.map(e => e.name).join(", ")}) will be logged as skipped and show up in Catch Up.
+              </div>
+              <div className="mc-actions">
+                <button className="mc-cancel" onClick={() => setConfirmMinSession(false)}>
+                  Keep training
+                </button>
+                <button
+                  className="mc-confirm"
+                  onClick={() => onFinish(data, sessionStartedAt.current,
+                    [...abandonedList.map(e => e.name), ...remaining.map(e => e.name)])}
+                >
+                  End session
+                </button>
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
@@ -7653,7 +7717,7 @@ function StatsTab({ stats, setStats, phase, theme, setTheme }) {
             </button>
           ))}
         </div>
-        <div className="app-version">Gym Tracker · v8.4 — Restart</div>
+        <div className="app-version">Gym Tracker · v8.5 — Restart</div>
       </div>
 
       <DataBackup />
