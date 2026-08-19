@@ -151,7 +151,17 @@ These are deliberate product decisions, not styling accidents — don't "fix" th
 - Hard mode is gated behind a 3-week streak rather than offered as a toggle. The gate is the intervention, not a limitation.
 - Deload/hold notes are written to be non-punitive. `sugNoteClass` renders `restart`/`return` as neutral `info`, not red.
 - The Diet tab judges a **rolling 7-day average**, not the single day. Daily intake swings far too much (820 → 3160 kcal in one month) for a per-day verdict to mean anything, and bodyweight responds to the weekly average anyway. Unlogged days are excluded from the average rather than counted as zero — counting them would punish not-logging twice.
+- **The scale outranks the food log.** `weightTrend()` is the primary diet signal, shown above the logging UI: it integrates every meal logged *and* every one forgotten, which matters at low logging adherence. Target rate is `RATE_TARGET` (+0.25–0.6 kg/month on a bulk); the verdict converts the gap to a kcal/day adjustment at 7700 kcal/kg. Note that "flat" only asks for ~+100 kcal — the large corrections are only for actual deficits.
+- **The per-ingredient meal library was deleted in v8.8.** It was used 18 times against 37 freeform entries; the detail was never the bottleneck, the typing was. `DEFAULT_MEALS`/`getMealKcal` survive so old logs still total correctly and saved meals fold into the quick-add strip, but there is no library view or editor. Don't rebuild it.
+- **A rough whole-day estimate beats a blank day.** The `[light|normal|big]` buttons replace the day's total outright, anchored to `computeTargets`. His logged "Lunch" ranges 750–1350 kcal, so everything in this app was always an estimate — precision was never available to lose.
 - **Quick-add buttons are mined from repeated freeform `extras`**, not from the meal library. The library wants per-ingredient detail; the real logging pattern is coarse and repetitive ("Lunch ~1200"). Build for the observed behaviour, not the intended one.
+
+### Notifications (`worker/`, optional)
+`PUSH_ENDPOINT` in `index.html` is empty by default and the entire feature is then absent — the app stays a zero-backend static file. Setting it to a deployed Cloudflare Worker URL enables **one weekly weigh-in reminder**, deliberately nothing else: a daily food nudge becomes something you learn to dismiss, which is a recurring failure notice.
+
+`worker/src/index.js` implements VAPID (RFC 8292) directly against WebCrypto — no `web-push` dependency, since Workers has no Node crypto and the ES256 signing is ~40 lines. **Pushes carry no payload**: an empty push still wakes the service worker, which composes the text locally, so payload encryption is skipped entirely and the push service learns nothing about the user. Dead subscriptions (404/410) are deleted on send.
+
+iOS delivers web push only to a Home-Screen-installed app; `PushToggle` detects a plain Safari tab and says so instead of offering a button that silently fails.
 
 ### Versioning convention
 Recent commits follow `vX.Y update` / `vX.Y-<Theme>`. The version string is rendered in the footer (`.app-version`) and should be bumped in the JSX when shipping user-visible changes.

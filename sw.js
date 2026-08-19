@@ -75,3 +75,28 @@ self.addEventListener("fetch", (e) => {
     })
   );
 });
+
+/* ── Push: weigh-in reminder ──
+ * The push carries NO payload. An empty push still wakes this worker, and the
+ * text is composed here — which means the push service never sees anything
+ * about the user, and we skip payload encryption entirely.
+ */
+self.addEventListener("push", (e) => {
+  e.waitUntil(self.registration.showNotification("Weigh-in day", {
+    body: "30 seconds on the scale. It's the number that says whether any of the rest is working.",
+    icon: "./icon.svg",
+    badge: "./icon.svg",
+    tag: "weigh-in",
+    requireInteraction: false,
+  }));
+});
+
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  e.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+      for (const c of list) if ("focus" in c) return c.focus();
+      return self.clients.openWindow("./");
+    })
+  );
+});

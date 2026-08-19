@@ -2050,6 +2050,69 @@ button { cursor: pointer; }
 .roll-note.floor { color: var(--accent-hold); }
 .roll-note.target { color: var(--ok); }
 
+.push-note { font-size: 12px; color: var(--ink-3); line-height: 1.6; }
+.push-note b { color: var(--ink-2); }
+.push-btn {
+  width: 100%; margin-top: 11px; padding: 12px;
+  border-radius: 10px; border: 1px solid var(--line-2);
+  background: transparent; color: var(--ink-2);
+  font-family: var(--font-mono); font-size: 11px; font-weight: 700;
+  letter-spacing: 0.1em; text-transform: uppercase;
+}
+.push-btn.on { border-color: color-mix(in oklab, var(--ok) 50%, var(--line-2)); color: var(--ok); }
+.push-err { margin-top: 9px; font-size: 11px; color: var(--bad); line-height: 1.5; }
+
+/* ── Weigh-in card ── */
+.weigh-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+.weigh-card.under    { border-color: color-mix(in oklab, var(--accent-hold) 45%, var(--line)); }
+.weigh-card.over     { border-color: color-mix(in oklab, var(--accent-hold) 45%, var(--line)); }
+.weigh-card.on-track { border-color: color-mix(in oklab, var(--ok) 42%, var(--line)); }
+.wg-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 2px 0 9px; }
+.wg-big {
+  font-family: var(--font-mono); font-size: 21px; font-weight: 800;
+  color: var(--ink); font-variant-numeric: tabular-nums;
+}
+.wg-big em, .wg-rate em { font-style: normal; font-size: 10px; color: var(--ink-4); margin-left: 3px; }
+.wg-rate {
+  font-family: var(--font-mono); font-size: 15px; font-weight: 700;
+  font-variant-numeric: tabular-nums; color: var(--ink-3);
+}
+.weigh-card.under .wg-rate, .weigh-card.over .wg-rate { color: var(--accent-hold); }
+.weigh-card.on-track .wg-rate { color: var(--ok); }
+.wg-verdict { font-size: 12px; line-height: 1.6; color: var(--ink-3); }
+.wg-btn {
+  width: 100%; margin-top: 11px; padding: 10px;
+  border-radius: 10px; border: 1px solid var(--line-2);
+  background: transparent; color: var(--ink-2);
+  font-family: var(--font-mono); font-size: 11px; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+
+/* ── Rough whole-day buttons ── */
+.rough-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+.rough-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 11px 6px; border-radius: 10px;
+  border: 1px solid var(--line-2); background: transparent; color: var(--ink-2);
+}
+.rough-btn:active { transform: scale(0.97); border-color: var(--accent); }
+.rb-l { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-4); }
+.rb-n { font-family: var(--font-mono); font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.rough-note { font-size: 11px; color: var(--ink-4); line-height: 1.5; margin-top: 9px; }
+.quick-empty { font-size: 12px; color: var(--ink-4); line-height: 1.55; }
+.quick-yday {
+  width: 100%; margin-top: 8px; padding: 11px;
+  border-radius: 10px; border: 1px dashed var(--line-2);
+  background: transparent; color: var(--ink-3); font-size: 12px; font-weight: 600;
+}
+.quick-yday .tnum { font-family: var(--font-mono); color: var(--ink-4); }
+
 /* ── Quick add ── */
 .quick-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
 .quick-btn {
@@ -4329,6 +4392,45 @@ function daysSinceWeighIn(stats) {
   if (!last?.date) return null;
   const t = new Date(last.date + "T12:00:00").getTime();
   return Number.isFinite(t) ? Math.max(0, Math.floor((Date.now() - t) / 86400000)) : null;
+}
+
+// ─── WEIGHT TREND ─────────────────────────────────────────────────────────────
+// The scale is the only honest arbiter of whether you're eating enough. It
+// integrates every meal you logged AND every one you forgot, which is why it
+// outranks the food log as a control signal — especially for someone whose
+// logging adherence is low.
+//
+// Target rates come from the lean-bulk literature: ~0.25–0.5 kg/month for an
+// intermediate. Faster is mostly fat; flat means the surplus isn't real.
+const RATE_TARGET = { bulk: [0.25, 0.6], cut: [-1.0, -0.35] };
+function weightTrend(stats, phase) {
+  const pts = (stats || [])
+    .map(s => ({ w: num(s.weight), t: new Date(s.date + "T12:00:00").getTime() }))
+    .filter(p => p.w > 0 && Number.isFinite(p.t))
+    .sort((a, b) => a.t - b.t);
+  if (pts.length < 2) return { ok: false, reason: pts.length ? "need-second" : "none", points: pts.length };
+
+  // Prefer the last 6 weeks; fall back to the last two readings if that's all
+  // there is, so a long gap still produces a (clearly stale) answer.
+  const cutoff = Date.now() - 42 * 86400000;
+  const win = pts.filter(p => p.t >= cutoff);
+  const use = win.length >= 2 ? win : pts.slice(-2);
+  const a = use[0], b = use[use.length - 1];
+  const days = Math.max(1, (b.t - a.t) / 86400000);
+  const perMonth = (b.w - a.w) / days * 30;
+  const [lo, hi] = RATE_TARGET[phase] || RATE_TARGET.bulk;
+  const verdict = perMonth < lo ? "under" : perMonth > hi ? "over" : "on-track";
+  // How much to change intake to land mid-band. 7700 kcal ≈ 1 kg.
+  const mid = (lo + hi) / 2;
+  const kcalAdjust = Math.round(((mid - perMonth) * 7700 / 30) / 50) * 50;
+  return {
+    ok: true, from: a.w, to: b.w, days: Math.round(days),
+    delta: Math.round((b.w - a.w) * 10) / 10,
+    perMonth: Math.round(perMonth * 100) / 100,
+    lo, hi, verdict, kcalAdjust,
+    stale: (Date.now() - b.t) > 10 * 86400000,
+    points: use.length,
+  };
 }
 
 // ─── BODY TREND ALARM ─────────────────────────────────────────────────────────
@@ -6650,7 +6752,7 @@ function DietTab({ today, todayDiet, dietLogs, setDietLogs, phase, stats, target
   // existing reference below picks up the personalised numbers unchanged.
   const kcalTarget = targets.target;
   const PROTEIN_G  = targets.protein;
-  const [view, setView] = useState("today"); // today | library | history
+  const [view, setView] = useState("today"); // today | history
   // Which date the "Today" view is currently editing. Defaults to today but can
   // walk backwards via the date nav — handles the "forgot to log yesterday" /
   // "logging after midnight" cases cleanly.
@@ -6818,7 +6920,15 @@ function DietTab({ today, todayDiet, dietLogs, setDietLogs, phase, stats, target
   // is coarse and repetitive ("Lunch ~1200", "Dinner ~1200", "Shake"). Rather
   // than fight that, mine the freeform extras for repeated names and offer them
   // as one-tap buttons at the median calories/protein actually entered.
+  // One list of "stuff you actually eat", built from BOTH sources so there's no
+  // second place to look: your saved meals, plus any freeform name you've typed
+  // more than once (at the median of what you actually entered — "Lunch" has
+  // ranged 750–1350 kcal, so a median is as accurate as the typing was).
   const quickAdds = (() => {
+    const median = (arr) => {
+      const a = [...arr].sort((x, y) => x - y);
+      return a.length % 2 ? a[(a.length-1)/2] : Math.round((a[a.length/2-1] + a[a.length/2]) / 2);
+    };
     const byName = new Map();
     for (const log of Object.values(dietLogs)) {
       for (const e of (log.extras || [])) {
@@ -6828,24 +6938,50 @@ function DietTab({ today, todayDiet, dietLogs, setDietLogs, phase, stats, target
         byName.get(key).push({ kcal: num(e.kcal) || 0, prot: num(e.prot) || 0 });
       }
     }
-    const median = (arr) => {
-      const s = [...arr].sort((a, b) => a - b);
-      return s.length % 2 ? s[(s.length-1)/2] : Math.round((s[s.length/2-1] + s[s.length/2]) / 2);
-    };
-    return [...byName.entries()]
-      .filter(([, uses]) => uses.length >= 2)          // repeated at least once
-      .map(([name, uses]) => ({
-        name, uses: uses.length,
-        kcal: median(uses.map(u => u.kcal)),
-        prot: median(uses.map(u => u.prot)),
-      }))
-      .filter(q => q.kcal > 0)
-      .sort((a, b) => b.uses - a.uses)
-      .slice(0, 6);
+    const mined = [...byName.entries()]
+      .filter(([, uses]) => uses.length >= 2)
+      .map(([name, uses]) => ({ name, uses: uses.length,
+        kcal: median(uses.map(u => u.kcal)), prot: median(uses.map(u => u.prot)) }))
+      .filter(q => q.kcal > 0);
+    // Saved meals fold in here rather than living behind their own tab.
+    const saved = (meals || [])
+      .map(m => ({ name: m.name, uses: m.fav ? 2 : 1, kcal: getMealKcal(m, phase), prot: m.baseProt || 0, saved: true }))
+      .filter(q => q.kcal > 0 && !mined.some(x => x.name.toLowerCase() === q.name.toLowerCase()));
+    return [...mined, ...saved].sort((a, b) => b.uses - a.uses).slice(0, 8);
   })();
 
-  // Mirrors the extras-edit path: append, then recompute totals from meals +
-  // extras rather than incrementing a stored total (which would drift).
+  // Yesterday, repeated wholesale. People eat the same way most days.
+  const yesterday = (() => {
+    const d = new Date(editDate + "T12:00:00"); d.setDate(d.getDate() - 1);
+    const log = dietLogs[isoLocal(d)];
+    return (log && (log.kcal > 0)) ? { kcal: log.kcal, protein: log.protein || 0, extras: log.extras || [] } : null;
+  })();
+
+  // Escape hatch for days you won't itemise anything. Anchored to the computed
+  // targets so the labels stay honest as bodyweight changes. A rough number
+  // beats the blank day that 87% of days currently are.
+  const roughDays = [
+    { label: "light",  kcal: Math.round((targets.maintenance * 0.75) / 50) * 50 },
+    { label: "normal", kcal: Math.round((targets.maintenance) / 50) * 50 },
+    { label: "big",    kcal: Math.round((targets.target * 1.12) / 50) * 50 },
+  ];
+
+  // Replace the day's total outright — for the coarse "rough day" buttons, which
+  // are an estimate of the WHOLE day rather than another item to append.
+  const setRoughDay = (kcal) => {
+    setDietLogs(prev => ({ ...prev, [editDate]: {
+      ...(prev[editDate] || {}), meals: [], extras: [{ name: "Rough estimate", kcal, prot: 0 }],
+      kcal, protein: (prev[editDate]?.protein) || 0,
+    }}));
+  };
+  const copyYesterday = () => {
+    if (!yesterday) return;
+    setDietLogs(prev => ({ ...prev, [editDate]: {
+      ...(prev[editDate] || {}), meals: [], extras: [...yesterday.extras],
+      kcal: yesterday.kcal, protein: yesterday.protein,
+    }}));
+  };
+
   const addQuick = (q) => {
     const updated = [...(editDiet.extras || []), { name: q.name, kcal: q.kcal, prot: q.prot }];
     const exK = updated.reduce((s, e) => s + e.kcal, 0);
@@ -6864,9 +7000,9 @@ function DietTab({ today, todayDiet, dietLogs, setDietLogs, phase, stats, target
   return (
     <>
       <div className="view-switch">
-        {["today","library","history"].map(v => (
+        {["today","history"].map(v => (
           <button key={v} className={view===v?"on":""} onClick={() => setView(v)}>
-            {v==="today"?"Today":v==="library"?"Meals":"History"}
+            {v==="today"?"Today":"History"}
           </button>
         ))}
       </div>
@@ -6940,15 +7076,59 @@ function DietTab({ today, todayDiet, dietLogs, setDietLogs, phase, stats, target
             </div>
           </div>
 
-          {/* ── Quick add ──
-              Generated from repeated freeform entries rather than the meal
-              library, because that's how this actually gets logged. */}
-          {quickAdds.length > 0 && (
-            <div className="quick-card">
-              <div className="section-head">
-                <span className="eyebrow">Quick add</span>
-                <span className="eyebrow" style={{color:"var(--ink-4)"}}>from what you usually eat</span>
+          {/* ── Weigh-in ──
+              Promoted above food logging on purpose. The scale integrates every
+              meal you logged and every one you didn't, so at low logging
+              adherence it is a far more reliable signal than the food diary. */}
+          {(() => {
+            const wt = weightTrend(stats, phase);
+            const stale = daysSinceWeighIn(stats);
+            return (
+              <div className={`weigh-card ${wt.ok ? wt.verdict : "none"}`}>
+                <div className="section-head">
+                  <span className="eyebrow">Weigh-in</span>
+                  <span className="eyebrow" style={{color: (stale === null || stale > 10) ? "var(--accent-hold)" : "var(--ink-4)"}}>
+                    {stale === null ? "never" : stale === 0 ? "today" : `${stale}d ago`}
+                  </span>
+                </div>
+                {wt.ok ? (
+                  <>
+                    <div className="wg-row">
+                      <span className="wg-big tnum">{wt.from}→{wt.to}<em>kg</em></span>
+                      <span className="wg-rate tnum">{wt.perMonth > 0 ? "+" : ""}{wt.perMonth}<em>kg/mo</em></span>
+                    </div>
+                    <div className="wg-verdict">
+                      {wt.verdict === "on-track"
+                        ? `On track. Target is ${wt.lo}–${wt.hi} kg/month and you're inside it.`
+                        : wt.verdict === "under"
+                          ? `Too slow for a ${phase}. Add about ${Math.abs(wt.kcalAdjust)} kcal a day.`
+                          : `Faster than ${wt.hi} kg/month — that's mostly fat. Cut about ${Math.abs(wt.kcalAdjust)} kcal a day.`}
+                      {wt.stale && " (based on an old reading — weigh in again)"}
+                    </div>
+                  </>
+                ) : (
+                  <div className="wg-verdict">
+                    {wt.reason === "need-second"
+                      ? "One reading so far. A second one, a week or two apart, is what turns this into a verdict."
+                      : "No measurements yet. This is the number that tells you whether any of the rest is working."}
+                  </div>
+                )}
+                <button className="wg-btn" onClick={() => setTab("stats")}>Log a weigh-in →</button>
               </div>
+            );
+          })()}
+
+          {/* ── Fast log ──
+              One tap per thing you ate, sourced from what you actually type.
+              The per-ingredient meal library this replaced was used 18 times
+              against 37 freeform entries — the detail was never the bottleneck,
+              the typing was. */}
+          <div className="quick-card">
+            <div className="section-head">
+              <span className="eyebrow">One tap</span>
+              <span className="eyebrow" style={{color:"var(--ink-4)"}}>what you usually eat</span>
+            </div>
+            {quickAdds.length > 0 ? (
               <div className="quick-grid">
                 {quickAdds.map(q => (
                   <button key={q.name} className="quick-btn" onClick={() => addQuick(q)}>
@@ -6957,8 +7137,34 @@ function DietTab({ today, todayDiet, dietLogs, setDietLogs, phase, stats, target
                   </button>
                 ))}
               </div>
+            ) : (
+              <div className="quick-empty">
+                Log a few meals below and anything you repeat shows up here as a one-tap button.
+              </div>
+            )}
+            {yesterday && (
+              <button className="quick-yday" onClick={copyYesterday}>
+                Same as yesterday <span className="tnum">· {yesterday.kcal} kcal</span>
+              </button>
+            )}
+          </div>
+
+          {/* Coarse whole-day estimate — for days that would otherwise be blank. */}
+          <div className="quick-card">
+            <div className="section-head">
+              <span className="eyebrow">Can't be bothered</span>
+              <span className="eyebrow" style={{color:"var(--ink-4)"}}>rough whole day</span>
             </div>
-          )}
+            <div className="rough-grid">
+              {roughDays.map(r => (
+                <button key={r.label} className="rough-btn" onClick={() => setRoughDay(r.kcal)}>
+                  <span className="rb-l">{r.label}</span>
+                  <span className="rb-n tnum">~{r.kcal}</span>
+                </button>
+              ))}
+            </div>
+            <div className="rough-note">Replaces the whole day. A rough number beats a blank one.</div>
+          </div>
 
           {/* Date nav — defaults to today, walks back for "forgot to log" days */}
           <div className="date-nav">
@@ -7244,153 +7450,6 @@ function DietTab({ today, todayDiet, dietLogs, setDietLogs, phase, stats, target
               )}
             </div>
           )}
-        </>
-      )}
-
-      {view==="library" && (
-        <>
-          <div className="card">
-            <div className="section-head">
-              <span className="eyebrow">Meal library</span>
-              <span className="eyebrow" style={{color:"var(--ink-4)"}}>carbs adjust for {phase}</span>
-            </div>
-            {CAT_ORDER.map(cat => {
-              const catMeals = meals.filter(m => m.cat===cat);
-              if (!catMeals.length) return null;
-              // Favorites pin to the top within each category.
-              const sortedCat = [...catMeals].sort((a,b) => (!!b.fav) - (!!a.fav));
-              return (
-                <div key={cat} style={{marginBottom:18}}>
-                  <div className="meal-cat">{CAT_LABELS[cat]}</div>
-                  {sortedCat.map(m => {
-                    if (editingMealId === m.id && editDraft) {
-                      return (
-                        <div key={m.id} className="add-meal-form" style={{marginBottom:8}}>
-                          <div className="eyebrow" style={{marginBottom:12}}>Edit meal</div>
-                          {[
-                            { label:"Name",         key:"name", ph:"Chicken + quinoa" },
-                            { label:"Description",  key:"desc", ph:"Ingredients + quantities" },
-                            { label:"Tip (optional)", key:"tip", ph:"Context / pairing" },
-                          ].map(f => (
-                            <div key={f.key} style={{marginBottom:10}}>
-                              <label>{f.label}</label>
-                              <input value={editDraft[f.key]} onChange={e => setEditDraft(p=>({...p,[f.key]:e.target.value}))} placeholder={f.ph} type="text"/>
-                            </div>
-                          ))}
-                          <div className="amf-row">
-                            <div>
-                              <label>Kcal</label>
-                              <input value={editDraft.baseKcal} onChange={e => setEditDraft(p=>({...p,baseKcal:e.target.value}))} placeholder="500" type="text" inputMode="decimal" style={{textAlign:"center"}}/>
-                            </div>
-                            <div>
-                              <label>Prot g</label>
-                              <input value={editDraft.baseProt} onChange={e => setEditDraft(p=>({...p,baseProt:e.target.value}))} placeholder="40" type="text" inputMode="decimal" style={{textAlign:"center"}}/>
-                            </div>
-                            <div>
-                              <label>Category</label>
-                              <select value={editDraft.cat} onChange={e => setEditDraft(p=>({...p,cat:e.target.value}))}>
-                                {CAT_ORDER.map(c => <option key={c} value={c}>{c}</option>)}
-                              </select>
-                            </div>
-                          </div>
-                          <div className="amf-check">
-                            <input type="checkbox" checked={editDraft.carbHeavy} onChange={e => setEditDraft(p=>({...p,carbHeavy:e.target.checked}))} id={`carb-${m.id}`}/>
-                            <label htmlFor={`carb-${m.id}`} style={{marginBottom:0}}>Carb-heavy (scales portions per phase)</label>
-                          </div>
-                          <div style={{display:"grid", gridTemplateColumns:"auto 1fr 1fr", gap:10}}>
-                            <button className="btn danger" style={{padding:"10px 12px"}} onClick={() => {
-                              if (confirm(`Delete "${m.name}" from the library?`)) deleteMeal(m.id);
-                            }}>Delete</button>
-                            <button className="btn ghost" onClick={cancelEditMeal}>Cancel</button>
-                            <button className="btn accent" onClick={saveEditMeal}>Save</button>
-                          </div>
-                        </div>
-                      );
-                    }
-                    return (
-                      <div key={m.id} className={`meal-lib-item${m.fav?" fav":""}`}>
-                        <div className="meal-lib-top">
-                          <div style={{flex:1, minWidth:0}}>
-                            <div className="meal-lib-name">{m.name}</div>
-                            <div className="meal-lib-desc">{m.desc}</div>
-                            {m.tip && <div className="meal-lib-tip">💡 {m.tip}</div>}
-                          </div>
-                          <div className="meal-lib-actions">
-                            <button className="meal-lib-add" onClick={() => { addMealToday(m); setView("today"); }}>+ add</button>
-                            <div className="meal-lib-mini-row">
-                              <button
-                                className={`meal-lib-mini star${m.fav?" on":""}`}
-                                onClick={() => toggleFavMeal(m.id)}
-                                title={m.fav ? "Unfavorite" : "Favorite"}
-                              >{m.fav ? "★" : "☆"}</button>
-                              <button
-                                className="meal-lib-mini"
-                                onClick={() => startEditMeal(m)}
-                                title="Edit meal"
-                              >Edit</button>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="meal-lib-meta">
-                          <span className="k">{getMealKcal(m,phase)} kcal</span>
-                          <span className="p">{m.baseProt}g prot</span>
-                          {m.carbHeavy && <span className="tag">{phase==="bulk"?"↑ bulk carbs":"↓ cut carbs"}</span>}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })}
-
-            {!showAddMeal ? (
-              <button className="add-meal-open" onClick={() => setShowAddMeal(true)}>+ Add new meal to library</button>
-            ) : (
-              <div className="add-meal-form">
-                <div className="eyebrow" style={{marginBottom:12}}>New meal</div>
-                {[
-                  { label:"Name",         key:"name", ph:"Chicken + quinoa" },
-                  { label:"Description",  key:"desc", ph:"Ingredients + quantities" },
-                  { label:"Tip (optional)", key:"tip", ph:"Context / pairing" },
-                ].map(f => (
-                  <div key={f.key} style={{marginBottom:10}}>
-                    <label>{f.label}</label>
-                    <input value={newMeal[f.key]} onChange={e => setNewMeal(p=>({...p,[f.key]:e.target.value}))} placeholder={f.ph} type="text"/>
-                  </div>
-                ))}
-                <div className="amf-row">
-                  <div>
-                    <label>Kcal</label>
-                    <input value={newMeal.baseKcal} onChange={e => setNewMeal(p=>({...p,baseKcal:e.target.value}))} placeholder="500" type="text" inputMode="decimal" style={{textAlign:"center"}}/>
-                  </div>
-                  <div>
-                    <label>Prot g</label>
-                    <input value={newMeal.baseProt} onChange={e => setNewMeal(p=>({...p,baseProt:e.target.value}))} placeholder="40" type="text" inputMode="decimal" style={{textAlign:"center"}}/>
-                  </div>
-                  <div>
-                    <label>Category</label>
-                    <select value={newMeal.cat} onChange={e => setNewMeal(p=>({...p,cat:e.target.value}))}>
-                      {CAT_ORDER.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div className="amf-check">
-                  <input type="checkbox" checked={newMeal.carbHeavy} onChange={e => setNewMeal(p=>({...p,carbHeavy:e.target.checked}))} id="carbHeavy"/>
-                  <label htmlFor="carbHeavy" style={{marginBottom:0}}>Carb-heavy (scales portions per phase)</label>
-                </div>
-                <div className="btn-row">
-                  <button className="btn ghost" onClick={() => { setShowAddMeal(false); setNewMeal({ name:"", cat:"snack", desc:"", baseKcal:"", baseProt:"", carbHeavy:false, tip:"" }); }}>Cancel</button>
-                  <button className="btn accent" onClick={() => {
-                    if (!newMeal.name || !newMeal.baseKcal || !newMeal.baseProt) return;
-                    const m = { ...newMeal, id:"m"+Date.now(), baseKcal:parseNum(newMeal.baseKcal), baseProt:parseNum(newMeal.baseProt) };
-                    setMeals(prev => [...prev, m]);
-                    setNewMeal({ name:"", cat:"snack", desc:"", baseKcal:"", baseProt:"", carbHeavy:false, tip:"" });
-                    setShowAddMeal(false);
-                  }}>Save meal</button>
-                </div>
-              </div>
-            )}
-          </div>
         </>
       )}
 
@@ -7871,15 +7930,132 @@ function StatsTab({ stats, setStats, phase, theme, setTheme }) {
             </button>
           ))}
         </div>
-        <div className="app-version">Gym Tracker · v8.7 — Restart</div>
+        <div className="app-version">Gym Tracker · v8.8 — Restart</div>
       </div>
 
+      <PushToggle />
       <DataBackup />
     </>
   );
 }
 
 // ─── DATA BACKUP ─────────────────────────────────────────────────────────────
+// ─── PUSH NOTIFICATIONS ───────────────────────────────────────────────────────
+// Entirely optional. Set PUSH_ENDPOINT to the deployed Worker URL (see
+// worker/README.md) to switch this on; left empty, the whole feature is absent
+// and the app stays a zero-backend static file.
+//
+// Scope is deliberately one weekly weigh-in reminder. A daily "log your food"
+// nudge becomes something you learn to dismiss, which is just a recurring
+// failure notice — the exact pattern the rest of the app avoids.
+const PUSH_ENDPOINT = "";
+
+function pushSupported() {
+  return typeof window !== "undefined"
+    && typeof Notification !== "undefined"
+    && typeof navigator !== "undefined"
+    && !!navigator.serviceWorker
+    && "PushManager" in window;
+}
+// iOS only delivers push to a web app installed on the Home Screen. In a plain
+// Safari tab the permission prompt never even appears, so say so up front
+// rather than letting the button silently do nothing.
+function isStandalone() {
+  try {
+    return window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator?.standalone === true;
+  } catch { return false; }
+}
+function isIOS() {
+  try { return /iPad|iPhone|iPod/.test(navigator.userAgent || ""); } catch { return false; }
+}
+
+function PushToggle() {
+  const [state, setState] = useState("idle");   // idle | working | on | error
+  const [msg, setMsg] = useState("");
+  const supported = pushSupported();
+  const configured = !!PUSH_ENDPOINT;
+
+  useEffect(() => {
+    if (!supported || !configured) return;
+    navigator.serviceWorker.ready
+      .then(r => r.pushManager.getSubscription())
+      .then(sub => setState(sub ? "on" : "idle"))
+      .catch(() => {});
+  }, [supported, configured]);
+
+  const enable = async () => {
+    setState("working"); setMsg("");
+    try {
+      const perm = await Notification.requestPermission();
+      if (perm !== "granted") { setState("error"); setMsg("Permission denied — enable it in your browser settings."); return; }
+      const key = await fetch(PUSH_ENDPOINT + "/key").then(r => r.text());
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: Uint8Array.from(
+          atob(key.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - key.length % 4) % 4)),
+          c => c.charCodeAt(0)),
+      });
+      await fetch(PUSH_ENDPOINT + "/subscribe", {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(sub),
+      });
+      setState("on");
+    } catch (e) { setState("error"); setMsg(e?.message || "Could not enable notifications."); }
+  };
+
+  const disable = async () => {
+    setState("working");
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        await fetch(PUSH_ENDPOINT + "/unsubscribe", {
+          method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(sub),
+        }).catch(() => {});
+        await sub.unsubscribe();
+      }
+      setState("idle");
+    } catch { setState("idle"); }
+  };
+
+  if (!configured) return null;
+  const iosBlocked = isIOS() && !isStandalone();
+
+  return (
+    <div className="card">
+      <div className="section-head">
+        <span className="eyebrow">Weigh-in reminder</span>
+        <span className="eyebrow" style={{color: state === "on" ? "var(--ok)" : "var(--ink-4)"}}>
+          {state === "on" ? "on" : "off"}
+        </span>
+      </div>
+      {!supported ? (
+        <div className="push-note">This browser doesn't support notifications.</div>
+      ) : iosBlocked ? (
+        <div className="push-note">
+          On iPhone, notifications only work once the app is on your Home Screen.
+          Tap <b>Share → Add to Home Screen</b>, open it from there, then come back.
+        </div>
+      ) : (
+        <>
+          <div className="push-note">
+            One push a week: a nudge to stand on the scale. Nothing else — no food
+            reminders, no streak nagging.
+          </div>
+          <button
+            className={`push-btn ${state === "on" ? "on" : ""}`}
+            disabled={state === "working"}
+            onClick={state === "on" ? disable : enable}
+          >
+            {state === "working" ? "…" : state === "on" ? "Turn off" : "Turn on"}
+          </button>
+          {msg && <div className="push-err">{msg}</div>}
+        </>
+      )}
+    </div>
+  );
+}
+
 function DataBackup() {
   const [status, setStatus] = useState("");
   const keys = ["phul_phase","phul_stats","phul_logs","phul_diet","phul_draft","phul_makeup_draft","phul_meals","phul_custom_sessions","phul_theme","phul_dismissed_makeups","phul_program","phul_migration_v"];

@@ -88,7 +88,7 @@ module.exports = function load(withReact = false) {
     "num", "isScorable", "calcNextWeight", "computeRestartWeight", "warmupSets", "stalenessFactor",
     "getEquipmentType", "getRestSeconds", "snap", "PHUL", "FULLBODY", "PROGRAMS", "lookupDay",
     "coreExercises", "MIGRATION_REPORT", "computeTargets", "bodyTrendAlarm", "daysSinceWeighIn",
-    "consistency", "hardModeState", "applyIntensity", "FINISHERS", "HARD_MODE_WEEKS", "effortTarget",
+    "weightTrend", "consistency", "hardModeState", "applyIntensity", "FINISHERS", "HARD_MODE_WEEKS", "effortTarget",
     ...(withReact ? ["App", "Dashboard", "WorkoutTab", "DietTab", "StatsTab", "SessionLogger"] : []),
   ];
   const file = path.join(HERE, withReact ? ".tmp.app-react.js" : ".tmp.app.js");

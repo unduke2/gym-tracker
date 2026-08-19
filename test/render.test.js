@@ -108,6 +108,17 @@ has("warm-up ramp starts from an empty bar", normal["Full Body A"], "bar only");
 has("diet shows the 7-day average", dietOut, "7-day average");
 has("diet quick-add is mined from logged meals", dietOut, "Dinner");
 
+console.log("\n── Diet tab: fast log, scale first ──");
+{
+  has("weigh-in card is present", dietOut, "Weigh-in");
+  has("weigh-in has a call to action", dietOut, "Log a weigh-in");
+  has("one-tap section exists", dietOut, "One tap");
+  has("rough whole-day escape hatch exists", dietOut, "be bothered");
+  has("rough buttons are labelled", dietOut, "normal");
+  hasnt("meal library tab is gone", dietOut, ">Meals<");
+  hasnt("no per-ingredient library UI", dietOut, "carbHeavy");
+}
+
 console.log("\n── Consistency card is legible ──");
 {
   has("week columns are labelled with dates", app, 'class="wk-d"');

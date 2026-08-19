@@ -191,6 +191,32 @@ console.log("\n── Diet targets ──");
   check("stopping training doesn't collapse the target", drop <= 120, `${drop} kcal`);
 }
 
+console.log("\n── Weight trend: the scale as the control signal ──");
+{
+  const iso = (n) => new Date(Date.now() - n * DAY).toISOString().slice(0, 10);
+  const t = (pairs) => A.weightTrend(pairs.map(([d, w]) => ({ date: iso(d), weight: w })), "bulk");
+  const good = t([[28, 71.8], [0, 72.3]]);
+  console.log(`   +0.5kg/28d ⇒ ${good.perMonth} kg/mo · ${good.verdict}`);
+  check("gaining inside the band reads on-track", good.verdict === "on-track", good.verdict);
+  const flat = t([[28, 71.8], [0, 71.8]]);
+  check("flat weight on a bulk reads under", flat.verdict === "under");
+  check("flat asks for a SMALL bump, not 500 kcal", flat.kcalAdjust > 0 && flat.kcalAdjust <= 200, String(flat.kcalAdjust));
+  const losing = t([[28, 72.5], [0, 71.8]]);
+  check("losing on a bulk reads under", losing.verdict === "under");
+  check("losing asks for more than flat does", losing.kcalAdjust > flat.kcalAdjust);
+  const fast = t([[28, 71.8], [0, 73.5]]);
+  check("gaining too fast reads over", fast.verdict === "over");
+  check("over suggests eating LESS", fast.kcalAdjust < 0, String(fast.kcalAdjust));
+  check("one reading gives no verdict", t([[0, 71.8]]).ok === false);
+  check("no readings gives no verdict", A.weightTrend([], "bulk").ok === false);
+  check("an old reading is flagged stale", t([[80, 71.8], [60, 72.3]]).stale === true);
+  check("a cut inverts the direction",
+    A.weightTrend([{date:iso(28),weight:73},{date:iso(0),weight:72.4}], "cut").verdict === "on-track",
+    A.weightTrend([{date:iso(28),weight:73},{date:iso(0),weight:72.4}], "cut").verdict);
+  check("garbage weights don't produce NaN",
+    A.weightTrend([{date:iso(28),weight:"abc"},{date:iso(0),weight:72}], "bulk").ok === false);
+}
+
 console.log("\n── Body-trend alarm ──");
 {
   const t = A.computeTargets(A._data.phul_stats, A._data.phul_logs, "bulk");

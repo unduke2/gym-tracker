@@ -1,0 +1,11 @@
+name = "gym-tracker-push"
+main = "src/index.js"
+compatibility_date = "2026-01-01"
+
+# Sunday 09:00 UTC — one push a week, nothing else.
+[triggers]
+crons = ["0 9 * * 0"]
+
+[[kv_namespaces]]
+binding = "SUBS"
+id = "REPLACE_WITH_KV_ID"
