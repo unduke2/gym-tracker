@@ -309,19 +309,26 @@ button { cursor: pointer; }
   border-radius: var(--r-lg);
   padding: 18px;
 }
-.card .section-head {
+.section-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
+  gap: 10px;
   margin-bottom: 14px;
 }
-.card .section-head .more {
-  background: none; border: none;
+.section-head .more {
+  background: transparent;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
   font-family: var(--font-mono);
-  font-size: 10px; font-weight: 600;
-  color: var(--ink-3);
+  font-size: 10px; font-weight: 700;
+  color: var(--ink-2);
   letter-spacing: 0.12em;
   text-transform: uppercase;
+  white-space: nowrap;
+  padding: 7px 12px;
+  min-height: 32px;
+  margin: -8px -4px -8px 0;
 }
 
 /* ─── BUTTONS ─── */
@@ -343,7 +350,29 @@ button { cursor: pointer; }
   -webkit-appearance: none;
   appearance: none;
 }
-.btn:active { transform: scale(0.99); }
+.btn:active { transform: scale(0.97); filter: brightness(0.88); }
+
+/* Tap highlight is disabled globally (line 118), so every control needs an
+   explicit :active or a landed tap is indistinguishable from a missed one. */
+.finish-btn:active, .rest-skip:active, .pill-btns button:active,
+.day-card-start:active, .session-ctl button:active, .qa-chip:active,
+.meal-x:active, .del-btn:active, .del-confirm button:active,
+.set-editable button:active, .add-set-btn:active, .section-head .more:active,
+.date-nav-arrow:active, .date-nav-today:active, .hold-chip-btns button:active,
+.view-switch button:active, .prog-switch button:active, .wu-skip:active,
+.modal-actions button:active, .mc-actions button:active,
+.ta-btn:active, .wg-btn:active, .push-btn:active, .quick-yday:active,
+.rpe-grid button:active, .tab:active {
+  filter: brightness(1.3);
+  transform: scale(0.97);
+}
+/* Transparent controls need a fill, not just a brightness shift. */
+.pill-btns button:active, .session-ctl button:active, .del-btn:active,
+.set-editable button:active, .rest-skip:active, .qa-chip:active,
+.meal-x:active, .date-nav-arrow:active, .hold-chip-btns button:active,
+.wu-skip:active, .section-head .more:active {
+  background: color-mix(in oklab, var(--ink) 14%, transparent);
+}
 .btn.accent { background: var(--accent); color: var(--accent-ink); }
 .btn.ok { background: var(--ok); color: #051a0d; }
 .btn.ghost {
@@ -418,8 +447,8 @@ button { cursor: pointer; }
 .next-card {
   background: var(--card);
   border: 1px solid var(--line);
-  border-radius: 20px;
-  padding: 22px 22px 20px;
+  border-radius: var(--r-lg);
+  padding: 20px 18px 18px;
   position: relative;
   overflow: hidden;
 }
@@ -665,10 +694,10 @@ button { cursor: pointer; }
 
 /* Week strip */
 .week-strip {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  display: flex;
   gap: 6px;
 }
+.week-strip .week-cell { flex: 1 1 0; min-width: 0; }
 .week-cell {
   display: flex; flex-direction: column;
   align-items: center;
@@ -1019,12 +1048,15 @@ button { cursor: pointer; }
   font-weight: 700;
 }
 .wblock .sug-note {
-  margin-top: 10px;
-  font-size: 12px;
-  line-height: 1.45;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+  line-height: 1.5;
   color: var(--ink-2);
-  font-style: italic;
-  padding: 0 10px;
+  font-style: normal;
+  text-align: left;
+  text-wrap: pretty;
 }
 .wblock .sug-note.ok { color: var(--ok); }
 .wblock .sug-note.warn { color: var(--warn); }
@@ -1271,16 +1303,24 @@ button { cursor: pointer; }
 .rest-wrap .eyebrow { color: var(--accent); margin-bottom: 4px; }
 .rest-wrap .next-up {
   font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.14em;
+  font-size: 10px;
+  letter-spacing: 0.12em;
   color: var(--ink-3);
   text-transform: uppercase;
-  margin-top: -8px;
+  line-height: 1.4;
+  text-align: center;
+  margin-top: -6px;
 }
 .rest-wrap .next-up em {
+  display: block;
+  margin-top: 5px;
+  font-family: var(--font);
   font-style: normal;
-  color: var(--accent);
+  font-size: 15px;
   font-weight: 700;
+  letter-spacing: -0.01em;
+  text-transform: none;
+  color: var(--accent);
 }
 .rest-ring-wrap {
   position: relative;
@@ -1393,14 +1433,20 @@ button { cursor: pointer; }
 .hold-chip-txt { flex: 1; min-width: 0; }
 .hold-chip-name { font-size: 13px; font-weight: 700; color: var(--accent-hold); letter-spacing: -0.01em; }
 .hold-chip-sub { font-family: var(--font-mono); font-size: 10px; color: var(--ink-3); letter-spacing: 0.06em; margin-top: 2px; text-transform: uppercase; }
-.hold-chip-btns { display: flex; gap: 6px; }
+.hold-chip-btns { display: flex; gap: 8px; }
 .hold-chip-btns button {
   background: transparent;
   border: 1px solid var(--line-2);
-  border-radius: 8px;
-  padding: 6px 10px;
+  border-radius: var(--r-sm);
+  padding: 0 14px;
+  min-height: 38px;
+  min-width: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1705,7 +1751,7 @@ button { cursor: pointer; }
   border-bottom: 1px solid var(--line);
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
 }
 .day-card-head-l { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
@@ -1907,9 +1953,9 @@ button { cursor: pointer; }
   align-items: baseline;
   gap: 8px;
   flex-wrap: wrap;
-  padding: 9px 12px;
-  border-radius: 10px;
-  margin-bottom: 10px;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  margin: 14px 20px 12px;
   border: 1px solid var(--line-2);
   background: transparent;
 }
@@ -1924,7 +1970,12 @@ button { cursor: pointer; }
 }
 .effort-chip.hold-back .ec-label { color: var(--accent-full); }
 .effort-chip.to-failure .ec-label { color: var(--bad); }
-.ec-detail { font-size: 11px; color: var(--ink-4); }
+.ec-detail {
+  flex-basis: 100%;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
 .rpe-over {
   margin-top: 9px;
   padding-top: 8px;
@@ -1938,9 +1989,9 @@ button { cursor: pointer; }
 .finisher-note {
   border: 1px solid color-mix(in oklab, var(--accent) 45%, var(--line-2));
   background: color-mix(in oklab, var(--accent) 9%, transparent);
-  border-radius: 12px;
+  border-radius: var(--r-md);
   padding: 11px 13px;
-  margin-bottom: 10px;
+  margin: 14px 20px 0;
 }
 .fn-head { display: flex; align-items: baseline; gap: 9px; margin-bottom: 6px; }
 .fn-tag {
@@ -1956,8 +2007,8 @@ button { cursor: pointer; }
 
 /* ── Body-trend alarm ── */
 .trend-alarm {
-  border-radius: 14px;
-  padding: 14px 16px;
+  border-radius: var(--r-lg);
+  padding: 18px;
   margin-bottom: 12px;
   border: 1px solid var(--line-2);
   background: var(--card);
@@ -2010,8 +2061,8 @@ button { cursor: pointer; }
 .roll-card, .quick-card {
   background: var(--card);
   border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 14px 16px;
+  border-radius: var(--r-lg);
+  padding: 18px;
   margin-bottom: 12px;
 }
 .roll-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; }
@@ -2066,8 +2117,8 @@ button { cursor: pointer; }
 .weigh-card {
   background: var(--card);
   border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 14px 16px;
+  border-radius: var(--r-lg);
+  padding: 18px;
   margin-bottom: 12px;
 }
 .weigh-card.under    { border-color: color-mix(in oklab, var(--accent-hold) 45%, var(--line)); }
@@ -2217,11 +2268,16 @@ button { cursor: pointer; }
 .warmup-head .wu-skip {
   font-family: var(--font-mono);
   font-size: 10px;
+  font-weight: 700;
   letter-spacing: 0.08em;
-  color: var(--ink-4);
-  background: none;
-  border: none;
-  padding: 2px 0;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  background: transparent;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  padding: 7px 14px;
+  min-height: 32px;
+  margin: -6px -4px -6px 0;
 }
 .warmup-rows { display: flex; flex-direction: column; gap: 2px; }
 .wu-row {
@@ -2348,7 +2404,7 @@ button { cursor: pointer; }
   margin-top: 2px;
   font-variant-numeric: tabular-nums;
 }
-.hist-ex { font-size: 11px; color: var(--ink-3); margin-bottom: 3px; line-height: 1.4; }
+.hist-ex { font-size: 12px; color: var(--ink-3); margin-bottom: 6px; line-height: 1.55; }
 .hist-ex .name { color: var(--ink-2); font-weight: 600; }
 .hist-ex .sets {
   font-family: var(--font-mono);
@@ -2359,18 +2415,28 @@ button { cursor: pointer; }
 .del-btn {
   background: transparent;
   border: 1px solid var(--line-2);
-  border-radius: 8px;
-  padding: 5px 10px;
+  border-radius: var(--r-sm);
+  padding: 0 14px;
+  min-width: 44px;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
   color: var(--ink-4);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 13px;
 }
-.del-confirm { display: flex; gap: 6px; }
+.del-confirm { display: flex; gap: 10px; }
 .del-confirm button {
-  padding: 5px 10px;
-  border-radius: 8px;
+  padding: 0 16px;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-sm);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -2545,10 +2611,16 @@ button { cursor: pointer; }
 .meal-x {
   background: transparent;
   border: 1px solid var(--line-2);
-  border-radius: 8px;
-  padding: 6px 10px;
+  border-radius: var(--r-sm);
+  min-width: 44px;
+  min-height: 38px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
   color: var(--ink-3);
-  font-size: 14px;
+  font-size: 17px;
   line-height: 1;
 }
 
@@ -2564,14 +2636,17 @@ button { cursor: pointer; }
   padding-top: 12px;
   border-top: 1px solid var(--line);
 }
-.qa-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.qa-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .qa-chip {
   background: var(--card-2);
   border: 1px solid var(--line-2);
   border-radius: 999px;
-  padding: 6px 12px;
+  padding: 0 16px;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
   color: var(--ink-2);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
 }
 .qa-chip.dashed { border-style: dashed; color: var(--ink-3); }
@@ -2589,6 +2664,7 @@ button { cursor: pointer; }
   margin-top: 10px;
 }
 .extras-form label {
+  display: block;
   font-family: var(--font-mono);
   font-size: 9px;
   color: var(--ink-3);
@@ -3601,7 +3677,7 @@ function calcNextWeight(exercise, logs) {
       const w = snap(num(filled[0].weight), eq);
       return {
         weight: w, status: "hold-partial", increment: baseInc, eq,
-        note: `→ ${w}kg — you only got partway through this last time. Finish the sets this round.`
+        note: `You only got partway through this last time. Finish the sets this round.`
       };
     }
     return { weight: exercise.startWeight, status: "start", increment: baseInc, eq, note: `Start: ${exercise.startWeight}kg` };
@@ -3635,7 +3711,7 @@ function calcNextWeight(exercise, logs) {
   const setCount  = reps.length;
   if (!setCount) {
     const w = snap(lastWeight, eq);
-    return { weight: w, status: "same", increment: baseInc, eq, note: `→ ${w}kg — log clean sets at this weight.` };
+    return { weight: w, status: "same", increment: baseInc, eq, note: `Log clean sets at this weight.` };
   }
 
   // ─── Performance metrics ───────────────────────────────────────────────
@@ -3765,7 +3841,7 @@ function calcNextWeight(exercise, logs) {
   if (fatigueSuspect && failedSets >= 1 && stallCount < 2) {
     return {
       weight: lastWeight, status: "fatigue-hold", increment: baseInc, eq,
-      note: `→ ${lastWeight}kg — rough round, but this comes late in the session. Same weight, fresher legs.`
+      note: `Rough round, but this comes late in the session. Same weight, fresher legs.`
     };
   }
 
@@ -3809,7 +3885,7 @@ function calcNextWeight(exercise, logs) {
   if (failedSets === 1 && worstDeficit === 1) {
     return {
       weight: lastWeight, status: "grind", increment: baseInc, eq,
-      note: `→ ${lastWeight}kg — one set hit ${worstReps}. One more rep and it's yours.`
+      note: `One set hit ${worstReps} — one more and it's yours.`
     };
   }
 
@@ -3830,7 +3906,7 @@ function calcNextWeight(exercise, logs) {
     if (grinding) {
       return {
         weight: lastWeight, status: "same", increment: baseInc, eq,
-        note: `→ ${lastWeight}kg — ${Math.round(perf*100)}% of target at RPE ~${rpeShow}. Own this weight before adding.`
+        note: `${Math.round(perf*100)}% of target at RPE ~${rpeShow}. Own this weight before adding.`
       };
     }
     // Micro-progression for light dumbbells (rep-only default).
@@ -3846,14 +3922,14 @@ function calcNextWeight(exercise, logs) {
     }
     return {
       weight: lastWeight, status: "same", increment: baseInc, eq,
-      note: `→ ${lastWeight}kg — ${Math.round(perf*100)}% of target. Push for top.`
+      note: `${Math.round(perf*100)}% of target. Push for top.`
     };
   }
 
   // 9. HOLD — catchall for "not all top, but no failures"
   return {
     weight: lastWeight, status: "same", increment: baseInc, eq,
-    note: `→ ${lastWeight}kg — ${Math.round(perf*100)}% of target.`
+    note: `${Math.round(perf*100)}% of target.`
   };
   };
 
@@ -3872,7 +3948,7 @@ function calcNextWeight(exercise, logs) {
         ...result,
         weight: scaled,
         status: "return",
-        note: `→ ${scaled}kg — ${wks} weeks since you last did this. Starting light on purpose; you'll be back past it inside a month.`
+        note: `${wks} weeks since you last did this. Starting light on purpose — you'll be past it inside a month.`
       };
     }
   }
@@ -3965,8 +4041,8 @@ function computeRestartWeight(exercise, logs) {
   return {
     weight: w, status: "restart", increment: getBaseIncrement(eq), eq,
     note: from === exercise.name
-      ? `→ ${w}kg — from your own numbers (${why}, ${when}). Starts light by design. Earn it back.`
-      : `→ ${w}kg — carried over from ${from} (${why}, ${when}). Starts light by design. Earn it back.`
+      ? `From your own numbers — ${why}, ${when}. Starts light by design.`
+      : `Carried over from ${from} — ${why}, ${when}. Starts light by design.`
   };
 }
 
@@ -4198,7 +4274,7 @@ const DAYS = ["Upper Power","Lower Power","Upper Hypertrophy","Lower Hypertrophy
 const FULLBODY = {
   "Full Body A": {
     type: "fullbody", color: "#4a9eff", icon: "◈",
-    description: "Squat · press · pull · arms. Seven lifts, ~60 min. Leave 1–2 reps in the tank.",
+    description: "Squat · press · pull · arms. ~60 min. Leave 1–2 reps in the tank.",
     exercises: [
       { name: "Squat",              day: "Full Body A", tier: 1, sets: 3, repRange: "5-8",   startWeight: 30, barbell: true, barWeight: BAR.olympic, seedFrom: ["Squat","Front Squat"], hardMode: { sets: 4, finish: "amrap" }, note: "Deep as your hips allow — the stretched position is where the growth is." },
       { name: "Bench Press",        day: "Full Body A", tier: 1, sets: 3, repRange: "5-8",   startWeight: 30, barbell: true, barWeight: BAR.olympic, seedFrom: ["Bench Press"], hardMode: { sets: 4, finish: "amrap" }, note: "Stop with 1–2 clean reps left. Not to failure." },
@@ -4219,7 +4295,7 @@ const FULLBODY = {
   },
   "Full Body B": {
     type: "fullbody", color: "#4a9eff", icon: "◈",
-    description: "Hinge · press · pull · arms. Seven lifts, ~60 min. Leave 1–2 reps in the tank.",
+    description: "Hinge · press · pull · arms. ~60 min. Leave 1–2 reps in the tank.",
     exercises: [
       { name: "Deadlift",           day: "Full Body B", tier: 1, sets: 3, repRange: "5-8",   startWeight: 35, barbell: true, barWeight: BAR.olympic, seedFrom: ["Deadlift"], hardMode: { sets: 4, finish: "amrap" }, note: "Brace, push the floor away. Reset each rep." },
       { name: "Incline Barbell Press", day: "Full Body B", tier: 1, sets: 3, repRange: "8-12", startWeight: 15, barbell: true, barWeight: BAR.olympic, seedFrom: ["Incline Barbell Press"], hardMode: { sets: 4, finish: "amrap" }, note: "Slow down the descent. Stretch at the bottom." },
@@ -5058,9 +5134,9 @@ function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, 
       <div className="next-card">
         <div className="label-row">
           <span className={`eyebrow eyebrow-${nextTypeCls}`}>
-            Today · {nextPlan.type === "power" ? "Power" : "Hypertrophy"}
+            Today · {nextPlan.type === "power" ? "Power" : nextPlan.type === "fullbody" ? "Full body" : "Hypertrophy"}
           </span>
-          <span className="subtitle">{nextPlan.exercises.length} exercises</span>
+          <span className="subtitle">{coreExercises(nextPlan).length} lifts</span>
         </div>
         <h2 className="next-title">
           {nextDay.split(" ")[0]} <em>{nextDay.split(" ").slice(1).join(" ")}</em>
@@ -6024,7 +6100,7 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
             <div className="ex-head">
               <div className="ex-meta-top">
                 <span className={`eyebrow eyebrow-${typeCls}`}>
-                  {plan.type === "power" ? "Power" : "Hypertrophy"} · T{curEx.tier}
+                  {plan.type === "power" ? "Power" : plan.type === "fullbody" ? "Full body" : "Hypertrophy"} · T{curEx.tier}
                 </span>
                 <span className="pill">{curEx.repRange} reps</span>
               </div>
@@ -7076,9 +7152,8 @@ function DietTab({ today, todayDiet, dietLogs, setDietLogs, phase, stats, target
                 </span>
               </div>
               <div className="ta-body">
-                Without a recent measurement none of this can tell you whether it's working.
+                Nothing below means much without a fresh reading.
               </div>
-              <button className="ta-btn" onClick={() => setTab("stats")}>Log a weigh-in →</button>
             </div>
           )}
 
@@ -8018,7 +8093,7 @@ function StatsTab({ stats, setStats, phase, theme, setTheme }) {
             </button>
           ))}
         </div>
-        <div className="app-version">Gym Tracker · v8.9 — Restart</div>
+        <div className="app-version">Gym Tracker · v8.10 — Restart</div>
       </div>
 
       <PushToggle />

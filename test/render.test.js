@@ -133,6 +133,52 @@ console.log("\n── Diet tab: fast log, scale first ──");
   has("and still offers delete", out, "Remove Lunch");
 }
 
+console.log("\n── UI regressions found by the v8.10 audit ──");
+{
+  const css = require("fs").readFileSync(__dirname + "/../index.html", "utf8")
+    .match(/<style>([\s\S]*?)<\/style>/)[1];
+  // .section-head was scoped to .card, so the seven headers on non-.card panels
+  // (roll-card, quick-card x2, weigh-card, stats-current, log-form, catchup-card)
+  // rendered with no flex, no space-between and no bottom margin at all.
+  const scoped = /^\.card \.section-head \{/m.test(css);
+  const bare = /^\.section-head \{/m.test(css);
+  bare && !scoped ? console.log("  ok   .section-head applies outside .card")
+    : (fails++, console.log("  FAIL .section-head is still card-scoped"));
+  // The rotation strip was a fixed 4-column grid; the default program has 2 days.
+  const strip = css.match(/\.week-strip \{[^}]*\}/)[0];
+  !/repeat\(4/.test(strip) ? console.log("  ok   rotation strip adapts to program length")
+    : (fails++, console.log("  FAIL .week-strip still hardcodes 4 columns"));
+  // Card gutters have to match or stacked cards step in and out.
+  const radii = [...css.matchAll(/\.(next-card|trend-alarm|roll-card|weigh-card)[^{]*\{[^}]*border-radius:\s*([^;]+);/g)]
+    .map(m => m[2].trim());
+  radii.every(r => r.startsWith("var(--r")) ? console.log("  ok   card radii use the shape scale")
+    : (fails++, console.log("  FAIL off-scale card radii: " + radii.join(", ")));
+}
+{
+  // Full-body days carry type "fullbody"; both ternaries fell through to
+  // "Hypertrophy", mislabelling the default program on the first screen.
+  const t = tg(stats, logs, "bulk");
+  const dash = renderToString(h(M.Dashboard, {
+    latest: stats[stats.length-1], phase:"bulk", kcalTarget:t.target, todayDiet:{kcal:0,protein:0},
+    workoutLogs: {}, setTab:noop, setActiveSession:noop, startSession:noop, draftSession:null,
+    pendingMakeups:[], startMakeup:noop, dismissMakeup:noop, program:M.PROGRAMS.fullbody,
+    targets:t, trend:M.bodyTrendAlarm(stats,"bulk",t), hardMode:{on:false,streak:0,need:3} }));
+  hasnt("full-body day is not labelled Hypertrophy", dash, "Hypertrophy");
+  has("it is labelled Full body", dash, "Full body");
+  const sess = renderToString(h(M.SessionLogger, { dayName:"Full Body A",
+    plan: M.FULLBODY["Full Body A"], workoutLogs: logs,
+    onFinish:noop, onCancel:noop, onDiscard:noop, savedSession:null, onSaveSession:noop }));
+  hasnt("session header is not labelled Hypertrophy either", sess, "Hypertrophy");
+  // The hero counted optional finishers as exercises.
+  hasnt("hero does not count optional finishers", dash, "9 exercises");
+}
+{
+  // Two identically-labelled CTAs stacked on the diet tab.
+  const n = (dietOut.match(/Log a weigh-in/g) || []).length;
+  n <= 1 ? console.log("  ok   only one 'Log a weigh-in' CTA")
+    : (fails++, console.log(`  FAIL ${n} duplicate weigh-in CTAs`));
+}
+
 console.log("\n── Consistency card is legible ──");
 {
   has("week columns are labelled with dates", app, 'class="wk-d"');

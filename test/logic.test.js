@@ -325,6 +325,28 @@ console.log("\n── applyIntensity ──");
   check("every muscle is trained twice a week", Object.keys(M).length >= 13);
 }
 
+console.log("\n── Progression notes don't repeat the weight ──");
+{
+  // The weight is rendered at 92px directly above the note; leading with it
+  // again cost a phone card's width and pushed the note to four wrapped lines.
+  const cases = [
+    A.calcNextWeight(bench, sess("Upper Power","Bench Press",[S(40,4,9),S(40,5,9),S(40,5,9)])),
+    A.calcNextWeight(squat, sess("Lower Power","Squat",[S(50,4,8),S(50,4,8),S(50,4,8)])),
+    A.calcNextWeight(squat, sess("Lower Power","Squat",[S(50,5,8),S(50,5,8),S(50,5,8)], 120)),
+    ...A.PROGRAMS.fullbody.order.flatMap(d =>
+      A.PROGRAMS.fullbody.days[d].exercises.map(e => A.calcNextWeight(e, A._data.phul_logs))),
+  ];
+  check("no note opens by restating the weight",
+    cases.every(r => !/^→\s*[\d.]+\s*kg/.test(r.note)),
+    cases.filter(r => /^→\s*[\d.]+\s*kg/.test(r.note)).map(r => r.note).join(" | "));
+  check("increase/decrease notes still show the delta",
+    cases.filter(r => r.status === "increase" || r.status === "crush").every(r => /[↑↓]\s*\+?[\d.]+kg/.test(r.note)),
+    cases.filter(r => r.status === "increase").map(r => r.note).join(" | "));
+  check("every note is short enough for a phone card",
+    cases.every(r => r.note.length <= 110),
+    cases.filter(r => r.note.length > 110).map(r => `${r.note.length}: ${r.note}`).join(" | "));
+}
+
 console.log("\n── Program integrity ──");
 {
   for (const [pid, prog] of Object.entries(A.PROGRAMS)) {
