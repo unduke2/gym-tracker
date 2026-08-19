@@ -1,6 +1,6 @@
 {
   "name": "gym-tracker",
-  "version": "8.8.0",
+  "version": "8.9.0",
   "private": true,
   "description": "Personal gym + diet + body-comp tracker. The app has no runtime dependencies \u2014 index.html runs standalone in any browser. These devDependencies exist only for the optional production build (build.mjs) and the test suite (test/).",
   "scripts": {

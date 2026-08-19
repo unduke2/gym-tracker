@@ -2094,6 +2094,29 @@ button { cursor: pointer; }
   letter-spacing: 0.08em; text-transform: uppercase;
 }
 
+.meal-row-l {
+  display: flex; flex-direction: column; gap: 3px; align-items: flex-start;
+  flex: 1; min-width: 0; text-align: left;
+  background: none; border: none; padding: 0; color: inherit;
+}
+.mr-edit {
+  font-family: var(--font-mono); font-style: normal; font-size: 8px;
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-4);
+  margin-left: 6px;
+}
+.modal-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+.modal-actions button {
+  padding: 13px; border-radius: 10px;
+  font-family: var(--font-mono); font-size: 11px; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+.modal-actions .danger {
+  border: 1px solid color-mix(in oklab, var(--bad) 50%, var(--line-2));
+  background: transparent; color: var(--bad);
+}
+.modal-actions .ok { border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); }
+.quick-hint { font-size: 11px; color: var(--ink-4); line-height: 1.55; margin-top: 10px; }
+
 /* ── Rough whole-day buttons ── */
 .rough-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
 .rough-btn {
@@ -6767,6 +6790,11 @@ function DietTab({ today, todayDiet, dietLogs, setDietLogs, phase, stats, target
   const [showAddMeal, setShowAddMeal] = useState(false);
   const [newMeal, setNewMeal] = useState({ name:"", cat:"snack", desc:"", baseKcal:"", baseProt:"", carbHeavy:false, tip:"" });
   const [confirmDelDiet, setConfirmDelDiet] = useState(null);
+  // Any logged item can be corrected after the fact. The one-tap chips add a
+  // median of what you've typed before, which is right on average and wrong on
+  // any given day — so the fast path stays one tap and the correction lives
+  // here, on the entry itself.
+  const [editingExtra, setEditingExtra] = useState(null); // {idx,name,kcal,prot}
   // Meal-library edit mode. `editingMealId` points at the meal being edited;
   // `editDraft` holds the in-progress edit values (applied on Save).
   const [editingMealId, setEditingMealId] = useState(null);
@@ -6982,6 +7010,17 @@ function DietTab({ today, todayDiet, dietLogs, setDietLogs, phase, stats, target
     }}));
   };
 
+  // Single place that rewrites the extras array and recomputes the day total,
+  // so add / edit / delete can't drift apart.
+  const writeExtras = (updated) => {
+    const exK = updated.reduce((s, e) => s + (num(e.kcal) || 0), 0);
+    const exP = updated.reduce((s, e) => s + (num(e.prot) || 0), 0);
+    setDietLogs(prev => ({ ...prev, [editDate]: {
+      ...(prev[editDate] || {}), meals: dayMeals, extras: updated,
+      kcal: mealKcal + exK, protein: mealProt + exP,
+    }}));
+  };
+
   const addQuick = (q) => {
     const updated = [...(editDiet.extras || []), { name: q.name, kcal: q.kcal, prot: q.prot }];
     const exK = updated.reduce((s, e) => s + e.kcal, 0);
@@ -7126,7 +7165,7 @@ function DietTab({ today, todayDiet, dietLogs, setDietLogs, phase, stats, target
           <div className="quick-card">
             <div className="section-head">
               <span className="eyebrow">One tap</span>
-              <span className="eyebrow" style={{color:"var(--ink-4)"}}>what you usually eat</span>
+              <span className="eyebrow" style={{color:"var(--ink-4)"}}>typical amounts</span>
             </div>
             {quickAdds.length > 0 ? (
               <div className="quick-grid">
@@ -7140,6 +7179,12 @@ function DietTab({ today, todayDiet, dietLogs, setDietLogs, phase, stats, target
             ) : (
               <div className="quick-empty">
                 Log a few meals below and anything you repeat shows up here as a one-tap button.
+              </div>
+            )}
+            {quickAdds.length > 0 && (
+              <div className="quick-hint">
+                Amounts are the middle of what you've logged before. Tap to add, then
+                tap the entry below to correct it — the numbers here follow along.
               </div>
             )}
             {yesterday && (
@@ -7353,15 +7398,13 @@ function DietTab({ today, todayDiet, dietLogs, setDietLogs, phase, stats, target
             })()}
             {(editDiet.extras||[]).map((ex,i) => (
               <div key={i} className="meal-row">
-                <div className="meal-row-l">
-                  <div className="meal-row-name">{ex.name||"Extra"}</div>
-                  <div className="meal-row-sub">{ex.kcal} kcal · {ex.prot}g protein</div>
-                </div>
-                <button className="meal-x" onClick={() => {
-                  const updated = (editDiet.extras||[]).filter((_,idx)=>idx!==i);
-                  const exK = updated.reduce((s,e)=>s+(e.kcal||0),0), exP = updated.reduce((s,e)=>s+(e.prot||0),0);
-                  setDietLogs(prev => ({ ...prev, [editDate]:{ ...prev[editDate]||{}, meals:dayMeals, extras:updated, kcal: mealKcal+exK, protein: mealProt+exP } }));
-                }}>×</button>
+                <button className="meal-row-l" onClick={() => setEditingExtra({
+                  idx: i, name: ex.name || "", kcal: String(ex.kcal ?? ""), prot: String(ex.prot ?? "") })}>
+                  <span className="meal-row-name">{ex.name||"Extra"} <em className="mr-edit">edit</em></span>
+                  <span className="meal-row-sub">{ex.kcal} kcal{ex.prot ? ` · ${ex.prot}g protein` : ""}</span>
+                </button>
+                <button className="meal-x" aria-label={`Remove ${ex.name||"entry"}`}
+                  onClick={() => writeExtras((editDiet.extras||[]).filter((_,idx)=>idx!==i))}>×</button>
               </div>
             ))}
             <div className="extras-form">
@@ -7392,6 +7435,51 @@ function DietTab({ today, todayDiet, dietLogs, setDietLogs, phase, stats, target
           <button className={`btn ${saved?"ghost":"accent"} huge`} onClick={saveDay}>
             {saved ? "Saved ✓" : (isToday ? "Save day" : `Save ${editDate}`)}
           </button>
+
+          {/* ── Edit a logged item ──
+              The chips add a median, which is right on average and wrong on any
+              given day. This is where "I actually ate something else" gets fixed
+              without retyping the whole entry. Corrections also feed back into
+              the medians, so the chips get more accurate the more they're used. */}
+          {editingExtra && (
+            <div className="modal-bg" onClick={() => setEditingExtra(null)}>
+              <div className="modal-sheet" onClick={e => e.stopPropagation()}>
+                <div className="modal-k">Edit entry</div>
+                <div className="extras-form" style={{marginTop:10}}>
+                  <div>
+                    <label>Name</label>
+                    <input value={editingExtra.name} type="text"
+                      onChange={e => setEditingExtra(p => ({...p, name: e.target.value}))}/>
+                  </div>
+                  <div>
+                    <label>Kcal</label>
+                    <input className="num" value={editingExtra.kcal} type="text" inputMode="decimal"
+                      onChange={e => setEditingExtra(p => ({...p, kcal: e.target.value}))}/>
+                  </div>
+                  <div>
+                    <label>Prot g</label>
+                    <input className="num" value={editingExtra.prot} type="text" inputMode="decimal"
+                      onChange={e => setEditingExtra(p => ({...p, prot: e.target.value}))}/>
+                  </div>
+                </div>
+                <div className="modal-actions">
+                  <button className="danger" onClick={() => {
+                    writeExtras((editDiet.extras||[]).filter((_,i) => i !== editingExtra.idx));
+                    setEditingExtra(null);
+                  }}>Delete</button>
+                  <button className="ok" onClick={() => {
+                    const k = num(editingExtra.kcal) || 0;
+                    if (!k) return;
+                    const updated = (editDiet.extras||[]).map((e,i) => i === editingExtra.idx
+                      ? { name: editingExtra.name.trim() || "Extra", kcal: k, prot: num(editingExtra.prot) || 0 }
+                      : e);
+                    writeExtras(updated);
+                    setEditingExtra(null);
+                  }}>Save</button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* 7-day grid */}
           <div className="card">
@@ -7930,7 +8018,7 @@ function StatsTab({ stats, setStats, phase, theme, setTheme }) {
             </button>
           ))}
         </div>
-        <div className="app-version">Gym Tracker · v8.8 — Restart</div>
+        <div className="app-version">Gym Tracker · v8.9 — Restart</div>
       </div>
 
       <PushToggle />

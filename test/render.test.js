@@ -115,8 +115,22 @@ console.log("\n── Diet tab: fast log, scale first ──");
   has("one-tap section exists", dietOut, "One tap");
   has("rough whole-day escape hatch exists", dietOut, "be bothered");
   has("rough buttons are labelled", dietOut, "normal");
+  has("chip numbers are explained", dietOut, "middle of what you");
   hasnt("meal library tab is gone", dietOut, ">Meals<");
   hasnt("no per-ingredient library UI", dietOut, "carbHeavy");
+}
+
+{
+  // The modal is state-gated, so drive it: render with an entry present and
+  // confirm the row exposes an edit affordance rather than only a delete.
+  const t = tg(stats, logs, "bulk");
+  const withEntry = { "2026-08-03": { kcal: 1200, protein: 60,
+    extras: [{ name: "Lunch", kcal: 1200, prot: 60 }], meals: [] } };
+  const out = renderToString(h(M.DietTab, { today:"2026-08-03", todayDiet: withEntry["2026-08-03"],
+    dietLogs: withEntry, setDietLogs: noop, phase:"bulk", stats, targets: t,
+    trend: M.bodyTrendAlarm(stats,"bulk",t), setTab: noop }));
+  has("a logged entry renders an edit affordance", out, "mr-edit");
+  has("and still offers delete", out, "Remove Lunch");
 }
 
 console.log("\n── Consistency card is legible ──");
