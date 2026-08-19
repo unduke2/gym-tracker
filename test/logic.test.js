@@ -204,6 +204,63 @@ console.log("\n── Body-trend alarm ──");
   check("one stat doesn't throw", ["none","measure"].includes(A.bodyTrendAlarm([A._data.phul_stats[0]], "bulk", t).level));
 }
 
+console.log("\n── Consistency weeks are stable over time ──");
+{
+  // The bug: buckets were "N days ago" measured from now, so with nothing logged
+  // the same sessions displayed as `· · · · 4 · · 1` one day and `· · · 3 1 · · 1`
+  // two days later. A session must belong to the calendar week it happened in,
+  // permanently. Freeze the clock to check.
+  const RealDate = Date;
+  const atTime = (iso, fn) => {
+    const fixed = new RealDate(iso + "T12:00:00").getTime();
+    class FakeDate extends RealDate {
+      constructor(...a) { super(...(a.length ? a : [fixed])); }
+      static now() { return fixed; }
+    }
+    global.Date = FakeDate;
+    try { return fn(); } finally { global.Date = RealDate; }
+  };
+  const at = (iso) => new RealDate(iso + "T18:00:00").getTime();
+  const logs = { a:{ts:at("2026-07-20")}, b:{ts:at("2026-07-21")},
+                 c:{ts:at("2026-07-24")}, d:{ts:at("2026-08-13")} };
+  // Map each week-start to its count, so results stay comparable even as the
+  // 8-week window slides forward.
+  const byWeek = (r) => Object.fromEntries(
+    r.weeks.filter(w => w.count > 0).map(w => [new RealDate(w.start).toISOString().slice(0,10), w.count]));
+
+  const days = ["2026-08-16","2026-08-17","2026-08-18","2026-08-19","2026-08-20","2026-08-26"];
+  const snaps = days.map(d => [d, atTime(d, () => A.consistency(logs))]);
+  for (const [d, r] of snaps) console.log(`   ${d}: ${JSON.stringify(byWeek(r))}  streak ${r.streak}`);
+  const ref = JSON.stringify(byWeek(snaps[0][1]));
+  check("session→week assignment never changes as days pass",
+    snaps.every(([, r]) => JSON.stringify(byWeek(r)) === ref),
+    snaps.map(([d, r]) => d + ":" + JSON.stringify(byWeek(r))).join(" "));
+  check("every session is counted exactly once",
+    snaps.every(([, r]) => r.weeks.reduce((n, w) => n + w.count, 0) === 4));
+
+  // Streak semantics
+  const wk = (iso, n=1) => { const o={}; for(let i=0;i<n;i++) o["k"+iso+i]={ts:at(iso)+i*3600e3}; return o; };
+  const threeStraight = { ...wk("2026-08-03"), ...wk("2026-08-10"), ...wk("2026-08-17") };
+  check("three consecutive calendar weeks = streak 3",
+    atTime("2026-08-19", () => A.consistency(threeStraight)).streak === 3,
+    String(atTime("2026-08-19", () => A.consistency(threeStraight)).streak));
+  // A Monday with nothing logged yet must not read as a broken streak.
+  const upToLastWeek = { ...wk("2026-08-03"), ...wk("2026-08-10") };
+  const mon = atTime("2026-08-17", () => A.consistency(upToLastWeek));
+  check("current week empty does NOT zero the streak", mon.streak === 2, String(mon.streak));
+  check("but it is flagged at risk", mon.atRisk === true);
+  check("training this week clears the at-risk flag",
+    atTime("2026-08-19", () => A.consistency({ ...upToLastWeek, ...wk("2026-08-17") })).atRisk === false);
+  // A genuinely skipped week breaks it.
+  const gapped = { ...wk("2026-08-03"), ...wk("2026-08-17") };
+  check("a fully skipped week breaks the streak",
+    atTime("2026-08-19", () => A.consistency(gapped)).streak === 1,
+    String(atTime("2026-08-19", () => A.consistency(gapped)).streak));
+  check("streakFrom marks where the live streak starts",
+    (() => { const r = atTime("2026-08-19", () => A.consistency(threeStraight));
+      return r.weeks.slice(r.streakFrom).every(w => w.count > 0); })());
+}
+
 console.log("\n── Hard mode gating ──");
 {
   const mk = w => { const l = {}; for (let i = 0; i < w; i++) l["k"+i] = { ts: Date.now() - (i*7+1)*DAY }; return l; };

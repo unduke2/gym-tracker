@@ -1806,16 +1806,10 @@ button { cursor: pointer; }
 
 /* ── Consistency card ──
    Replaces the old "N/4 sessions this week" quota readout. */
-.streak-row {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 4px 0 2px;
-}
-.streak-big { display: flex; flex-direction: column; line-height: 1; }
+.streak-big { display: flex; flex-direction: column; line-height: 1; padding: 2px 0 12px; }
 .streak-big .sb-n {
   font-family: var(--font-mono);
-  font-size: 30px;
+  font-size: 32px;
   font-weight: 800;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
@@ -1826,34 +1820,52 @@ button { cursor: pointer; }
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--ink-4);
-  margin-top: 5px;
+  margin-top: 7px;
 }
-.streak-weeks {
-  display: flex;
-  gap: 5px;
-  flex: 1;
-  align-items: center;
-  justify-content: flex-end;
-}
-.sw-dot {
-  width: 22px; height: 22px;
-  border-radius: 6px;
+
+/* One column per calendar week — a timeline, not eight anonymous squares. */
+.wk-row { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; }
+.wk { display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; }
+.wk .wk-n {
+  width: 100%;
+  padding: 7px 0;
+  border-radius: 7px;
   border: 1px solid var(--line-2);
-  background: var(--card-2, transparent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.sw-dot.on {
-  background: color-mix(in oklab, var(--ok) 22%, transparent);
-  border-color: color-mix(in oklab, var(--ok) 55%, transparent);
-}
-.sw-dot .sw-n {
+  background: transparent;
+  color: var(--ink-4);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.wk.on .wk-n {
+  border-color: color-mix(in oklab, var(--ok) 40%, var(--line-2));
+  color: color-mix(in oklab, var(--ok) 70%, var(--ink-3));
+}
+.wk.on.streak .wk-n {
+  background: color-mix(in oklab, var(--ok) 24%, transparent);
+  border-color: color-mix(in oklab, var(--ok) 60%, transparent);
   color: var(--ok);
 }
+.wk.now .wk-n { box-shadow: 0 0 0 1px var(--accent) inset; }
+.wk .wk-d {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.04em;
+  color: var(--ink-4);
+  white-space: nowrap;
+}
+.wk.now .wk-d { color: var(--accent); font-weight: 700; }
+.wk-legend {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  margin-top: 9px;
+}
+.streak-note.risk { color: var(--accent-hold); }
 .streak-note {
   font-size: 12px;
   color: var(--ink-3);
@@ -4218,27 +4230,54 @@ function computeTargets(stats, workoutLogs, phase) {
 }
 
 // ─── CONSISTENCY ──────────────────────────────────────────────────────────────
-// Sessions per rolling week, oldest → newest. A "week" is a 7-day bucket counting
-// back from now, not a calendar week — a Sunday session and the following
-// Saturday one shouldn't land in different buckets because a calendar boundary
-// happened to fall between them. `streak` counts consecutive buckets containing
-// at least one session, which is the only training metric here that has ever
-// predicted anything for this user.
-function consistency(workoutLogs) {
-  const dots = new Array(8).fill(0);
+// Real Monday-anchored calendar weeks. A session lands in the week it happened
+// in and stays there forever.
+//
+// This previously used rolling "N days ago" buckets (Math.floor(age / 7d)),
+// which re-sorted itself every single day: with nothing logged, the same four
+// July sessions displayed as `· · · · 4 · · 1` on one day and `· · · 3 1 · · 1`
+// two days later, because they aged across a bucket boundary. Numbers moving
+// while the user does nothing destroys any trust in the display. The old
+// justification — that a Sunday and the following Saturday shouldn't land in
+// different buckets — optimised a rare edge case at the cost of the common one.
+function startOfWeek(d) {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); // Mon = 0 … Sun = 6
+  return x;
+}
+function consistency(workoutLogs, weeksBack = 8) {
+  const current = startOfWeek(new Date());
+  const weeks = [];
+  for (let i = weeksBack - 1; i >= 0; i--) {
+    const start = new Date(current); start.setDate(start.getDate() - i * 7);
+    const end = new Date(start);     end.setDate(end.getDate() + 7);
+    weeks.push({ start: start.getTime(), end: end.getTime(), count: 0, isCurrent: i === 0 });
+  }
   let last30 = 0;
   for (const s of Object.values(workoutLogs || {})) {
-    const age = Date.now() - s.ts;
-    const wk = Math.floor(age / (7 * 86400000));
-    if (wk >= 0 && wk < 8) dots[wk]++;
-    if (age < 30 * 86400000) last30++;
+    if (!s?.ts) continue;
+    if (Date.now() - s.ts < 30 * 86400000) last30++;
+    const w = weeks.find(w => s.ts >= w.start && s.ts < w.end);
+    if (w) w.count++;
   }
-  dots.reverse();
+
+  // Consecutive weeks containing at least one session, counting back from now.
+  // The CURRENT week never breaks the streak while it's still running — opening
+  // the app on a Monday morning shouldn't report that you've lost everything.
+  const currentCount = weeks[weeks.length - 1].count;
   let streak = 0;
-  for (let i = dots.length - 1; i >= 0; i--) {
-    if (dots[i] > 0) streak++; else break;
+  for (let i = weeks.length - (currentCount > 0 ? 1 : 2); i >= 0; i--) {
+    if (weeks[i].count > 0) streak++; else break;
   }
-  return { dots, streak, last30 };
+  // Index of the oldest week that is part of the live streak, for highlighting.
+  const streakFrom = weeks.length - (currentCount > 0 ? streak : streak + 1);
+  return {
+    weeks, streak, last30, currentCount,
+    atRisk: currentCount === 0 && streak > 0,
+    streakFrom,
+    dots: weeks.map(w => w.count), // legacy shape
+  };
 }
 
 // ─── INTENSITY PHASING ────────────────────────────────────────────────────────
@@ -4747,12 +4786,19 @@ function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, 
   // counting back from now, not a calendar week — a Sunday session and the
   // following Saturday one shouldn't land in different buckets just because a
   // calendar boundary fell between them.
-  const { dots: weekDots, streak: weekStreak, last30 } = consistency(workoutLogs);
+  const con = consistency(workoutLogs);
+  const { weeks: weekList, streak: weekStreak, last30, currentCount, atRisk, streakFrom } = con;
   const streakNote =
-    weekStreak === 0 ? "Nothing logged in the last week. One session puts you back on the board."
+    atRisk            ? `Nothing logged this week yet. One session keeps the ${weekStreak}-week streak alive.`
+    : weekStreak === 0 ? "No streak yet. One session this week starts it."
     : weekStreak === 1 ? "One week in. The second one is the one that counts."
     : weekStreak >= 6  ? `${weekStreak} straight weeks. This is just what you do now.`
     : `${weekStreak} weeks without missing one. Keep it boring.`;
+  // "Mon 11" style label for a week's start — makes the row a real timeline
+  // instead of eight anonymous squares.
+  // Numeric day/month — eight columns have to fit on a phone, and "13/7"
+  // aligns in a mono font where "13 Jul" wraps.
+  const weekLabel = (ts) => { const d = new Date(ts); return `${d.getDate()}/${d.getMonth()+1}`; };
 
   // Recent PRs — derived from workoutLogs: highest weight per exercise with reps >= minR
   const prLifts = (() => {
@@ -4992,24 +5038,28 @@ function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, 
       <div className="card">
         <div className="section-head">
           <span className="eyebrow">Consistency</span>
-          <span className="eyebrow" style={{color: weekStreak>0?"var(--ok)":"var(--ink-4)"}}>
-            {last30} session{last30===1?"":"s"} · 30d
-          </span>
+          <span className="eyebrow" style={{color:"var(--ink-4)"}}>last 8 weeks</span>
         </div>
-        <div className="streak-row">
-          <div className="streak-big">
-            <span className="sb-n tnum">{weekStreak}</span>
-            <span className="sb-l">week{weekStreak===1?"":"s"} running</span>
-          </div>
-          <div className="streak-weeks">
-            {weekDots.map((n, i) => (
-              <div key={i} className={`sw-dot ${n>0?"on":""}`} title={`${n} session${n===1?"":"s"}`}>
-                {n > 1 && <span className="sw-n">{n}</span>}
-              </div>
-            ))}
-          </div>
+        <div className="streak-big">
+          <span className="sb-n tnum">{weekStreak}</span>
+          <span className="sb-l">week{weekStreak===1?"":"s"} running</span>
         </div>
-        <div className="streak-note">{streakNote}</div>
+        {/* One column per calendar week, oldest → newest. Each column shows how
+            many sessions that week contained; weeks inside the live streak are
+            filled, earlier ones are outlined so the headline number and the row
+            visibly agree. */}
+        <div className="wk-row">
+          {weekList.map((w, i) => (
+            <div key={i} className={`wk ${w.count>0 ? (i>=streakFrom ? "on streak" : "on") : ""} ${w.isCurrent?"now":""}`}>
+              <span className="wk-n">{w.count || "–"}</span>
+              <span className="wk-d">{w.isCurrent ? "now" : weekLabel(w.start)}</span>
+            </div>
+          ))}
+        </div>
+        <div className="wk-legend">
+          <span>sessions per week · {last30} in the last 30 days</span>
+        </div>
+        <div className={`streak-note ${atRisk?"risk":""}`}>{streakNote}</div>
 
         {/* Intensity phase — the streak above is literally the unlock condition,
             so it lives in the same card rather than floating separately. */}
@@ -7821,7 +7871,7 @@ function StatsTab({ stats, setStats, phase, theme, setTheme }) {
             </button>
           ))}
         </div>
-        <div className="app-version">Gym Tracker · v8.6 — Restart</div>
+        <div className="app-version">Gym Tracker · v8.7 — Restart</div>
       </div>
 
       <DataBackup />

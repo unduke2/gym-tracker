@@ -143,7 +143,9 @@ This is **displayed in the session**, not left to memory. The app previously sho
 
 ### Adherence-first UI rules
 These are deliberate product decisions, not styling accidents — don't "fix" them back:
-- The Dashboard shows a **consistency streak** (consecutive 7-day windows containing ≥1 session), not a weekly quota. A quota you rarely hit renders a failure notice on every app open.
+- The Dashboard shows a **consistency streak**, not a weekly quota. A quota you rarely hit renders a failure notice on every app open.
+- `consistency()` buckets by **Monday-anchored calendar weeks**, never by "N days ago". It originally used rolling `Math.floor(age / 7d)` buckets, which re-sorted themselves daily: with nothing logged, the same four sessions rendered as `· · · · 4 · · 1` one day and `· · · 3 1 · · 1` two days later. Numbers moving while the user does nothing destroys trust in the whole card. A session belongs to the week it happened in, permanently — guarded by a clock-mocking test.
+- The current week **never breaks the streak while it's still running** (`atRisk` flags it instead). Opening the app on a Monday morning must not report that the streak is gone.
 - `SessionLogger` offers a **minimum session** ("End session early") once `MIN_SESSION` (3) core lifts are done. A short session is a real outcome, not a quit. **It requires a two-tap confirm and is deliberately not styled green.** The first version was green, sat under the set-logging controls, said "Good enough — log it ✓" and fired on one tap — it read as "log this exercise" and silently ended a real workout mid-session. Destructive actions never get the affirmative colour, an ambiguous verb, or a one-tap path. Guarded by a regression test in `test/render.test.js`.
 - `tools/merge-sessions.mjs` repairs a workout that got split across two logs (dry-run by default; `--apply` writes `*.merged.json` to import). It concatenates completed sets per exercise rather than picking one log, because a split can cut an exercise in half.
 - Hard mode is gated behind a 3-week streak rather than offered as a toggle. The gate is the intervention, not a limitation.

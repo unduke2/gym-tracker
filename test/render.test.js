@@ -108,6 +108,14 @@ has("warm-up ramp starts from an empty bar", normal["Full Body A"], "bar only");
 has("diet shows the 7-day average", dietOut, "7-day average");
 has("diet quick-add is mined from logged meals", dietOut, "Dinner");
 
+console.log("\n── Consistency card is legible ──");
+{
+  has("week columns are labelled with dates", app, 'class="wk-d"');
+  has("the current week is marked 'now'", app, ">now<");
+  has("row is explained rather than eight bare squares", app, "sessions per week");
+  hasnt("no bare 30-day count masquerading as a headline", app, "· 30d");
+}
+
 console.log("\n── Effort target is visible on every exercise ──");
 {
   const plan = M.FULLBODY["Full Body A"];
