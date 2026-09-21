@@ -82,7 +82,7 @@ console.log("\n── Restart seeding ──");
   for (const day of A.PROGRAMS.fullbody.order)
     for (const e of A.PROGRAMS.fullbody.days[day].exercises)
       rows.push([e.name, A.calcNextWeight(e, A._data.phul_logs)]);
-  check("no suggestion is zero, negative or NaN", rows.every(([, r]) => r.weight > 0),
+  check("no suggestion is zero, negative or NaN", rows.every(([n, r]) => A.getEquipmentType(n) === "bodyweight" ? r.hold > 0 : r.weight > 0),
     JSON.stringify(rows.filter(([, r]) => !(r.weight > 0)).map(([n]) => n)));
   check("lifts with prior history seed from it rather than startWeight",
     rows.filter(([, r]) => r.status === "restart").length >= 4,
@@ -310,19 +310,69 @@ console.log("\n── applyIntensity ──");
   check("T3 gains myo-reps", g("EZ Bar Curl").finish === "myo" && g("DB Lateral Raise").finish === "myo");
   check("optional finishers are untouched", !g("Calf Raise").finish);
   check("every finish key resolves in FINISHERS", on.exercises.every(e => !e.finish || A.FINISHERS[e.finish]));
-  const M = { Squat:"quads","Leg Press":"quads","Bench Press":"chest","Incline Barbell Press":"chest",
-    "Lat Pulldown":"back","Seated Cable Row":"back","Romanian Deadlift":"hams",Deadlift:"hams",
-    "DB Lateral Raise":"delts","EZ Bar Curl":"biceps","Incline DB Curl":"biceps",
-    "Skull Crushers":"triceps","Overhead DB Extension":"triceps" };
+  // v9.0: two movements per big muscle. Direct weekly sets at 2x/week — the
+  // dose-response data (Pelland 2025) keeps climbing to ~11/muscle/session and
+  // 20+/week, and the v8 plan sat at 6. Every muscle below must be trained in
+  // BOTH sessions (full-body means every visit trains everything).
+  const M = { Squat:"quads","Leg Press":"quads","Leg Extension":"quads","Bulgarian Split Squat":"quads",
+    "Bench Press":"chest","Incline Barbell Press":"chest","Cable Fly":"chest",
+    "Lat Pulldown":"back","Seated Cable Row":"back","One Arm DB Row":"back",
+    "Romanian Deadlift":"hams",Deadlift:"hams","Seated Leg Curl":"hams",
+    "DB Lateral Raise":"delts",OHP:"delts","EZ Bar Curl":"biceps","Incline DB Curl":"biceps",
+    "Skull Crushers":"triceps","Overhead DB Extension":"triceps","Side Plank":"trunk","Suitcase Carry":"trunk" };
   const vol = hard => { const v = {}; for (const d of A.PROGRAMS.fullbody.order)
     for (const e of A.applyIntensity(A.PROGRAMS.fullbody.days[d], hard).exercises)
       if (!e.optional && M[e.name]) v[M[e.name]] = (v[M[e.name]] || 0) + e.sets; return v; };
   const nv = vol(false), hv = vol(true);
   console.log("   normal:", JSON.stringify(nv), "\n   hard:  ", JSON.stringify(hv));
-  check("normal mode is 6 sets/muscle/week everywhere", Object.values(nv).every(n => n === 6), JSON.stringify(nv));
-  check("hard mode raises chest and back to 8", hv.chest === 8 && hv.back === 8);
+  check("chest, back and quads get ≥ 9 direct sets/week at 2x", nv.chest >= 9 && nv.back >= 9 && nv.quads >= 9, JSON.stringify(nv));
+  check("no trained muscle is below 6 sets/week", Object.entries(nv).every(([k, n]) => k === "trunk" || n >= 6), JSON.stringify(nv));
   check("hard mode never lowers any muscle", Object.keys(nv).every(k => hv[k] >= nv[k]));
-  check("every muscle is trained twice a week", Object.keys(M).length >= 13);
+  for (const d of A.PROGRAMS.fullbody.order) {
+    const names = new Set(A.PROGRAMS.fullbody.days[d].exercises.filter(e => !e.optional).map(e => M[e.name]));
+    check(`${d} trains every muscle group`, ["quads","chest","back","hams","delts","biceps","triceps","trunk"].every(m => names.has(m)),
+      [...names].join(","));
+  }
+  check("every core exercise is in the volume map",
+    A.PROGRAMS.fullbody.order.every(d => A.PROGRAMS.fullbody.days[d].exercises.every(e => e.optional || M[e.name])));
+}
+
+console.log("\n── Stall counter: double progression is not a stall ──");
+{
+  // Observed 2026-09: squat 6,6,7 → 7,7,7 at the same weight fired a 7% reset
+  // because the counter only asked "did you hit the top?". Reps climbing IS
+  // the protocol working. And a round logged at RPE 8 with nothing failed is
+  // the leave-2-reps rule being followed, not a lift being stuck.
+  const sq = ex("FULLBODY", "Full Body A", "Squat");  // 3 x 5-8
+  const two = (a, b) => ({ ...sess("Full Body A", "Squat", a, 2), ...sess("Full Body A", "Squat", b, 7) });
+  const climbing = A.calcNextWeight(sq, two([S(47.5,7,8),S(47.5,7,8),S(47.5,7,9)], [S(47.5,6,8),S(47.5,6,8),S(47.5,7,8)]));
+  console.log(`   6,6,7 → 7,7,7 @ ~8.3  ⇒  ${climbing.weight}kg (${climbing.status})`);
+  check("reps climbing at the same weight is not a stall-reset", climbing.status !== "stall-reset", climbing.status);
+  check("…and at RPE ~8.3 with nothing failed it progresses", climbing.status === "increase" && climbing.weight === 50, `${climbing.weight} ${climbing.status}`);
+  const rdl = ex("FULLBODY", "Full Body A", "Romanian Deadlift"); // 3 x 8-12, tier 2
+  const held = A.calcNextWeight(rdl, { ...sess("Full Body A","Romanian Deadlift",[S(20,10,8),S(20,9,8),S(20,9,8)],2),
+                                        ...sess("Full Body A","Romanian Deadlift",[S(20,10,8),S(20,10,8),S(20,9,8)],7) });
+  check("two flat rounds at RPE 8 hold rather than reset", held.status !== "stall-reset" && held.weight === 20, `${held.weight} ${held.status}`);
+  const regressed = A.calcNextWeight(sq, two([S(32.5,5,8),S(32.5,5,8),S(32.5,5,9)], [S(32.5,8,8),S(32.5,7,8),S(32.5,7,9)]));
+  check("a genuine regression (22 → 15 reps, pushed) still resets", regressed.status === "stall-reset", regressed.status);
+  check("the note counts the sessions honestly", /2 sessions/.test(regressed.note), regressed.note);
+  const ext = ex("FULLBODY", "Full Body B", "Overhead DB Extension"); // tier 3
+  const iso2 = A.calcNextWeight(ext, { ...sess("Full Body B","Overhead DB Extension",[S(12.5,13,8),S(12.5,12,8),S(12.5,10,10)],2),
+                                        ...sess("Full Body B","Overhead DB Extension",[S(12.5,15,8),S(12.5,12,8),S(12.5,10,10)],7) });
+  check("an isolation needs three stuck rounds, not two", iso2.status !== "stall-reset", iso2.status);
+}
+
+console.log("\n── Timed bodyweight holds ──");
+{
+  const plank = ex("FULLBODY", "Full Body A", "Side Plank"); // 2 x 30-45s
+  const fresh = A.calcNextWeight(plank, {});
+  check("no history → hold the bottom of the range", fresh.hold === 30 && fresh.weight === 0 && fresh.status === "start", JSON.stringify(fresh));
+  const held = A.calcNextWeight(plank, sess("Full Body A","Side Plank",[{weight:"",reps:"40",done:true},{weight:"",reps:"32",done:true}]));
+  check("target is shortest set + 5s, capped at the top", held.hold === 37, JSON.stringify(held));
+  const maxed = A.calcNextWeight(plank, sess("Full Body A","Side Plank",[{weight:"",reps:"45",done:true},{weight:"",reps:"50",done:true}]));
+  check("every set at the top → +5s", maxed.hold === 50 && maxed.status === "increase", JSON.stringify(maxed));
+  check("a timed set with no weight is never scorable for the weight tree", !A.isScorable({ weight:"", reps:"40", done:true }));
+  check("bodyweight equipment snaps to itself", A.snap(0, "bodyweight") === 0 && A.getEquipmentType("Side Plank") === "bodyweight");
 }
 
 console.log("\n── Progression notes don't repeat the weight ──");
@@ -340,7 +390,7 @@ console.log("\n── Progression notes don't repeat the weight ──");
     cases.every(r => !/^→\s*[\d.]+\s*kg/.test(r.note)),
     cases.filter(r => /^→\s*[\d.]+\s*kg/.test(r.note)).map(r => r.note).join(" | "));
   check("increase/decrease notes still show the delta",
-    cases.filter(r => r.status === "increase" || r.status === "crush").every(r => /[↑↓]\s*\+?[\d.]+kg/.test(r.note)),
+    cases.filter(r => r.status === "increase" || r.status === "crush").every(r => /[↑↓]\s*\+?[\d.]+(kg|s)/.test(r.note)),
     cases.filter(r => r.status === "increase").map(r => r.note).join(" | "));
   check("every note is short enough for a phone card",
     cases.every(r => r.note.length <= 110),
@@ -369,7 +419,7 @@ console.log("\n── Program integrity ──");
     for (const e of prog.days[day].exercises) known.add(e.name);
   const unclassified = [...known].filter(n => A.getEquipmentType(n) === "dumbbell_heavy");
   check("no exercise falls through equipment classification unintentionally",
-    unclassified.every(n => /DB |Dumbbell|Overhead DB/.test(n)), unclassified.join(", "));
+    unclassified.every(n => /DB |Dumbbell|Overhead DB|Bulgarian Split Squat|Suitcase Carry/.test(n)), unclassified.join(", "));
 }
 
 console.log(`\n${"─".repeat(52)}\n  ${pass} passed, ${fail} failed\n`);

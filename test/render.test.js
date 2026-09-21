@@ -228,5 +228,35 @@ console.log("\n── Ending a session early requires confirmation ──");
   hasnt("no one-tap End button in the unarmed state", out, ">End session<");
 }
 
+console.log("\n── v9.0: supersets and timed holds render ──");
+{
+  const plan = M.FULLBODY["Full Body A"];
+  const at = (exName, extra = {}) => {
+    const data = {};
+    for (const e of plan.exercises) data[e.name] = Array.from({length:e.sets}, () => ({weight:"",reps:"",rpe:null,done:false}));
+    Object.assign(data, extra);
+    return renderToString(h(M.SessionLogger, { dayName:"Full Body A", plan, workoutLogs: logs,
+      onFinish:noop, onCancel:noop, onDiscard:noop, onSaveSession:noop,
+      savedSession:{ data, activeEx:exName, activeIdx:0, exerciseHolds:{}, warmedUp:[exName], sessionStartedAt:Date.now() } }));
+  };
+  const curl = at("EZ Bar Curl");
+  has("superset leader announces its partner", curl, "superset · then <strong>Skull Crushers");
+  has("paired rows are marked in the list", curl, ">⇄<");
+  const skullsDone = at("EZ Bar Curl", { "Skull Crushers": [1,2,3].map(() => ({weight:"15",reps:"10",rpe:9,done:true})) });
+  hasnt("no partner tag once the partner is finished", skullsDone, "superset · then");
+  const plank = at("Side Plank");
+  has("timed hold shows a target in seconds", plank, "s / side");
+  has("timed hold shows the seconds range", plank, "30-45 sec");
+  hasnt("no plate/kg suggestion on a bodyweight hold", plank, "kg plates");
+  const logged = at("Side Plank", { "Side Plank": [{weight:"",reps:"40",rpe:null,done:true},{weight:"",reps:"",rpe:null,done:false}] });
+  has("a logged hold reads as seconds, not '×40'", logged, ">40s<");
+  const carry = renderToString(h(M.SessionLogger, { dayName:"Full Body B", plan: M.FULLBODY["Full Body B"], workoutLogs: logs,
+    onFinish:noop, onCancel:noop, onDiscard:noop, onSaveSession:noop,
+    savedSession:{ data: Object.fromEntries(M.FULLBODY["Full Body B"].exercises.map(e => [e.name, Array.from({length:e.sets}, () => ({weight:"",reps:"",rpe:null,done:false}))])),
+      activeEx:"Suitcase Carry", activeIdx:0, exerciseHolds:{}, warmedUp:[], sessionStartedAt:Date.now() } }));
+  has("a loaded carry still takes a weight", carry, "Suggested");
+  has("…in seconds", carry, "30-45 sec");
+}
+
 console.log(`\n${"─".repeat(52)}\n  ${fails ? fails + " FAILED" : "all render checks passed"}\n`);
 process.exit(fails ? 1 : 0);
