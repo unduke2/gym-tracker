@@ -289,12 +289,25 @@ console.log("\n── Consistency weeks are stable over time ──");
 
 console.log("\n── Hard mode gating ──");
 {
-  const mk = w => { const l = {}; for (let i = 0; i < w; i++) l["k"+i] = { ts: Date.now() - (i*7+1)*DAY }; return l; };
+  // Weeks are built Monday-anchored: `per` sessions in each of the last `w`
+  // calendar weeks, all placed on the Monday (+1 day per session) so they can
+  // never straddle a week boundary regardless of what day the test runs.
+  const monday = (weeksAgo) => { const d = new Date(); d.setHours(12,0,0,0);
+    d.setDate(d.getDate() - ((d.getDay() + 6) % 7) - weeksAgo * 7); return d.getTime(); };
+  const mk = (perWeek) => { const l = {}; perWeek.forEach((n, wk) => {
+    for (let i = 0; i < n; i++) l[`w${wk}s${i}`] = { ts: monday(wk) + i * DAY }; }); return l; };
+  // perWeek[0] is the current week.
   for (const [w, want] of [[0,false],[1,false],[2,false],[3,true],[5,true]])
-    check(`${w}-week streak → hard mode ${want ? "ON" : "off"}`, A.hardModeState(mk(w)).on === want);
+    check(`${w} weeks at 2/week → hard mode ${want ? "ON" : "off"}`, A.hardModeState(mk(Array(w).fill(2))).on === want);
   check("empty log is not hard mode", A.hardModeState({}).on === false);
-  check("a missed week resets the streak",
-    A.hardModeState({ a:{ts:Date.now()-DAY}, b:{ts:Date.now()-22*DAY} }).streak === 1);
+  check("1 session a week for 3 weeks does NOT unlock", A.hardModeState(mk([1,1,1])).on === false);
+  check("a 1-session week breaks the run", A.hardModeState(mk([2,2,1,2,2])).streak === 2);
+  check("a missed week resets it", A.hardModeState(mk([2,2,0,2,2])).streak === 2);
+  check("the current week can't break it while it's still running",
+    A.hardModeState(mk([0,2,2,2])).on === true && A.hardModeState(mk([0,2,2,2])).atRisk === true);
+  check("one session so far this week is 'at risk', not broken",
+    A.hardModeState(mk([1,2,2,2])).on === true && A.hardModeState(mk([1,2,2,2])).thisWeek === 1);
+  check("4/week is not required", A.hardModeState(mk([2,2,2])).on === true);
 }
 
 console.log("\n── applyIntensity ──");

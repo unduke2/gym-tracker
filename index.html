@@ -4561,9 +4561,25 @@ const FINISHERS = {
     cue: "Take it to RPE 9. Then rest 15s → 3–5 reps, ×3 rounds. Log the total reps. Run this one on its own, not in the superset.",
   },
 };
+// A week only counts toward the gate at HARD_MODE_MIN_SESSIONS or more. One
+// session a week for three weeks proved nothing — on a 2-day rotation it means
+// each session ran once a fortnight. Two means A and B both happened, i.e.
+// every muscle got its two exposures; that's the floor the program is built
+// on. The user asked for 4: his logs show exactly one 4-session week in 2026
+// (20 Jul), followed by a three-week absence — a bar he has never met is a
+// lock, not a gate. A week under the minimum breaks the run; the current week
+// can't break it while it's still running (same rule as the visible streak).
+const HARD_MODE_MIN_SESSIONS = 2;
 function hardModeState(workoutLogs) {
-  const streak = consistency(workoutLogs).streak;
-  return { on: streak >= HARD_MODE_WEEKS, streak, need: HARD_MODE_WEEKS };
+  const { weeks } = consistency(workoutLogs);
+  const cur = weeks[weeks.length - 1];
+  const currentQualifies = cur.count >= HARD_MODE_MIN_SESSIONS;
+  let streak = 0;
+  for (let i = weeks.length - (currentQualifies ? 1 : 2); i >= 0; i--) {
+    if (weeks[i].count >= HARD_MODE_MIN_SESSIONS) streak++; else break;
+  }
+  return { on: streak >= HARD_MODE_WEEKS, streak, need: HARD_MODE_WEEKS, min: HARD_MODE_MIN_SESSIONS,
+           thisWeek: cur.count, atRisk: !currentQualifies && streak > 0 };
 }
 // Applies the per-exercise `hardMode` overrides. Returns the plan untouched when
 // hard mode is off, so the normal path is completely unaffected.
@@ -5372,17 +5388,17 @@ function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, 
             <>
               <div className="pg-head">
                 <span className="pg-tag">HARD MODE</span>
-                <span className="pg-sub">unlocked · week {hardMode.streak}</span>
+                <span className="pg-sub">unlocked · week {hardMode.streak}{hardMode.atRisk ? ` · ${hardMode.min - hardMode.thisWeek} more this week to keep it` : ""}</span>
               </div>
               <div className="pg-body">
-                4 sets on the main lifts, AMRAP finish, myo-reps on isolations, 60s rest.
+                4 sets on the main lifts, AMRAP finish, myo-reps on isolations, 60s rest. Stays on while you keep {hardMode.min}+ sessions a week.
               </div>
             </>
           ) : (
             <>
               <div className="pg-head">
                 <span className="pg-tag locked">HARD MODE</span>
-                <span className="pg-sub">{hardMode.need - hardMode.streak} more week{hardMode.need-hardMode.streak===1?"":"s"}</span>
+                <span className="pg-sub">{hardMode.need - hardMode.streak} more week{hardMode.need-hardMode.streak===1?"":"s"} at {hardMode.min}+</span>
               </div>
               <div className="pg-track">
                 {Array.from({length: hardMode.need}, (_, i) => (
@@ -5391,7 +5407,9 @@ function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, 
               </div>
               <div className="pg-body">
                 Build the habit first. Effort was never your problem — turning up on a
-                boring Tuesday is. Three straight weeks and the intensity work switches on.
+                boring Tuesday is. Three straight weeks of {hardMode.min}+ sessions (A and B both done)
+                and the intensity work switches on. A week under {hardMode.min} starts the count over.
+                {hardMode.thisWeek > 0 && hardMode.thisWeek < hardMode.min ? ` This week: ${hardMode.thisWeek} of ${hardMode.min}.` : ""}
               </div>
             </>
           )}
@@ -8254,7 +8272,7 @@ function StatsTab({ stats, setStats, phase, theme, setTheme }) {
             </button>
           ))}
         </div>
-        <div className="app-version">Gym Tracker · v9.0 — Volume</div>
+        <div className="app-version">Gym Tracker · v9.1 — Volume</div>
       </div>
 
       <PushToggle />
