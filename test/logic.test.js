@@ -312,7 +312,7 @@ console.log("\n── Hard mode gating ──");
 
 console.log("\n── Gym days, not logs ──");
 {
-  // 2026-09-28: Full Body A then B back to back, one evening. That's one visit.
+  // A then B back to back in one evening is one visit, not two.
   const now = new Date(); now.setHours(12,0,0,0);
   const monday = new Date(now); monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
   const at = (dayOffset, h) => { const d = new Date(monday); d.setDate(d.getDate() + dayOffset); d.setHours(h); return d.getTime(); };
@@ -327,7 +327,7 @@ console.log("\n── Gym days, not logs ──");
 console.log("\n── Session duration ──");
 {
   const H = 3600000, M = 60000;
-  check("wall clock reset to ~0 falls back to the set span (Full Body A, 2026-09-28)",
+  check("wall clock reset to ~0 falls back to the set span",
     A.sessionDurationMins(30 * 1000, 1000, 1000 + 75 * M) === 75);
   check("honest wall clock wins when it's larger (warm-up before set 1)",
     A.sessionDurationMins(90 * M, 1000, 1000 + 80 * M) === 90);
@@ -388,6 +388,44 @@ console.log("\n── Catch up all: one session, one log per day ──");
   const merged = Object.fromEntries(logs.map(l => [l.key, l.log]));
   const le = A.calcNextWeight(A.FULLBODY["Full Body A"].exercises.find(e => e.name === "Leg Extension"), merged);
   check("progression picks the catch-up up under its own day", le.status !== "restart" && le.status !== "start", le.status);
+}
+
+console.log("\n── Finishing: dated from the last set ──");
+{
+  const H = 3600000, M = 60000;
+  const plan = A.FULLBODY["Full Body A"];
+  const done = { weight:"40", reps:"8", rpe:8, done:true }, open = { weight:"", reps:"", rpe:null, done:false };
+  const data = {}; for (const e of plan.exercises) data[e.name] = Array.from({length:e.sets}, () => open);
+  data["Squat"] = [done, done, done]; data["Bench Press"] = [done, done, done];
+  // Regression: v9.0–9.2 passed { first, last } and read lastSetAt → always
+  // undefined → every log dated by the Finish tap.
+  const lastSetAt = new Date(2026, 8, 24, 19, 30).getTime();
+  const firstSetAt = lastSetAt - 70 * M;
+  const finishAt = new Date(2026, 8, 28, 19, 59).getTime();   // closed four days later
+  const { logs } = A.buildSessionLogs({ dayName:"Full Body A", plan, filter:null, data, abandoned:[],
+    times:{ firstSetAt, lastSetAt }, sessionStartedAt: finishAt - 30 * 1000, endAt: finishAt, now: finishAt });
+  check("a session closed days later is dated by its last set", logs[0].log.date === "2026-09-24", logs[0].log.date);
+  check("…and its ts is the last set", logs[0].log.ts === lastSetAt);
+  check("…and its duration is the set span, not 0", logs[0].log.durationMins === 70, logs[0].log.durationMins);
+  check("the key carries the real date", logs[0].key.startsWith("2026-09-24_Full_Body_A_"));
+
+  // Stale-draft sweep.
+  const draft = { dayName:"Full Body A", data, exerciseHolds:{}, sessionStartedAt: firstSetAt - 5 * M, firstSetAt, lastSetAt };
+  check("a draft idle under 3h is left alone (you might be mid-rest)", A.closeStaleDraft(draft, A.lookupDay, lastSetAt + 2 * H) === null);
+  const c = A.closeStaleDraft(draft, A.lookupDay, lastSetAt + 20 * H);
+  check("a draft idle 3h+ is closed", !!c && c.logs.length === 1);
+  check("…timed from its last set", c.logs[0].log.ts === lastSetAt && c.logs[0].log.date === "2026-09-24");
+  check("…with a real duration", c.logs[0].log.durationMins === 75, c.logs[0].log.durationMins);
+  check("…unfinished core exercises go to catch-up", c.missed.includes("Lat Pulldown") && !c.missed.includes("Squat"));
+  check("…optional finishers don't", !c.missed.includes("Calf Raise") && !c.missed.includes("Face Pull"));
+  check("a draft with nothing logged isn't turned into a session",
+    A.closeStaleDraft({ ...draft, data: Object.fromEntries(Object.keys(data).map(k => [k, [open]])) }, A.lookupDay, lastSetAt + 20 * H) === null);
+  check("a draft with no set times (pre-v9.0) is left alone", A.closeStaleDraft({ ...draft, lastSetAt: null }, A.lookupDay, lastSetAt + 20 * H) === null);
+  // A merged catch-up draft closes into per-day logs.
+  const tokens = ["Full Body A::Leg Extension", "Full Body B::Bulgarian Split Squat"];
+  const cu = A.closeStaleDraft({ dayName: A.CATCHUP_ALL, filter: tokens, sessionStartedAt: firstSetAt, firstSetAt, lastSetAt,
+    data: { "Leg Extension": [done, done, done], "Bulgarian Split Squat": [done, open, open] } }, A.lookupDay, lastSetAt + 5 * H);
+  check("a stale merged catch-up closes into one log per day", !!cu && cu.logs.map(l => l.log.day).sort().join() === "Full Body A,Full Body B");
 }
 
 console.log("\n── Catch-up window ──");

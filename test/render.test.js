@@ -275,6 +275,12 @@ console.log("\n── v9.2: catch up all ──");
   has("offers to merge them", two, "Catch up all in one session");
   const one = T("Dashboard [one catch-up group]", h(M.Dashboard, { ...props, pendingMakeups: groups.slice(0, 1) }));
   hasnt("no merge button for a single group", one, "Catch up all in one session");
+  const closed = T("Dashboard [a session was auto-closed]", h(M.Dashboard, { ...props, pendingMakeups: [],
+    autoClosed: [{ dayName: "Full Body A", lastSetAt: new Date(2026, 8, 24, 19, 30).getTime(), missed: ["Leg Extension", "Side Plank"] }],
+    clearAutoClosed: noop }));
+  has("says the session was left open and saved", closed, "Session left open");
+  has("names the session", closed, "Full Body A");
+  has("says where the unfinished work went", closed, "2 unfinished exercises are in Catch up");
   const plan = M.buildCatchupPlan(M.catchupTokens(groups), M.lookupDay);
   const sess = T("SessionLogger [merged catch-up]", h(M.SessionLogger, { dayName: M.CATCHUP_ALL, plan, workoutLogs: logs,
     onFinish:noop, onCancel:noop, onDiscard:noop, savedSession:null, onSaveSession:noop }));
