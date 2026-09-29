@@ -567,6 +567,20 @@ button { cursor: pointer; }
   gap: 10px;
 }
 .catchup-card .section-head { margin-bottom: 4px; }
+.catchup-all {
+  width: 100%;
+  padding: 11px 14px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in oklab, var(--accent-hold) 45%, var(--line));
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+.catchup-all .ca-sub { display: block; font-weight: 500; font-size: 11px; color: var(--ink-3); margin-top: 3px; }
 .catchup-group {
   display: flex;
   flex-direction: column;
@@ -4341,7 +4355,7 @@ const DAYS = ["Upper Power","Lower Power","Upper Hypertrophy","Lower Hypertrophy
 const FULLBODY = {
   "Full Body A": {
     type: "fullbody", color: "#4a9eff", icon: "◈",
-    description: "Squat · bench · pull · fly · row · quads · arms · trunk. ~90 min. Compounds stop 2 reps short, isolations go to the wall.",
+    description: "Squat · bench · pull · fly · row · quads · arms · trunk. ~2 h. Compounds stop 2 reps short, isolations go to the wall.",
     exercises: [
       { name: "Squat",              day: "Full Body A", tier: 1, sets: 3, repRange: "5-8",   startWeight: 30, barbell: true, barWeight: BAR.olympic, seedFrom: ["Squat","Front Squat"], hardMode: { sets: 4, finish: "amrap" }, note: "Deep as your hips allow — the stretched position is where the growth is." },
       { name: "Bench Press",        day: "Full Body A", tier: 1, sets: 3, repRange: "5-8",   startWeight: 30, barbell: true, barWeight: BAR.olympic, seedFrom: ["Bench Press"], hardMode: { sets: 4, finish: "amrap" }, note: "Stop with 1–2 clean reps left. Not to failure." },
@@ -4373,7 +4387,7 @@ const FULLBODY = {
   },
   "Full Body B": {
     type: "fullbody", color: "#4a9eff", icon: "◈",
-    description: "Deadlift · incline · row · legs ×2 · overhead · hams · arms · carry. ~90 min. Compounds stop 2 reps short, isolations go to the wall.",
+    description: "Deadlift · incline · row · legs ×2 · overhead · hams · arms · carry. ~2 h. Compounds stop 2 reps short, isolations go to the wall.",
     exercises: [
       { name: "Deadlift",           day: "Full Body B", tier: 1, sets: 3, repRange: "5-8",   startWeight: 35, barbell: true, barWeight: BAR.olympic, seedFrom: ["Deadlift"], hardMode: { sets: 4, finish: "amrap" }, note: "Brace, push the floor away. Reset each rep." },
       { name: "Incline Barbell Press", day: "Full Body B", tier: 1, sets: 3, repRange: "8-12", startWeight: 15, barbell: true, barWeight: BAR.olympic, seedFrom: ["Incline Barbell Press"], hardMode: { sets: 4, finish: "amrap" }, note: "Slow down the descent. Stretch at the bottom." },
@@ -4509,9 +4523,17 @@ function consistency(workoutLogs, weeksBack = 8) {
     const end = new Date(start);     end.setDate(end.getDate() + 7);
     weeks.push({ start: start.getTime(), end: end.getTime(), count: 0, isCurrent: i === 0 });
   }
+  // Counts DAYS trained, not logs. Two logs on one date are one visit: A and B
+  // back to back (2026-09-28), or a merged catch-up that writes one log per
+  // source day. Counting logs let a single evening satisfy the hard-mode gate's
+  // "2 a week" on its own — and the gate exists to reward coming back.
+  const seen = new Set();
   let last30 = 0;
   for (const s of Object.values(workoutLogs || {})) {
     if (!s?.ts) continue;
+    const day = localDate(s.ts);
+    if (seen.has(day)) continue;
+    seen.add(day);
     if (Date.now() - s.ts < 30 * 86400000) last30++;
     const w = weeks.find(w => s.ts >= w.start && s.ts < w.end);
     if (w) w.count++;
@@ -4710,6 +4732,99 @@ const Bar = ({ value, max, color }) => (
 function makeupKey(dayName, filter) {
   return dayName + "::" + [...(filter || [])].sort().join("|");
 }
+
+// ─── CATCH UP ALL ─────────────────────────────────────────────────────────────
+// Every pending catch-up, across days, as ONE session in the gym — and still one
+// log PER SOURCE DAY on disk, because progression, makeup resolution and the
+// rotation all key on `log.day`. The session is identified by CATCHUP_ALL as its
+// activeSession and a filter of "Day::Exercise" tokens (an exercise name alone
+// is ambiguous: DB Lateral Raise is in both A and B).
+const CATCHUP_ALL = "Catch-up";
+function catchupTokens(groups) {
+  return groups.flatMap(g => g.items.map(i => `${g.dayType}::${i.exName}`));
+}
+function parseCatchupTokens(tokens) {
+  const out = [];
+  for (const t of tokens || []) {
+    const i = t.indexOf("::");
+    const dayType = t.slice(0, i), exName = t.slice(i + 2);
+    let g = out.find(x => x.dayType === dayType);
+    if (!g) { g = { dayType, exNames: [] }; out.push(g); }
+    g.exNames.push(exName);
+  }
+  return out;
+}
+// A name pending on two days is done ONCE and logged to the first day that has
+// it (sourceDays[0]); the other days' pending entries are resolved by the caller.
+// Each exercise keeps its own `day`, so calcNextWeight suggests from the right
+// day's history without knowing it's in a merged session.
+function buildCatchupPlan(tokens, resolvePlan) {
+  const exercises = [], sourceDays = {};
+  let type = "fullbody";
+  parseCatchupTokens(tokens).forEach((g, gi) => {
+    const plan = resolvePlan(g.dayType);
+    if (!plan) return;
+    if (gi === 0) type = plan.type;
+    for (const ex of plan.exercises) {
+      if (!g.exNames.includes(ex.name)) continue;
+      if (sourceDays[ex.name]) { sourceDays[ex.name].push(g.dayType); continue; }
+      sourceDays[ex.name] = [g.dayType];
+      exercises.push(ex);
+    }
+  });
+  return { name: CATCHUP_ALL, type, description: "", exercises, sourceDays };
+}
+// Splits a finished merged session back into per-day makeup logs. A day on which
+// nothing at all got done writes no log: its pending entries simply stay pending
+// on their original window, rather than being re-abandoned with a fresh date.
+function splitCatchupLogs(plan, data, abandoned, { date, ts, durationMins }) {
+  const byDay = [];
+  for (const ex of plan.exercises) {
+    const day = plan.sourceDays[ex.name][0];
+    let g = byDay.find(x => x.day === day);
+    if (!g) { g = { day, names: [] }; byDay.push(g); }
+    g.names.push(ex.name);
+  }
+  const done = n => (data[n] || []).filter(s => s.done).length;
+  const total = plan.exercises.reduce((t, e) => t + done(e.name), 0);
+  const out = [];
+  byDay.forEach((g, i) => {
+    const d = g.names.reduce((t, n) => t + done(n), 0);
+    if (!d) return;
+    const t = ts + i; // distinct keys and a stable A-then-B order
+    out.push({ key: `${date}_${g.day.replace(/ /g, "_")}_${t}`, log: {
+      day: g.day, dayLabel: g.day, isCustom: false, isMakeup: true, makeupFrom: g.names,
+      type: lookupDay(g.day)?.type || plan.type,
+      exercises: Object.fromEntries(g.names.map(n => [n, data[n]])),
+      date, ts: t,
+      durationMins: total ? Math.round(durationMins * d / total) : 0,
+      abandoned: (abandoned || []).filter(n => g.names.includes(n)),
+    }});
+  });
+  // Names that were pending on more than one day and actually got done: the
+  // later days' entries are satisfied by the log written above.
+  const alsoResolved = [];
+  for (const ex of plan.exercises)
+    if (done(ex.name) && plan.sourceDays[ex.name].length > 1)
+      for (const day of plan.sourceDays[ex.name].slice(1)) alsoResolved.push({ dayType: day, exName: ex.name });
+  return { logs: out, alsoResolved };
+}
+
+// How long a session took. Wall clock (start → Finish) is wrong in two known
+// ways: SessionLogger resets its start when a draft is reopened >3h after it was
+// created, so a session started earlier in the day reads as ~0 min (Full Body A,
+// 2026-09-28); and a draft finished the next morning reads as 14 hours. The span
+// from first to last logged set is the other estimate. Take the larger of
+// whichever are plausible (0 < x < 5h).
+function sessionDurationMins(wallMs, firstSetAt, lastSetAt) {
+  const sane = ms => ms > 0 && ms < 5 * 3600000;
+  const span = (firstSetAt && lastSetAt) ? lastSetAt - firstSetAt : 0;
+  return Math.round(Math.max(sane(wallMs) ? wallMs : 0, sane(span) ? span : 0) / 60000);
+}
+function localDate(ts) {
+  const d = new Date(ts);
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
 function App() {
   const [tab, setTab]               = useState("dash");
   const [phase, setPhase]           = useState(() => lsGet("phul_phase") || "bulk");
@@ -4827,6 +4942,18 @@ function App() {
     setActiveSession(dayType);
   };
 
+  // Every pending group as one session. The token list is captured at start, so
+  // the plan is stable for the whole session and the draft key matches on resume.
+  const startCatchupAll = () => {
+    const days = pendingMakeups.map(g => g.dayType);
+    if (draftSession && days.includes(draftSession.dayName)) {
+      alert(`You have a draft "${draftSession.dayName}" session in progress. Finish or discard it before catching up.`);
+      return;
+    }
+    setActiveSessionFilter(catchupTokens(pendingMakeups));
+    setActiveSession(CATCHUP_ALL);
+  };
+
   // Guard the normal "Start" buttons: the regular draft lives in a single slot,
   // so starting a DIFFERENT day would overwrite an unfinished one. Confirm first;
   // resuming the same day (or starting with no draft) skips the prompt.
@@ -4840,15 +4967,18 @@ function App() {
   };
 
   if (activeSession) {
-    const rawPlan = resolvePlan(activeSession);
+    const isCatchupAll = activeSession === CATCHUP_ALL;
+    const rawPlan = isCatchupAll
+      ? buildCatchupPlan(activeSessionFilter, resolvePlan)
+      : resolvePlan(activeSession);
     if (!rawPlan) {
       // Defensive: custom session was deleted while active — bail cleanly
       setActiveSession(null);
       setActiveSessionFilter(null);
       return null;
     }
-    // Apply makeup filter if active
-    const activePlan = activeSessionFilter
+    // Apply makeup filter if active (the merged catch-up is already filtered)
+    const activePlan = (activeSessionFilter && !isCatchupAll)
       ? {
           ...rawPlan,
           name: `${rawPlan.name || activeSession} · Makeup`,
@@ -4877,16 +5007,25 @@ function App() {
         onFinish={(data, sessionStartedAt, abandoned, setTimes) => {
           // Date the log by when the LAST SET was logged, not by when Finish was
           // tapped: a draft finished the next morning is still yesterday's
-          // session. Duration likewise falls back to first→last set when the
-          // wall-clock span is absurd (draft resumed days later reads as 0 min
-          // because SessionLogger resets a stale start).
+          // session. See sessionDurationMins for why duration isn't wall clock.
           const lastAt = setTimes?.lastSetAt || Date.now();
-          const date = (() => { const d = new Date(lastAt);
-            return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0"); })();
+          const date = localDate(lastAt);
+          const durationMins = sessionDurationMins(
+            Date.now() - (sessionStartedAt || Date.now()), setTimes?.firstSetAt, setTimes?.lastSetAt);
+          if (isCatchupAll) {
+            const { logs, alsoResolved } = splitCatchupLogs(activePlan, data, abandoned, { date, ts: lastAt, durationMins });
+            setWorkoutLogs(prev => { const next = { ...prev }; for (const l of logs) next[l.key] = l.log; return next; });
+            for (const r of alsoResolved) {
+              const item = pendingMakeups.find(g => g.dayType === r.dayType)?.items.find(i => i.exName === r.exName);
+              if (item) dismissMakeup(item.sourceLogKey, item.exName);
+            }
+            clearMakeupDraft(activeSession, activeSessionFilter);
+            setActiveSession(null);
+            setActiveSessionFilter(null);
+            setTab("workout");
+            return;
+          }
           const key = date + "_" + activeSession.replace(/ /g,"_") + "_" + Date.now();
-          const wall = Date.now() - (sessionStartedAt || Date.now());
-          const span = (setTimes?.firstSetAt && setTimes?.lastSetAt) ? setTimes.lastSetAt - setTimes.firstSetAt : 0;
-          const durationMins = Math.round(((wall > 0 && wall < 6 * 3600000) ? wall : span) / 60000);
           setWorkoutLogs(prev => ({ ...prev, [key]: {
             day: activeSession,
             dayLabel: activePlan.name || activeSession,
@@ -4965,7 +5104,7 @@ function App() {
       </header>
 
       <main className="app-main">
-        {tab==="dash"    && <Dashboard latest={latest} phase={phase} kcalTarget={kcalTarget} todayDiet={todayDiet} workoutLogs={workoutLogs} setTab={setTab} setActiveSession={setActiveSession} startSession={startSession} draftSession={draftSession} pendingMakeups={pendingMakeups} startMakeup={startMakeup} dismissMakeup={dismissMakeup} program={program} targets={targets} trend={trend} hardMode={hardMode} />}
+        {tab==="dash"    && <Dashboard latest={latest} phase={phase} kcalTarget={kcalTarget} todayDiet={todayDiet} workoutLogs={workoutLogs} setTab={setTab} setActiveSession={setActiveSession} startSession={startSession} draftSession={draftSession} pendingMakeups={pendingMakeups} startMakeup={startMakeup} startCatchupAll={startCatchupAll} dismissMakeup={dismissMakeup} program={program} targets={targets} trend={trend} hardMode={hardMode} />}
         {tab==="workout" && <WorkoutTab workoutLogs={workoutLogs} setWorkoutLogs={setWorkoutLogs} setActiveSession={setActiveSession} startSession={startSession} draftSession={draftSession} customSessions={customSessions} setCustomSessions={setCustomSessions} program={program} programId={programId} setProgramId={setProgramId} />}
         {tab==="diet"    && <DietTab today={today} todayDiet={todayDiet} dietLogs={dietLogs} setDietLogs={setDietLogs} phase={phase} stats={stats} targets={targets} trend={trend} setTab={setTab} />}
         {tab==="stats"   && <StatsTab stats={stats} setStats={setStats} phase={phase} theme={theme} setTheme={setTheme} />}
@@ -5028,7 +5167,15 @@ function computePendingMakeups(workoutLogs, dismissedMakeups = [], windowDays = 
     if (log.abandoned?.length) {
       for (const exName of log.abandoned) {
         if (dismissedSet.has(`${key}::${exName}`)) continue;
-        if (pendingByDay[dayType].some(p => p.exName === exName)) continue;
+        // Missed AGAIN: refresh the entry to this session. Keeping the older
+        // date let a twice-missed exercise age out of the 14-day window while
+        // it was still missing (DB Lateral Raise, missed 09-14 and 09-28, gone
+        // from the card by 09-29).
+        const existing = pendingByDay[dayType].find(p => p.exName === exName);
+        if (existing) {
+          Object.assign(existing, { sourceLogKey: key, sourceDate: log.date, abandonedAt: log.ts });
+          continue;
+        }
         pendingByDay[dayType].push({
           exName,
           sourceLogKey: key,
@@ -5068,7 +5215,7 @@ function mesocycleDelta(workoutLogs, dayType) {
   const deltaPct = ((last - avg) / avg) * 100;
   return { last, avg, deltaPct };
 }
-function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, setActiveSession, startSession, draftSession, pendingMakeups = [], startMakeup, dismissMakeup, program, targets, trend, hardMode }) {
+function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, setActiveSession, startSession, draftSession, pendingMakeups = [], startMakeup, startCatchupAll, dismissMakeup, program, targets, trend, hardMode }) {
   const PROTEIN_G = targets.protein; // shadow the legacy constant — see computeTargets
   // When a pending group is tapped, this holds it for the choice modal.
   const [catchupOpen, setCatchupOpen] = useState(null);
@@ -5090,7 +5237,9 @@ function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, 
   // next day in rotation — custom sessions, and sessions from a program you've
   // since switched away from, don't advance the cycle.
   const order = program.order;
-  const lastDay = recent.find(s => program.days[s.day])?.day;
+  // Catch-up logs carry their source day but aren't a turn of the rotation:
+  // making up A's missed isolations after a full B must not make B "next".
+  const lastDay = recent.find(s => program.days[s.day] && !s.isMakeup)?.day;
   const nextIdx = lastDay ? (order.indexOf(lastDay)+1)%order.length : 0;
   const nextDay = order[nextIdx];
   const nextPlan = program.days[nextDay];
@@ -5205,6 +5354,14 @@ function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, 
               </button>
             );
           })}
+          {pendingMakeups.length > 1 && startCatchupAll && (
+            <button className="catchup-all" onClick={startCatchupAll}>
+              Catch up all in one session →
+              <span className="ca-sub">
+                {pendingMakeups.reduce((t, g) => t + g.items.length, 0)} exercises · each still counts toward its own day
+              </span>
+            </button>
+          )}
         </div>
       )}
 
@@ -5377,7 +5534,7 @@ function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, 
           ))}
         </div>
         <div className="wk-legend">
-          <span>sessions per week · {last30} in the last 30 days</span>
+          <span>days trained per week · {last30} in the last 30 days</span>
         </div>
         <div className={`streak-note ${atRisk?"risk":""}`}>{streakNote}</div>
 
@@ -5407,7 +5564,7 @@ function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, 
               </div>
               <div className="pg-body">
                 Build the habit first. Effort was never your problem — turning up on a
-                boring Tuesday is. Three straight weeks of {hardMode.min}+ sessions (A and B both done)
+                boring Tuesday is. Three straight weeks of {hardMode.min}+ gym days (A and B on separate days)
                 and the intensity work switches on. A week under {hardMode.min} starts the count over.
                 {hardMode.thisWeek > 0 && hardMode.thisWeek < hardMode.min ? ` This week: ${hardMode.thisWeek} of ${hardMode.min}.` : ""}
               </div>
@@ -8272,7 +8429,7 @@ function StatsTab({ stats, setStats, phase, theme, setTheme }) {
             </button>
           ))}
         </div>
-        <div className="app-version">Gym Tracker · v9.1 — Volume</div>
+        <div className="app-version">Gym Tracker · v9.2 — Volume</div>
       </div>
 
       <PushToggle />

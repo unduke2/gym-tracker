@@ -183,7 +183,7 @@ console.log("\n── Consistency card is legible ──");
 {
   has("week columns are labelled with dates", app, 'class="wk-d"');
   has("the current week is marked 'now'", app, ">now<");
-  has("row is explained rather than eight bare squares", app, "sessions per week");
+  has("row is explained rather than eight bare squares", app, "days trained per week");
   hasnt("no bare 30-day count masquerading as a headline", app, "· 30d");
 }
 
@@ -256,6 +256,30 @@ console.log("\n── v9.0: supersets and timed holds render ──");
       activeEx:"Suitcase Carry", activeIdx:0, exerciseHolds:{}, warmedUp:[], sessionStartedAt:Date.now() } }));
   has("a loaded carry still takes a weight", carry, "Suggested");
   has("…in seconds", carry, "30-45 sec");
+}
+
+console.log("\n── v9.2: catch up all ──");
+{
+  const groups = [
+    { dayType: "Full Body A", items: [{ exName: "Leg Extension", sourceLogKey: "kA", abandonedAt: Date.now(), sourceDate: "x" },
+                                      { exName: "EZ Bar Curl", sourceLogKey: "kA", abandonedAt: Date.now(), sourceDate: "x" },
+                                      { exName: "Skull Crushers", sourceLogKey: "kA", abandonedAt: Date.now(), sourceDate: "x" }] },
+    { dayType: "Full Body B", items: [{ exName: "Bulgarian Split Squat", sourceLogKey: "kB", abandonedAt: Date.now(), sourceDate: "x" }] },
+  ];
+  const t = tg(stats, logs, "bulk");
+  const props = { latest: stats[stats.length-1], phase:"bulk", kcalTarget:t.target, todayDiet:{kcal:0,protein:0},
+    workoutLogs: logs, setTab:noop, setActiveSession:noop, startSession:noop, draftSession:null,
+    startMakeup:noop, startCatchupAll:noop, dismissMakeup:noop, program:M.PROGRAMS.fullbody,
+    targets:t, trend:M.bodyTrendAlarm(stats,"bulk",t), hardMode:{on:false,streak:1,need:3,min:2,thisWeek:1} };
+  const two = T("Dashboard [two catch-up groups]", h(M.Dashboard, { ...props, pendingMakeups: groups }));
+  has("offers to merge them", two, "Catch up all in one session");
+  const one = T("Dashboard [one catch-up group]", h(M.Dashboard, { ...props, pendingMakeups: groups.slice(0, 1) }));
+  hasnt("no merge button for a single group", one, "Catch up all in one session");
+  const plan = M.buildCatchupPlan(M.catchupTokens(groups), M.lookupDay);
+  const sess = T("SessionLogger [merged catch-up]", h(M.SessionLogger, { dayName: M.CATCHUP_ALL, plan, workoutLogs: logs,
+    onFinish:noop, onCancel:noop, onDiscard:noop, savedSession:null, onSaveSession:noop }));
+  has("it lists exercises from both days", sess, "Bulgarian Split Squat");
+  has("…including A's", sess, "Leg Extension");
 }
 
 console.log(`\n${"─".repeat(52)}\n  ${fails ? fails + " FAILED" : "all render checks passed"}\n`);

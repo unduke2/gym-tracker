@@ -310,6 +310,99 @@ console.log("\n── Hard mode gating ──");
   check("4/week is not required", A.hardModeState(mk([2,2,2])).on === true);
 }
 
+console.log("\n── Gym days, not logs ──");
+{
+  // 2026-09-28: Full Body A then B back to back, one evening. That's one visit.
+  const now = new Date(); now.setHours(12,0,0,0);
+  const monday = new Date(now); monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  const at = (dayOffset, h) => { const d = new Date(monday); d.setDate(d.getDate() + dayOffset); d.setHours(h); return d.getTime(); };
+  const sameDay = { a:{ ts: at(0, 18) }, b:{ ts: at(0, 21) } };
+  check("two logs on one date count as one day", A.consistency(sameDay).currentCount === 1);
+  check("one double-session evening does not satisfy the gate's 2/week",
+    A.hardModeState(sameDay).thisWeek === 1);
+  const twoDays = { a:{ ts: at(0, 18) }, b:{ ts: at(0, 21) }, c:{ ts: at(1, 18) } };
+  check("two separate days do", A.hardModeState(twoDays).thisWeek === 2);
+}
+
+console.log("\n── Session duration ──");
+{
+  const H = 3600000, M = 60000;
+  check("wall clock reset to ~0 falls back to the set span (Full Body A, 2026-09-28)",
+    A.sessionDurationMins(30 * 1000, 1000, 1000 + 75 * M) === 75);
+  check("honest wall clock wins when it's larger (warm-up before set 1)",
+    A.sessionDurationMins(90 * M, 1000, 1000 + 80 * M) === 90);
+  check("a draft finished the next morning isn't 14 hours",
+    A.sessionDurationMins(14 * H, 1000, 1000 + 70 * M) === 70);
+  check("no set times and no sane wall clock is 0, not NaN", A.sessionDurationMins(0, null, null) === 0);
+}
+
+console.log("\n── Catch up all: one session, one log per day ──");
+{
+  const groups = [
+    { dayType: "Full Body A", items: [
+      { exName: "Leg Extension", sourceLogKey: "kA" }, { exName: "DB Lateral Raise", sourceLogKey: "kA" },
+      { exName: "EZ Bar Curl", sourceLogKey: "kA" }, { exName: "Skull Crushers", sourceLogKey: "kA" } ] },
+    { dayType: "Full Body B", items: [
+      { exName: "Bulgarian Split Squat", sourceLogKey: "kB" }, { exName: "DB Lateral Raise", sourceLogKey: "kB" },
+      { exName: "Suitcase Carry", sourceLogKey: "kB" } ] },
+  ];
+  const tokens = A.catchupTokens(groups);
+  const plan = A.buildCatchupPlan(tokens, A.lookupDay);
+  const names = plan.exercises.map(e => e.name);
+  check("every pending exercise is in the plan", ["Leg Extension","EZ Bar Curl","Bulgarian Split Squat","Suitcase Carry"].every(n => names.includes(n)));
+  check("an exercise pending on both days appears once", names.filter(n => n === "DB Lateral Raise").length === 1);
+  check("each exercise keeps its own day for progression",
+    plan.exercises.find(e => e.name === "Leg Extension").day === "Full Body A" &&
+    plan.exercises.find(e => e.name === "Bulgarian Split Squat").day === "Full Body B");
+  check("the arm superset partners both made it (so the pair still alternates)",
+    names.includes("EZ Bar Curl") && names.includes("Skull Crushers"));
+  const done = (w, r) => ({ weight: String(w), reps: String(r), rpe: 8, done: true });
+  const open = () => ({ weight: "", reps: "", rpe: null, done: false });
+  const data = {
+    "Leg Extension": [done(25,12), done(25,12), done(25,11)],
+    "DB Lateral Raise": [done(7,15), done(7,14), done(7,12)],
+    "EZ Bar Curl": [done(15,10), done(15,9), done(15,8)],
+    "Skull Crushers": [done(15,10), done(15,9), done(15,8)],
+    "Bulgarian Split Squat": [done(10,10), done(10,10), done(10,9)],
+    "Suitcase Carry": [open(), open()],
+  };
+  const { logs, alsoResolved } = A.splitCatchupLogs(plan, data, ["Suitcase Carry"], { date: "2026-09-29", ts: 1000, durationMins: 60 });
+  const byDay = Object.fromEntries(logs.map(l => [l.log.day, l.log]));
+  check("one log per source day", logs.length === 2 && byDay["Full Body A"] && byDay["Full Body B"]);
+  check("logs are makeups, so they don't advance the rotation", logs.every(l => l.log.isMakeup));
+  check("A's log holds only A's exercises",
+    Object.keys(byDay["Full Body A"].exercises).sort().join() === ["DB Lateral Raise","EZ Bar Curl","Leg Extension","Skull Crushers"].join());
+  check("B's log holds B's, and the shared exercise is not duplicated into it",
+    !byDay["Full Body B"].exercises["DB Lateral Raise"] && !!byDay["Full Body B"].exercises["Bulgarian Split Squat"]);
+  check("the shared exercise resolves B's pending entry instead",
+    alsoResolved.length === 1 && alsoResolved[0].dayType === "Full Body B" && alsoResolved[0].exName === "DB Lateral Raise");
+  check("abandoned exercises stay with their own day", byDay["Full Body B"].abandoned.join() === "Suitcase Carry" && byDay["Full Body A"].abandoned.length === 0);
+  check("duration is shared by sets done, not duplicated",
+    byDay["Full Body A"].durationMins + byDay["Full Body B"].durationMins === 60 && byDay["Full Body A"].durationMins > byDay["Full Body B"].durationMins);
+  check("keys are distinct", new Set(logs.map(l => l.key)).size === 2);
+  const none = A.splitCatchupLogs(plan, { ...data, "Bulgarian Split Squat": [open(),open(),open()] },
+    ["Bulgarian Split Squat","Suitcase Carry"], { date: "x", ts: 1, durationMins: 30 });
+  check("a day where nothing got done writes no log (pending keeps its original window)",
+    none.logs.length === 1 && none.logs[0].log.day === "Full Body A");
+  // Written logs feed the right day's progression.
+  const merged = Object.fromEntries(logs.map(l => [l.key, l.log]));
+  const le = A.calcNextWeight(A.FULLBODY["Full Body A"].exercises.find(e => e.name === "Leg Extension"), merged);
+  check("progression picks the catch-up up under its own day", le.status !== "restart" && le.status !== "start", le.status);
+}
+
+console.log("\n── Catch-up window ──");
+{
+  const X = n => ({ [n]: [{ weight:"", reps:"", done:false }] });
+  const logs = {
+    k1: { day:"Full Body A", ts: Date.now() - 15*DAY, date:"old", exercises: X("DB Lateral Raise"), abandoned:["DB Lateral Raise"] },
+    k2: { day:"Full Body A", ts: Date.now() - 1*DAY,  date:"new", exercises: X("DB Lateral Raise"), abandoned:["DB Lateral Raise"] },
+  };
+  const p = A.computePendingMakeups(logs, []);
+  const it = p.find(g => g.dayType === "Full Body A")?.items.find(i => i.exName === "DB Lateral Raise");
+  check("an exercise missed twice stays pending on the NEW miss's window", !!it && it.sourceLogKey === "k2", JSON.stringify(p));
+  check("…and appears once", p.find(g => g.dayType === "Full Body A").items.length === 1);
+}
+
 console.log("\n── applyIntensity ──");
 {
   const base = A.FULLBODY["Full Body A"];
