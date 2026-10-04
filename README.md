@@ -6,7 +6,14 @@ The interesting part is the **auto-progression engine**: given a logged history 
 
 > **Live:** _add your Cloudflare Pages URL here_
 
-<!-- Add 2–3 phone screenshots here: Dashboard, an active session, Stats. -->
+<p align="center">
+  <img src="docs/screenshots/home.png" width="23%" alt="Dashboard: today's session, consistency streak, hard-mode unlock">
+  <img src="docs/screenshots/session.png" width="23%" alt="Live session: suggested load, plate diagram, effort target">
+  <img src="docs/screenshots/fuel.png" width="23%" alt="Diet: 7-day average and weight-trend verdict">
+  <img src="docs/screenshots/body.png" width="23%" alt="Body composition and progress analysis">
+</p>
+
+<sub>Screenshots use invented demo data.</sub>
 
 ## What it does
 
