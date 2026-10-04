@@ -4,7 +4,7 @@ An offline-first training, diet and body-composition tracker. One static page, n
 
 The interesting part is the **auto-progression engine**: given a logged history of sets, weights and RPE, it decides what load to put on the bar next session.
 
-> **Live:** _add your Cloudflare Pages URL here_
+> **Live:** https://gym-tracker-5sc.pages.dev (opens straight in a browser; on a phone, "Add to Home Screen" installs it as an offline app)
 
 <p align="center">
   <img src="docs/screenshots/home.png" width="23%" alt="Dashboard: today's session, consistency streak, hard-mode unlock">
