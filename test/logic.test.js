@@ -472,7 +472,8 @@ console.log("\n── Session time: estimate from the lifter's own pace ──")
   check("weekday close is 21:00", A.minutesUntilClose(wed2030) === 30);
   check("Saturday close is 16:00", A.minutesUntilClose(new Date(2026, 9, 10, 14, 0)) === 120);
   check("after close → null", A.minutesUntilClose(new Date(2026, 9, 7, 21, 30)) === null);
-  check("unknown day (Sunday) → null", A.minutesUntilClose(new Date(2026, 9, 11, 12, 0)) === null);
+  check("Sunday (closed) → null, not a NaN countdown", A.minutesUntilClose(new Date(2026, 9, 11, 12, 0)) === null);
+  check("Sunday is marked closed", A.GYM_HOURS[0]?.closed === true);
 }
 
 console.log("\n── A stale time-boxed draft is judged against what it asked for ──");

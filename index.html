@@ -4348,7 +4348,7 @@ function fitPlanToTime(plan, minutes, pace = DEFAULT_PACE) {
 // Minutes from now until today's closing time, or null if unknown / already shut.
 function minutesUntilClose(now = new Date()) {
   const h = GYM_HOURS[now.getDay()];
-  if (!h) return null;
+  if (!h?.close) return null;
   const close = new Date(now); close.setHours(h.close, 0, 0, 0);
   const m = Math.floor((close - now) / 60000);
   return m > 0 ? m : null;
@@ -4844,10 +4844,11 @@ const INIT_STATS = { weight: 74.1, height: 180, bodyFat: 14.3, bmr: 2200, date: 
 // Personal gym schedule — used to warn when the session ETA will overshoot
 // closing time. Keys: 0=Sun, 1=Mon ... 6=Sat. Hours are LOCAL (phone timezone).
 // Edit if the gym schedule changes.
-// New gym from 2026-10. Weekdays close 21:00, Saturday 16:00. Opening times and
-// Sunday aren't known yet — only `close` is read, and a missing day simply
-// means no closing-time warning or "fits before close" option that day.
+// New gym from 2026-10. Weekdays close 21:00, Saturday 16:00, closed Sunday.
+// Only `close` is read (opening times unknown); a missing day means no
+// closing-time logic at all.
 const GYM_HOURS = {
+  0: { closed: true }, // Sunday
   1: { close: 21 }, // Monday
   2: { close: 21 }, // Tuesday
   3: { close: 21 }, // Wednesday
@@ -5674,6 +5675,7 @@ function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, 
             session wouldn't make it before GYM_HOURS' closing time. */}
         <div className="next-time">
           ≈ {fmtMins(fullMin)} at your pace
+          {GYM_HOURS[new Date().getDay()]?.closed && <span>{" · gym's closed today"}</span>}
           {untilClose != null && <span className={untilClose < fullMin ? "nt-close" : ""}>{` · gym closes in ${fmtMins(untilClose)}`}</span>}
         </div>
         <button className="start-btn" onClick={() => startSession(nextDay)}>
@@ -6268,7 +6270,7 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
     const now = new Date(nowTick);
     const dow = now.getDay();
     const hours = GYM_HOURS[dow];
-    if (!hours) return { state: "", label: "" };
+    if (!hours?.close) return { state: "", label: "" };
     const closeAt = new Date(now);
     closeAt.setHours(hours.close, 0, 0, 0);
     const overshootMin = (finishAt - closeAt) / 60000;
@@ -8708,7 +8710,7 @@ function StatsTab({ stats, setStats, phase, theme, setTheme }) {
             </button>
           ))}
         </div>
-        <div className="app-version">Gym Tracker · v9.4 — Volume</div>
+        <div className="app-version">Gym Tracker · v9.4.1 — Volume</div>
       </div>
 
       <PushToggle />
