@@ -231,19 +231,26 @@ console.log("\n── Ending a session early requires confirmation ──");
 console.log("\n── v9.0: supersets and timed holds render ──");
 {
   const plan = M.FULLBODY["Full Body A"];
-  const at = (exName, extra = {}) => {
+  const at = (exName, extra = {}, supersets = []) => {
     const data = {};
     for (const e of plan.exercises) data[e.name] = Array.from({length:e.sets}, () => ({weight:"",reps:"",rpe:null,done:false}));
     Object.assign(data, extra);
     return renderToString(h(M.SessionLogger, { dayName:"Full Body A", plan, workoutLogs: logs,
       onFinish:noop, onCancel:noop, onDiscard:noop, onSaveSession:noop,
-      savedSession:{ data, activeEx:exName, activeIdx:0, exerciseHolds:{}, warmedUp:[exName], sessionStartedAt:Date.now() } }));
+      savedSession:{ data, activeEx:exName, activeIdx:0, exerciseHolds:{}, warmedUp:[exName], sessionStartedAt:Date.now(), supersets } }));
   };
-  const curl = at("EZ Bar Curl");
-  has("superset leader announces its partner", curl, "superset · then <strong>Skull Crushers");
+  // v9.4: supersets are opt-in. A planned pair offers the toggle; it doesn't
+  // put you in the alternating flow until you tap it.
+  const offByDefault = at("EZ Bar Curl");
+  hasnt("a planned pair is NOT supersetted by default", offByDefault, "superset · then");
+  has("…it offers the superset instead", offByDefault, "⇄ Superset with Skull Crushers");
+  const curl = at("EZ Bar Curl", {}, ["EZ Bar Curl", "Skull Crushers"]);
+  has("switched on, the leader announces its partner", curl, "superset · then <strong>Skull Crushers");
+  has("…and offers to stop", curl, "Superset on · tap to stop");
   has("paired rows are marked in the list", curl, ">⇄<");
-  const skullsDone = at("EZ Bar Curl", { "Skull Crushers": [1,2,3].map(() => ({weight:"15",reps:"10",rpe:9,done:true})) });
+  const skullsDone = at("EZ Bar Curl", { "Skull Crushers": [1,2,3].map(() => ({weight:"15",reps:"10",rpe:9,done:true})) }, ["EZ Bar Curl", "Skull Crushers"]);
   hasnt("no partner tag once the partner is finished", skullsDone, "superset · then");
+  hasnt("…and no toggle for a finished partner", skullsDone, "⇄ Superset with");
   const plank = at("Side Plank");
   has("timed hold shows a target in seconds", plank, "s / side");
   has("timed hold shows the seconds range", plank, "30-45 sec");
@@ -286,6 +293,30 @@ console.log("\n── v9.2: catch up all ──");
     onFinish:noop, onCancel:noop, onDiscard:noop, savedSession:null, onSaveSession:noop }));
   has("it lists exercises from both days", sess, "Bulgarian Split Squat");
   has("…including A's", sess, "Leg Extension");
+}
+
+console.log("\n── v9.4: real session time, short-on-time options ──");
+{
+  const t = tg(stats, logs, "bulk");
+  const props = { latest: stats[stats.length-1], phase:"bulk", kcalTarget:t.target, todayDiet:{kcal:0,protein:0},
+    workoutLogs: logs, setTab:noop, setActiveSession:noop, startSession:noop, draftSession:null, pendingMakeups:[],
+    startMakeup:noop, startCatchupAll:noop, dismissMakeup:noop, program:M.PROGRAMS.fullbody,
+    targets:t, trend:M.bodyTrendAlarm(stats,"bulk",t), hardMode:{on:false,streak:1,need:3,min:2,thisWeek:1} };
+  const dash = T("Dashboard [time estimate]", h(M.Dashboard, props));
+  has("shows a real estimate", dash, "at your pace");
+  has("offers short versions", dash, "Short on time");
+  // (Which options show depends on the clock — closing time can replace 60 or
+  // 90 with "Fit before close" — so only their presence is checked here.)
+  hasnt("no hand-written duration left in the plan text", dash, "~2 h");
+  const wt = T("WorkoutTab [time estimate]", h(M.WorkoutTab, { workoutLogs:logs, setWorkoutLogs:noop, setActiveSession:noop,
+    startSession:noop, draftSession:null, customSessions:[], setCustomSessions:noop, program:M.PROGRAMS.fullbody,
+    programId:"fullbody", setProgramId:noop, hardMode:{on:false} }));
+  has("day cards show the estimate", wt, "· ≈ ");
+  const fitted = M.fitPlanToTime(M.FULLBODY["Full Body A"], 60, 1.4);
+  const sess = T("SessionLogger [60-min version]", h(M.SessionLogger, { dayName:"Full Body A", plan: fitted, workoutLogs: logs,
+    onFinish:noop, onCancel:noop, onDiscard:noop, savedSession:null, onSaveSession:noop }));
+  has("the session says it's the short version", sess, "60-min version");
+  hasnt("trimmed isolations aren't on the list", sess, "Skull Crushers");
 }
 
 console.log(`\n${"─".repeat(52)}\n  ${fails ? fails + " FAILED" : "all render checks passed"}\n`);

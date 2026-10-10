@@ -552,6 +552,43 @@ button { cursor: pointer; }
   display: flex; align-items: center; justify-content: center;
   gap: 10px;
 }
+.next-time {
+  margin-top: 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.next-time .nt-close { color: var(--accent-hold); }
+.time-opts {
+  margin-top: 10px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+}
+.time-opts .to-k {
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--ink-3); margin-right: 2px;
+}
+.time-opts .to-btn {
+  font-family: var(--font-mono); font-size: 12px; font-weight: 700;
+  color: var(--ink); background: transparent;
+  border: 1px solid var(--line-2); border-radius: 999px; padding: 7px 12px;
+  font-variant-numeric: tabular-nums; cursor: pointer;
+}
+.time-opts .to-btn.close { border-color: color-mix(in oklab, var(--accent-hold) 55%, var(--line-2)); }
+.budget-chip {
+  font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+  color: var(--accent-hold);
+  border: 1px solid color-mix(in oklab, var(--accent-hold) 45%, var(--line-2));
+  padding: 4px 10px; border-radius: 999px;
+}
+.ss-toggle {
+  margin-top: 10px;
+  font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+  color: var(--ink-2); background: transparent;
+  border: 1px dashed var(--line-2); border-radius: 999px; padding: 6px 12px; cursor: pointer;
+}
+.ss-toggle.on { color: var(--ink); border-style: solid; border-color: color-mix(in oklab, var(--accent) 50%, var(--line-2)); }
 .start-btn .arrow { transition: transform 0.2s; }
 .start-btn:hover .arrow { transform: translateX(3px); }
 .start-btn:active { transform: scale(0.99); }
@@ -4215,6 +4252,108 @@ function sugNoteClass(status) {
   return "";
 }
 
+// ─── SESSION TIME ─────────────────────────────────────────────────────────────
+// How long a plan really takes. The day descriptions used to carry a hand-written
+// "~90 min", later "~2 h"; at his real pace (≈4.3 min/set) the v9 sessions were
+// 2h15, and the new gym shuts at 21:00 — so the full plan never fit an evening
+// visit and got finished as a catch-up two days later.
+//
+// Model: every set is ~45s of work plus the prescribed rest, every exercise ends
+// with the between-exercise rest. That's the theoretical floor. Real sessions
+// run longer (setup, waiting for kit, warm-ups, talking), so it's scaled by the
+// lifter's own ratio of actual to theoretical over recent sessions (paceFactor).
+const SET_WORK_S = 45;
+function exerciseSeconds(ex, sets, dayType) {
+  if (!sets) return 0;
+  // Timed work: the top of the range, per side, both sides.
+  const work = ex.unit === "s" ? (num(String(ex.repRange).split("-")[1]) || 45) * 2 + 15 : SET_WORK_S;
+  const rest  = typeof ex?.rest?.set === "number" ? ex.rest.set : getRestSeconds(ex.name, dayType);
+  const trans = typeof ex?.rest?.betweenEx === "number" ? ex.rest.betweenEx : getBetweenExerciseRest(ex.name, dayType);
+  return sets * work + (sets - 1) * rest + trans;
+}
+function planSeconds(exercises, dayType, setsOf = e => e.sets) {
+  return (exercises || []).reduce((t, e) => t + exerciseSeconds(e, setsOf(e), dayType), 0);
+}
+// Median of actual ÷ theoretical over the last 6 sessions with a believable
+// duration. Clamped so one odd session can't make the estimate absurd.
+const DEFAULT_PACE = 1.25;
+function paceFactor(logs) {
+  const ratios = [];
+  for (const l of Object.values(logs || {}).sort((a, b) => b.ts - a.ts)) {
+    if (!(l?.durationMins > 10)) continue;
+    const plan = lookupDay(l.day);
+    if (!plan) continue;
+    const doneOf = e => (l.exercises?.[e.name] || []).filter(s => s.done).length;
+    const did = plan.exercises.filter(e => doneOf(e) > 0);
+    if (did.reduce((t, e) => t + doneOf(e), 0) < 5) continue;
+    const theo = planSeconds(did, plan.type, doneOf) / 60;
+    if (theo > 0) ratios.push(l.durationMins / theo);
+    if (ratios.length >= 6) break;
+  }
+  if (ratios.length < 2) return DEFAULT_PACE;
+  ratios.sort((a, b) => a - b);
+  return Math.min(2, Math.max(0.8, ratios[Math.floor(ratios.length / 2)]));
+}
+// Core exercises only — finishers are extra.
+function estimateMinutes(plan, logs, pace = paceFactor(logs)) {
+  return Math.round(planSeconds(coreExercises(plan), plan.type) / 60 * pace);
+}
+function fmtMins(m) {
+  if (m < 60) return `${m} min`;
+  const h = Math.floor(m / 60), r = m % 60;
+  return r ? `${h}h ${String(r).padStart(2, "0")}` : `${h}h`;
+}
+
+// ─── FIT A SESSION TO THE TIME YOU HAVE ───────────────────────────────────────
+// "I've got an hour" shouldn't mean guessing what to drop. Sets are added in
+// order of what they buy per minute, until the budget is used:
+//   1. main lifts (T1), 2 sets      — strength gains plateau around 2 sets per
+//   2. second-tier lifts (T2), 2 sets  session (Pelland 2025), and growth has
+//   3. main lifts, 3rd set             sharply diminishing returns per extra set,
+//   4. isolations, 1 set to failure    so two sets of everything beats three of
+//   5. isolations, 2nd set             some and none of the rest
+//   6. main lifts' hard-mode 4th set, 7. T2 3rd set, 8. isolations 3rd set
+// Nothing trimmed this way becomes a catch-up: a short session is a session.
+function fitPlanToTime(plan, minutes, pace = DEFAULT_PACE) {
+  const core = coreExercises(plan);
+  const budget = minutes * 60 / pace;          // in theoretical seconds
+  const sets = Object.fromEntries(core.map(e => [e.name, 0]));
+  const tier = e => e.tier || 3;
+  const upTo = (e, n) => Math.min(e.sets, n);
+  const rounds = [
+    e => tier(e) === 1 ? upTo(e, 2) : 0,
+    e => tier(e) === 2 ? upTo(e, 2) : 0,
+    e => tier(e) === 1 ? upTo(e, 3) : 0,
+    e => tier(e) >= 3 ? upTo(e, 1) : 0,
+    e => tier(e) >= 3 ? upTo(e, 2) : 0,
+    e => tier(e) === 1 ? e.sets : 0,      // hard mode's 4th set
+    e => tier(e) === 2 ? e.sets : 0,
+    e => tier(e) >= 3 ? e.sets : 0,
+  ];
+  const used = () => planSeconds(core, plan.type, e => sets[e.name]);
+  for (const round of rounds) for (const e of core) {
+    const want = round(e);
+    if (want <= sets[e.name]) continue;
+    const before = sets[e.name];
+    sets[e.name] = want;
+    if (used() > budget) sets[e.name] = before;
+  }
+  return {
+    ...plan,
+    exercises: core.filter(e => sets[e.name] > 0).map(e => sets[e.name] === e.sets ? e : { ...e, sets: sets[e.name] }),
+    budget: minutes,
+    trimmed: core.filter(e => !sets[e.name]).map(e => e.name),
+  };
+}
+// Minutes from now until today's closing time, or null if unknown / already shut.
+function minutesUntilClose(now = new Date()) {
+  const h = GYM_HOURS[now.getDay()];
+  if (!h) return null;
+  const close = new Date(now); close.setHours(h.close, 0, 0, 0);
+  const m = Math.floor((close - now) / 60000);
+  return m > 0 ? m : null;
+}
+
 function getBetweenExerciseRest(previousExName, dayType) {
   // Between-exercise rest scales with the fatigue of what you JUST finished,
   // plus a small buffer for walking to the next station and setting up.
@@ -4355,7 +4494,7 @@ const DAYS = ["Upper Power","Lower Power","Upper Hypertrophy","Lower Hypertrophy
 const FULLBODY = {
   "Full Body A": {
     type: "fullbody", color: "#4a9eff", icon: "◈",
-    description: "Squat · bench · pull · fly · row · quads · arms · trunk. ~2 h. Compounds stop 2 reps short, isolations go to the wall.",
+    description: "Squat · bench · pull · fly · row · quads · arms · trunk. Compounds stop 2 reps short, isolations go to the wall.",
     exercises: [
       { name: "Squat",              day: "Full Body A", tier: 1, sets: 3, repRange: "5-8",   startWeight: 30, barbell: true, barWeight: BAR.olympic, seedFrom: ["Squat","Front Squat"], hardMode: { sets: 4, finish: "amrap" }, note: "Deep as your hips allow — the stretched position is where the growth is." },
       { name: "Bench Press",        day: "Full Body A", tier: 1, sets: 3, repRange: "5-8",   startWeight: 30, barbell: true, barWeight: BAR.olympic, seedFrom: ["Bench Press"], hardMode: { sets: 4, finish: "amrap" }, note: "Stop with 1–2 clean reps left. Not to failure." },
@@ -4388,7 +4527,7 @@ const FULLBODY = {
   },
   "Full Body B": {
     type: "fullbody", color: "#4a9eff", icon: "◈",
-    description: "Deadlift · incline · row · legs ×2 · overhead · hams · arms · carry. ~2 h. Compounds stop 2 reps short, isolations go to the wall.",
+    description: "Deadlift · incline · row · legs ×2 · overhead · hams · arms · carry. Compounds stop 2 reps short, isolations go to the wall.",
     exercises: [
       { name: "Deadlift",           day: "Full Body B", tier: 1, sets: 3, repRange: "5-8",   startWeight: 35, barbell: true, barWeight: BAR.olympic, seedFrom: ["Deadlift"], hardMode: { sets: 4, finish: "amrap" }, note: "Brace, push the floor away. Reset each rep." },
       { name: "Incline Barbell Press", day: "Full Body B", tier: 1, sets: 3, repRange: "8-12", startWeight: 15, barbell: true, barWeight: BAR.olympic, seedFrom: ["Incline Barbell Press"], hardMode: { sets: 4, finish: "amrap" }, note: "Slow down the descent. Stretch at the bottom." },
@@ -4705,14 +4844,16 @@ const INIT_STATS = { weight: 74.1, height: 180, bodyFat: 14.3, bmr: 2200, date: 
 // Personal gym schedule — used to warn when the session ETA will overshoot
 // closing time. Keys: 0=Sun, 1=Mon ... 6=Sat. Hours are LOCAL (phone timezone).
 // Edit if the gym schedule changes.
+// New gym from 2026-10. Weekdays close 21:00, Saturday 16:00. Opening times and
+// Sunday aren't known yet — only `close` is read, and a missing day simply
+// means no closing-time warning or "fits before close" option that day.
 const GYM_HOURS = {
-  0: { open: 9,  close: 13 }, // Sunday
-  1: { open: 7,  close: 22 }, // Monday
-  2: { open: 7,  close: 22 }, // Tuesday
-  3: { open: 7,  close: 22 }, // Wednesday
-  4: { open: 7,  close: 22 }, // Thursday
-  5: { open: 7,  close: 22 }, // Friday
-  6: { open: 8,  close: 20 }, // Saturday
+  1: { close: 21 }, // Monday
+  2: { close: 21 }, // Tuesday
+  3: { close: 21 }, // Wednesday
+  4: { close: 21 }, // Thursday
+  5: { close: 21 }, // Friday
+  6: { close: 16 }, // Saturday
 };
 
 // ─── SHARED UI ────────────────────────────────────────────────────────────────
@@ -4849,6 +4990,7 @@ function buildSessionLogs({ dayName, plan, filter, data, abandoned, times, sessi
     day: dayName, dayLabel: plan.name || dayName, isCustom: !lookupDay(dayName),
     isMakeup: !!filter, makeupFrom: filter || null, type: plan.type,
     exercises: data, date, ts: lastAt, durationMins, abandoned: abandoned || [],
+    ...(plan.budget ? { budget: plan.budget } : {}),
   }}]};
 }
 
@@ -4860,9 +5002,12 @@ function buildSessionLogs({ dayName, plan, filter, data, abandoned, times, sessi
 // would only close the draft sooner, with the identical record, and a wrong
 // GYM_HOURS (a new gym) could end a live session.
 const STALE_DRAFT_MS = 3 * 3600000;
-function closeStaleDraft(draft, resolvePlan, now) {
+function closeStaleDraft(draft, resolvePlan, now, pace = DEFAULT_PACE) {
   if (!draft?.lastSetAt || now - draft.lastSetAt < STALE_DRAFT_MS) return null;
-  const plan = resolveActivePlan(draft.dayName, draft.filter || null, resolvePlan);
+  const base = resolveActivePlan(draft.dayName, draft.filter || null, resolvePlan);
+  // A time-boxed session is judged against what it actually asked for —
+  // otherwise everything trimmed for time would land in Catch up.
+  const plan = (base && draft.budget && !draft.filter) ? fitPlanToTime(base, draft.budget, pace) : base;
   if (!plan?.exercises?.length) return null;
   const data = draft.data || {};
   if (!Object.values(data).some(sets => (sets || []).some(s => s.done))) return null;
@@ -4899,6 +5044,10 @@ function App() {
   // for "catch up" standalone makeup sessions. Array of exercise names to
   // include; null means full plan.
   const [activeSessionFilter, setActiveSessionFilter] = useState(null);
+  // Minutes the lifter said they have ("Short on time"), or null for the full
+  // plan. Only applies to regular program days. Once a draft exists, the
+  // draft's own `budget` wins, so a resumed session is the same session.
+  const [activeBudget, setActiveBudget] = useState(null);
   // Custom sessions — imported via JSON in WorkoutTab. Shape matches
   // SESSION_FORMAT.md schema. Stored as an array; addressable by .id.
   const [customSessions, setCustomSessions] = useState(() => lsGet("phul_custom_sessions") || []);
@@ -4940,12 +5089,17 @@ function App() {
   const today = todayStr();
   const todayDiet = dietLogs[today] || { kcal:0, protein:0, notes:"" };
 
+  const sessionBudget = (activeSession && !activeSessionFilter)
+    ? ((draftSession?.dayName === activeSession) ? (draftSession.budget ?? null) : activeBudget)
+    : null;
+  const pace = paceFactor(workoutLogs);
+
   const saveDraft = (state) => {
     // Only merge an EXISTING draft if it belongs to THIS day. Otherwise a stale
     // draft from a different day would leak its dayName/fields into the new
     // session and corrupt it. dayName is authoritative, so it's set last.
     const base = (draftSession && draftSession.dayName === activeSession) ? draftSession : {};
-    const d = { ...base, ...state, dayName: activeSession };
+    const d = { ...base, ...state, dayName: activeSession, budget: sessionBudget };
     setDraftSession(d);
     lsSet("phul_draft", d);
   };
@@ -5031,10 +5185,10 @@ function App() {
   useEffect(() => {
     if (activeSession) return;
     const now = Date.now(), closed = [];
-    const reg = closeStaleDraft(draftSession, resolvePlan, now);
+    const reg = closeStaleDraft(draftSession, resolvePlan, now, pace);
     if (reg) { closed.push(reg); clearDraft(); }
     for (const d of Object.values(makeupDrafts || {})) {
-      const c = closeStaleDraft(d, resolvePlan, now);
+      const c = closeStaleDraft(d, resolvePlan, now, pace);
       if (c) { closed.push(c); clearMakeupDraft(d.dayName, d.filter); }
     }
     if (!closed.length) return;
@@ -5045,17 +5199,19 @@ function App() {
   // Guard the normal "Start" buttons: the regular draft lives in a single slot,
   // so starting a DIFFERENT day would overwrite an unfinished one. Confirm first;
   // resuming the same day (or starting with no draft) skips the prompt.
-  const startSession = (dayKey) => {
+  const startSession = (dayKey, budget = null) => {
     if (draftSession && draftSession.dayName && draftSession.dayName !== dayKey) {
       const ok = window.confirm(`You have an unfinished "${draftSession.dayName}" session saved. Discard it and start a new one?\n\nTap Cancel to keep it — you can Resume it from the banner instead.`);
       if (!ok) return;
       clearDraft();
     }
+    setActiveBudget(budget);
     setActiveSession(dayKey);
   };
 
   if (activeSession) {
-    const activePlan = resolveActivePlan(activeSession, activeSessionFilter, resolvePlan);
+    const basePlan = resolveActivePlan(activeSession, activeSessionFilter, resolvePlan);
+    const activePlan = (basePlan && sessionBudget) ? fitPlanToTime(basePlan, sessionBudget, pace) : basePlan;
     if (!activePlan) {
       // Defensive: custom session was deleted while active — bail cleanly
       setActiveSession(null);
@@ -5091,16 +5247,19 @@ function App() {
           if (activeSessionFilter) clearMakeupDraft(activeSession, activeSessionFilter); else clearDraft();
           setActiveSession(null);
           setActiveSessionFilter(null);
+          setActiveBudget(null);
           setTab("workout");
         }}
         onDiscard={() => {
           if (activeSessionFilter) clearMakeupDraft(activeSession, activeSessionFilter); else clearDraft();
           setActiveSession(null);
           setActiveSessionFilter(null);
+          setActiveBudget(null);
         }}
         onCancel={() => {
           setActiveSession(null);
           setActiveSessionFilter(null);
+          setActiveBudget(null);
         }}
       />
     );
@@ -5153,8 +5312,8 @@ function App() {
       </header>
 
       <main className="app-main">
-        {tab==="dash"    && <Dashboard latest={latest} phase={phase} kcalTarget={kcalTarget} todayDiet={todayDiet} workoutLogs={workoutLogs} setTab={setTab} setActiveSession={setActiveSession} startSession={startSession} draftSession={draftSession} pendingMakeups={pendingMakeups} startMakeup={startMakeup} startCatchupAll={startCatchupAll} dismissMakeup={dismissMakeup} autoClosed={autoClosed} clearAutoClosed={() => setAutoClosed([])} program={program} targets={targets} trend={trend} hardMode={hardMode} />}
-        {tab==="workout" && <WorkoutTab workoutLogs={workoutLogs} setWorkoutLogs={setWorkoutLogs} setActiveSession={setActiveSession} startSession={startSession} draftSession={draftSession} customSessions={customSessions} setCustomSessions={setCustomSessions} program={program} programId={programId} setProgramId={setProgramId} />}
+        {tab==="dash"    && <Dashboard latest={latest} phase={phase} kcalTarget={kcalTarget} todayDiet={todayDiet} workoutLogs={workoutLogs} setTab={setTab} setActiveSession={setActiveSession} startSession={startSession} draftSession={draftSession} pendingMakeups={pendingMakeups} startMakeup={startMakeup} startCatchupAll={startCatchupAll} dismissMakeup={dismissMakeup} autoClosed={autoClosed} clearAutoClosed={() => setAutoClosed([])} pace={pace} program={program} targets={targets} trend={trend} hardMode={hardMode} />}
+        {tab==="workout" && <WorkoutTab workoutLogs={workoutLogs} setWorkoutLogs={setWorkoutLogs} setActiveSession={setActiveSession} startSession={startSession} draftSession={draftSession} customSessions={customSessions} setCustomSessions={setCustomSessions} program={program} programId={programId} setProgramId={setProgramId} hardMode={hardMode} />}
         {tab==="diet"    && <DietTab today={today} todayDiet={todayDiet} dietLogs={dietLogs} setDietLogs={setDietLogs} phase={phase} stats={stats} targets={targets} trend={trend} setTab={setTab} />}
         {tab==="stats"   && <StatsTab stats={stats} setStats={setStats} phase={phase} theme={theme} setTheme={setTheme} />}
       </main>
@@ -5264,7 +5423,7 @@ function mesocycleDelta(workoutLogs, dayType) {
   const deltaPct = ((last - avg) / avg) * 100;
   return { last, avg, deltaPct };
 }
-function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, setActiveSession, startSession, draftSession, pendingMakeups = [], startMakeup, startCatchupAll, dismissMakeup, autoClosed = [], clearAutoClosed, program, targets, trend, hardMode }) {
+function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, setActiveSession, startSession, draftSession, pendingMakeups = [], startMakeup, startCatchupAll, dismissMakeup, autoClosed = [], clearAutoClosed, pace = DEFAULT_PACE, program, targets, trend, hardMode }) {
   const PROTEIN_G = targets.protein; // shadow the legacy constant — see computeTargets
   // When a pending group is tapped, this holds it for the choice modal.
   const [catchupOpen, setCatchupOpen] = useState(null);
@@ -5293,6 +5452,11 @@ function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, 
   const nextDay = order[nextIdx];
   const nextPlan = program.days[nextDay];
   const nextTypeCls = dayTypeClass(nextPlan.type);
+  const fullMin = estimateMinutes(applyIntensity(nextPlan, !!hardMode?.on), workoutLogs, pace);
+  const untilClose = minutesUntilClose();
+  // 5 min of slack to rack and leave; below ~35 min there's no real session.
+  const closeBudget = (untilClose != null && untilClose - 5 < fullMin && untilClose - 5 >= 35) ? untilClose - 5 : null;
+  const shortOptions = [60, 90].filter(m => m < fullMin - 10 && !(closeBudget && Math.abs(m - closeBudget) < 10));
   const meso = mesocycleDelta(workoutLogs, nextDay);
 
   // Last session of the SAME day type — to show "volume last time"
@@ -5505,12 +5669,32 @@ function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, 
           </div>
         )}
 
+        {/* Real time, from this lifter's own pace — and the shorter versions,
+            offered not imposed. "Fit before close" appears only when the full
+            session wouldn't make it before GYM_HOURS' closing time. */}
+        <div className="next-time">
+          ≈ {fmtMins(fullMin)} at your pace
+          {untilClose != null && <span className={untilClose < fullMin ? "nt-close" : ""}>{` · gym closes in ${fmtMins(untilClose)}`}</span>}
+        </div>
         <button className="start-btn" onClick={() => startSession(nextDay)}>
           Start session
           <svg className="arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M5 12h14M13 6l6 6-6 6"/>
           </svg>
         </button>
+        {(closeBudget || shortOptions.length > 0) && (
+          <div className="time-opts">
+            <span className="to-k">Short on time</span>
+            {closeBudget && (
+              <button className="to-btn close" onClick={() => startSession(nextDay, closeBudget)}>
+                {`Fit before close · ${fmtMins(closeBudget)}`}
+              </button>
+            )}
+            {shortOptions.map(m => (
+              <button key={m} className="to-btn" onClick={() => startSession(nextDay, m)}>{`${m} min`}</button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Body-trend alarm, mirrored onto the dashboard — a lean-mass loss during
@@ -5813,6 +5997,9 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
   // Exercises whose warm-up ramp has been dismissed this session. Not persisted
   // to the log — warm-ups are guidance, not data.
   const [warmedUp, setWarmedUp] = useState(() => savedSession?.warmedUp || []);
+  // Superset pairs switched ON this session (both names of each pair). Off by
+  // default: a pair in the plan is an option you tap, not a mode you're put in.
+  const [supersetsOn, setSupersetsOn] = useState(() => savedSession?.supersets || []);
 
   // Helpers
   const isExDone      = (exName) => data[exName]?.every(s => s.done);
@@ -5880,7 +6067,7 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
   // copy over the draft when the timer hit zero, and a reload mid-session then
   // restored the session without the edit. Everything that saves reads this.
   const latest = useRef(null);
-  latest.current = { data, activeEx, activeIdx, exerciseHolds, warmedUp };
+  latest.current = { data, activeEx, activeIdx, exerciseHolds, warmedUp, supersets: supersetsOn };
   const snapshot = (extra = {}) => ({
     ...latest.current, sessionStartedAt: sessionStartedAt.current,
     ...setTimes.current, ...extra,
@@ -5889,7 +6076,7 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
   useEffect(() => {
     if (isFirst.current) { isFirst.current = false; return; }
     onSaveSession(snapshot());
-  }, [data, activeEx, activeIdx, exerciseHolds]);
+  }, [data, activeEx, activeIdx, exerciseHolds, supersetsOn]);
 
   useEffect(() => {
     if (phase !== "resting") return;
@@ -6138,15 +6325,17 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
   };
 
   // ─── SUPERSETS ─────────────────────────────────────────────────────────
-  // A pair alternates: A set 1 → switch → B set 1 → rest → A set 2 → switch →
-  // B set 2 → rest … The partner's set IS most of the rest, so the full rest
-  // only comes after both have gone. The pair only runs as a pair while both
-  // halves are live: hold or skip one and the other runs straight through on
-  // its own. Before this, "superset" was a note in the plan and you alternated
-  // by tapping between exercises in the list — which the rest timer blocked,
-  // and which meant two full rests per round.
+  // Opt-in per session (v9.4): a planned pair runs as two normal exercises until
+  // you tap "Superset" on either one. v9.0 forced every planned pair into the
+  // alternating flow, which wasn't what was asked for — "if I want to superset
+  // I click it, if I don't, it works normally."
+  // When on, a pair alternates: A set 1 → switch → B set 1 → rest → A set 2 …
+  // The partner's set IS most of the rest, so the full rest only comes after
+  // both have gone. It only runs as a pair while both halves are live: hold or
+  // skip one and the other runs straight through on its own.
   const SUPERSET_SWITCH_REST = 20; // change bar / pick up the other dumbbells
   const livePartner = (exName, dataNow) => {
+    if (!supersetsOn.includes(exName)) return null;
     const ex = plan.exercises.find(e => e.name === exName);
     const p = ex?.supersetWith && plan.exercises.find(e => e.name === ex.supersetWith);
     if (!p || isExHeld(p.name) || isExAbandoned(p.name)) return null;
@@ -6156,6 +6345,14 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
   const isPairLeader = (aName, bName) =>
     plan.exercises.findIndex(e => e.name === aName) < plan.exercises.findIndex(e => e.name === bName);
   const supersetOf = curEx ? livePartner(curEx.name, data) : null;
+  // The pair partner if it's in today's plan (a time-fitted session may have
+  // trimmed it), whether or not the superset is switched on.
+  const pairPartner = curEx?.supersetWith && plan.exercises.find(e => e.name === curEx.supersetWith && !isExDone(e.name) && !isExAbandoned(e.name));
+  const toggleSuperset = () => {
+    if (!pairPartner) return;
+    const pair = [curEx.name, pairPartner.name];
+    setSupersetsOn(prev => prev.includes(curEx.name) ? prev.filter(n => !pair.includes(n)) : [...prev, ...pair]);
+  };
 
   const finishSet = () => {
     if (!pendingR) return;
@@ -6390,6 +6587,7 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
           <span className="session-progress">
             <span className="done-n">{doneCount}</span>/{coreEx.length} exercises
           </span>
+          {plan.budget && <span className="budget-chip">{`${plan.budget}-min version`}</span>}
           {!allDone && etaMin > 0 && finishLabel && (
             <span className={`eta-chip ${closeInfo.state}`}>
               ~{finishLabel}
@@ -6514,6 +6712,11 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
               </h1>
               {supersetOf && (
                 <div className="superset-tag">⇄ superset · then <strong>{supersetOf.ex.name}</strong></div>
+              )}
+              {pairPartner && phase === "ready" && (
+                <button className={`ss-toggle ${supersetsOn.includes(curEx.name) ? "on" : ""}`} onClick={toggleSuperset}>
+                  {supersetsOn.includes(curEx.name) ? `⇄ Superset on · tap to stop` : `⇄ Superset with ${pairPartner.name}`}
+                </button>
               )}
               <div className="ex-set-meta">
                 <span>Set</span>
@@ -6984,7 +7187,8 @@ function validateCustomSession(obj, existingIds) {
   return [normalized, null];
 }
 
-function WorkoutTab({ workoutLogs, setWorkoutLogs, setActiveSession, startSession, draftSession, customSessions, setCustomSessions, program, programId, setProgramId }) {
+function WorkoutTab({ workoutLogs, setWorkoutLogs, setActiveSession, startSession, draftSession, customSessions, setCustomSessions, program, programId, setProgramId, hardMode }) {
+  const pace = paceFactor(workoutLogs);
   const [view, setView] = useState("plan");
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [confirmDelCustom, setConfirmDelCustom] = useState(null);
@@ -7058,7 +7262,7 @@ function WorkoutTab({ workoutLogs, setWorkoutLogs, setActiveSession, startSessio
                 <div className="day-card-head">
                   <div className="day-card-head-l">
                     <span className={`eyebrow eyebrow-${typeCls}`}>
-                      {p.type === "power" ? "Power" : p.type === "fullbody" ? `Full body · ${core.length} lifts` : "Hypertrophy"}
+                      {p.type === "power" ? "Power" : p.type === "fullbody" ? `Full body · ${core.length} lifts` : "Hypertrophy"}{` · ≈ ${fmtMins(estimateMinutes(applyIntensity(p, !!hardMode?.on), workoutLogs, pace))}`}
                     </span>
                     <div className="day-card-name">{day}</div>
                     {p.description && <div className="day-card-desc">{p.description}</div>}
@@ -8504,7 +8708,7 @@ function StatsTab({ stats, setStats, phase, theme, setTheme }) {
             </button>
           ))}
         </div>
-        <div className="app-version">Gym Tracker · v9.3 — Volume</div>
+        <div className="app-version">Gym Tracker · v9.4 — Volume</div>
       </div>
 
       <PushToggle />

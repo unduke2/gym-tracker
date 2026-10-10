@@ -88,7 +88,7 @@ module.exports = function load(withReact = false) {
     "num", "isScorable", "calcNextWeight", "computeRestartWeight", "warmupSets", "stalenessFactor",
     "getEquipmentType", "getRestSeconds", "snap", "PHUL", "FULLBODY", "PROGRAMS", "lookupDay",
     "coreExercises", "MIGRATION_REPORT", "computeTargets", "bodyTrendAlarm", "daysSinceWeighIn",
-    "weightTrend", "consistency", "hardModeState", "buildCatchupPlan", "splitCatchupLogs", "catchupTokens", "sessionDurationMins", "localDate", "CATCHUP_ALL", "computePendingMakeups", "buildSessionLogs", "closeStaleDraft", "resolveActivePlan", "STALE_DRAFT_MS", "applyIntensity", "FINISHERS", "HARD_MODE_WEEKS", "effortTarget",
+    "weightTrend", "consistency", "hardModeState", "buildCatchupPlan", "splitCatchupLogs", "catchupTokens", "sessionDurationMins", "localDate", "CATCHUP_ALL", "computePendingMakeups", "buildSessionLogs", "closeStaleDraft", "resolveActivePlan", "STALE_DRAFT_MS", "paceFactor", "estimateMinutes", "fitPlanToTime", "planSeconds", "minutesUntilClose", "fmtMins", "GYM_HOURS", "applyIntensity", "FINISHERS", "HARD_MODE_WEEKS", "effortTarget",
     ...(withReact ? ["App", "Dashboard", "WorkoutTab", "DietTab", "StatsTab", "SessionLogger"] : []),
   ];
   const file = path.join(HERE, withReact ? ".tmp.app-react.js" : ".tmp.app.js");

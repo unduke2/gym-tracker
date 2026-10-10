@@ -428,6 +428,66 @@ console.log("\n── Finishing: dated from the last set ──");
   check("a stale merged catch-up closes into one log per day", !!cu && cu.logs.map(l => l.log.day).sort().join() === "Full Body A,Full Body B");
 }
 
+console.log("\n── Session time: estimate from the lifter's own pace ──");
+{
+  const A1 = A.FULLBODY["Full Body A"], B1 = A.FULLBODY["Full Body B"];
+  const done = (n) => Array.from({ length: n }, () => ({ weight:"40", reps:"8", rpe:8, done:true }));
+  // Two logged sessions that took 1.4x the theoretical time → pace 1.4.
+  const mk = (day, plan, daysAgo) => {
+    const ex = {}; for (const e of plan.exercises.filter(e => !e.optional)) ex[e.name] = done(e.sets);
+    const theo = A.planSeconds(plan.exercises.filter(e => !e.optional), plan.type) / 60;
+    return { day, ts: Date.now() - daysAgo * DAY, date: "x", exercises: ex, abandoned: [], durationMins: Math.round(theo * 1.4) };
+  };
+  const logs = { a: mk("Full Body A", A1, 2), b: mk("Full Body B", B1, 4) };
+  const pace = A.paceFactor(logs);
+  check("pace is learned from real durations", Math.abs(pace - 1.4) < 0.03, pace.toFixed(3));
+  check("no history → a sane default, not 1.0", A.paceFactor({}) > 1);
+  const full = A.estimateMinutes(A1, logs);
+  check("a full v9 session is estimated at about 2 hours at that pace", full > 105 && full < 150, full);
+  check("hard mode estimates longer", A.estimateMinutes(A.applyIntensity(A1, true), logs) > full);
+  check("0-minute logs (the old dating bug) are ignored", A.paceFactor({ ...logs, z: { ...logs.a, durationMins: 0 } }) === pace);
+
+  // Fitting.
+  const f60 = A.fitPlanToTime(A1, 60, 1.4);
+  const sets = n => f60.exercises.find(e => e.name === n)?.sets || 0;
+  console.log("   60 min →", f60.exercises.map(e => `${e.name} ${e.sets}`).join(", "));
+  check("60 min fits in 60 min", A.estimateMinutes(f60, {}, 1.4) <= 60, A.estimateMinutes(f60, {}, 1.4));
+  check("the main lifts survive", ["Squat","Bench Press","Lat Pulldown"].every(n => sets(n) >= 2));
+  check("second-tier lifts get 2 sets before any isolation gets 1",
+    sets("Romanian Deadlift") >= 2 || !f60.exercises.some(e => (e.tier || 3) === 3));
+  check("what was cut is reported", f60.trimmed.length > 0 && f60.trimmed.every(n => !sets(n)));
+  check("optional finishers never appear in a fitted session", !f60.exercises.some(e => e.optional));
+  const f90 = A.fitPlanToTime(A1, 90, 1.4);
+  check("90 min keeps every core exercise at least once", f90.trimmed.length === 0, f90.trimmed.join());
+  check("a budget bigger than the session changes nothing",
+    A.fitPlanToTime(A1, 600, 1.4).exercises.every(e => e.sets === A1.exercises.find(x => x.name === e.name).sets));
+  check("the budget is carried on the plan (it goes into the log)", f60.budget === 60);
+  const h60 = A.fitPlanToTime(A.applyIntensity(A1, true), 60, 1.4);
+  const hs = n => h60.exercises.find(e => e.name === n)?.sets || 0;
+  check("hard mode's 4th set comes after every main lift has 3",
+    !(hs("Squat") === 4 && hs("Bench Press") < 3), `squat ${hs("Squat")} bench ${hs("Bench Press")}`);
+
+  // Closing time.
+  const wed2030 = new Date(2026, 9, 7, 20, 30);  // a Wednesday
+  check("weekday close is 21:00", A.minutesUntilClose(wed2030) === 30);
+  check("Saturday close is 16:00", A.minutesUntilClose(new Date(2026, 9, 10, 14, 0)) === 120);
+  check("after close → null", A.minutesUntilClose(new Date(2026, 9, 7, 21, 30)) === null);
+  check("unknown day (Sunday) → null", A.minutesUntilClose(new Date(2026, 9, 11, 12, 0)) === null);
+}
+
+console.log("\n── A stale time-boxed draft is judged against what it asked for ──");
+{
+  const plan = A.FULLBODY["Full Body A"];
+  const fitted = A.fitPlanToTime(plan, 60, 1.4);
+  const done = { weight:"40", reps:"8", rpe:8, done:true };
+  const data = Object.fromEntries(fitted.exercises.map(e => [e.name, Array.from({ length: e.sets }, () => done)]));
+  const t = Date.now() - 10 * 3600000;
+  const c = A.closeStaleDraft({ dayName:"Full Body A", data, budget: 60, sessionStartedAt: t - 3600000, firstSetAt: t - 3000000, lastSetAt: t },
+    A.lookupDay, Date.now(), 1.4);
+  check("a finished 60-min session left open isn't turned into catch-ups", !!c && c.missed.length === 0, c && c.missed.join());
+  check("…and the log says it was the 60-min version", c.logs[0].log.budget === 60);
+}
+
 console.log("\n── Catch-up window ──");
 {
   const X = n => ({ [n]: [{ weight:"", reps:"", done:false }] });
