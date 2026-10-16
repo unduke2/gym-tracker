@@ -319,5 +319,25 @@ console.log("\n── v9.4: real session time, short-on-time options ──");
   hasnt("trimmed isolations aren't on the list", sess, "Skull Crushers");
 }
 
+console.log("\n── v9.6: coming up, on the rest screen ──");
+{
+  // "all I can do is exit the session and check the plan, but there's no weight there"
+  const plan = M.FULLBODY["Full Body A"];
+  const data = Object.fromEntries(plan.exercises.map(e => [e.name, Array.from({ length: e.sets }, () => ({ weight:"", reps:"", rpe:null, done:false }))]));
+  data["Squat"][0] = { weight:"52.5", reps:"6", rpe:8, done:true };
+  const saved = { data, activeEx:"Squat", activeIdx:1, exerciseHolds:{}, restStartedAt: Date.now(), restDuration: 180 };
+  const out = T("SessionLogger [resting]", h(M.SessionLogger, { dayName:"Full Body A", plan, workoutLogs: {},
+    onFinish:noop, onCancel:noop, onDiscard:noop, savedSession:saved, onSaveSession:noop }));
+  const txt = out.replace(/<!-- -->/g, "");
+  has("rest screen lists what's coming up", txt, "Coming up");
+  has("…with the weight you're actually using", txt, "52.5kg");
+  has("…the bar total and plates", txt, "72.5 total");
+  has("…and the exercises after this one", txt, "Bench Press");
+  const up = txt.slice(txt.indexOf("Coming up"));
+  const ordered = (
+    up.indexOf("Squat") < up.indexOf("Bench Press") && up.indexOf("Lat Pulldown") < up.indexOf("Cable Fly"));
+  ordered ? console.log("  ok   current exercise first, then T1 before isolations") : (fails++, console.log("  FAIL coming-up order"));
+}
+
 console.log(`\n${"─".repeat(52)}\n  ${fails ? fails + " FAILED" : "all render checks passed"}\n`);
 process.exit(fails ? 1 : 0);

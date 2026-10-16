@@ -1424,6 +1424,20 @@ button { cursor: pointer; }
   text-transform: uppercase;
   text-align: center;
 }
+.upnext { display: flex; flex-direction: column; gap: 6px; }
+.upnext-row {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--r-md, 12px); padding: 10px 14px;
+}
+.upnext-row.now { border-color: color-mix(in oklab, var(--accent) 35%, var(--line)); }
+.upnext-row.held { opacity: 0.6; }
+.upnext-name { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-weight: 700; color: var(--ink); }
+.upnext-meta, .upnext-plates {
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em;
+  color: var(--ink-3); font-weight: 500;
+}
+.upnext-w { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-weight: 800; color: var(--ink); white-space: nowrap; }
 .rest-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -3532,7 +3546,7 @@ input.text-in {
   }
 </script>
 <script type="text/babel">
-const { useState, useEffect, useRef } = React;
+const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── LOCALSTORAGE HELPERS ─────────────────────────────────────────────────────
 function lsGet(key) {
@@ -6149,6 +6163,21 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
   const curIdx    = plan.exercises.findIndex(e => e.name===activeEx);
   const curEx     = plan.exercises[curIdx];
   const sug       = curEx ? calcNextWeight(curEx, workoutLogs) : null;
+  // Every exercise's suggestion, for the "Coming up" list on the rest screen.
+  // Memoised: the rest timer re-renders every second.
+  const sugAll = useMemo(() => Object.fromEntries(plan.exercises.map(e => [e.name, calcNextWeight(e, workoutLogs)])),
+    [plan, workoutLogs]);
+  // What's left, in the order the session will take it: the current exercise,
+  // then tier by tier, plan order, held ones last within a tier — the same
+  // order findNextExercise walks.
+  const comingUp = plan.exercises
+    .map((e, i) => ({ e, i }))
+    .filter(({ e }) => !isExDone(e.name) && !isExAbandoned(e.name))
+    .sort((a, b) => (b.e.name === activeEx) - (a.e.name === activeEx)
+      || (a.e.tier || 3) - (b.e.tier || 3)
+      || isExHeld(a.e.name) - isExHeld(b.e.name)
+      || a.i - b.i)
+    .map(({ e }) => e);
   const restTime  = curEx ? resolveSetRest(curEx, plan.type) : 60;
   // Optional finishers are extra credit — they never gate finishing, never count
   // toward the denominator, and skipping one is not "abandoning" anything.
@@ -6664,6 +6693,37 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
               setRestLeft(0); setPhase("ready"); restStartedAtRef.current = 0;
               onSaveSession(snapshot({ restStartedAt: null, restDuration: 0 }));
             }}>{restType === "switch" ? "Ready →" : "Skip rest →"}</button>
+          </div>
+        )}
+
+        {/* ── COMING UP — read-only, so you can load the next bar during the rest
+            instead of skipping the rest to see the weight. ── */}
+        {phase==="resting" && comingUp.length > 0 && (
+          <div className="upnext">
+            <div className="ex-list-head">Coming up</div>
+            {comingUp.map(e => {
+              const done = data[e.name]?.filter(x => x.done) || [];
+              const lastW = done.length ? num(done[done.length - 1].weight) : null;
+              const sg = sugAll[e.name];
+              const w = lastW ?? sg?.weight;
+              return (
+                <div key={e.name} className={`upnext-row ${e.name === activeEx ? "now" : ""} ${isExHeld(e.name) ? "held" : ""}`}>
+                  <div className="upnext-name">
+                    {e.name}
+                    <span className="upnext-meta">
+                      {done.length ? `${done.length}/${data[e.name].length} done` : `${data[e.name]?.length ?? e.sets} × ${e.repRange}${e.unit === "s" ? "s" : ""}`}
+                      {isExHeld(e.name) ? " · on hold" : ""}{e.optional ? " · optional" : ""}
+                    </span>
+                  </div>
+                  <div className="upnext-w tnum">
+                    {e.bodyweight ? `${sg?.hold ?? "—"}s` : w > 0 ? `${parseFloat(w.toFixed(2))}kg` : "—"}
+                    {e.barbell && w > 0 && (
+                      <span className="upnext-plates">{parseFloat((w + (e.barWeight || 0)).toFixed(2))} total · {formatPlateBreakdown(w)}/side</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -8733,7 +8793,7 @@ function StatsTab({ stats, setStats, phase, theme, setTheme }) {
             </button>
           ))}
         </div>
-        <div className="app-version">Gym Tracker · v9.5.1 — Volume</div>
+        <div className="app-version">Gym Tracker · v9.6 — Volume</div>
       </div>
 
       <PushToggle />
