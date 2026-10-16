@@ -16,6 +16,11 @@ const bench = ex("PHUL", "Upper Power", "Bench Press");
 const facePull = ex("PHUL", "Upper Hypertrophy", "Face Pull");
 
 console.log("\n── Progression: patterns that used to misfire ──");
+// "Sometimes I just can't do a weight, so I write a lower one" — the next
+// suggestion must come from what was lifted, not from what was planned.
+check("a weight dropped mid-exercise drives the next suggestion",
+  A.calcNextWeight(ex("FULLBODY", "Full Body A", "Bench Press"),
+    sess("Full Body A", "Bench Press", [S(35,4,10), S(30,8,8), S(30,8,8)])).weight === 32.5);
 check("AMRAP burnout set (5,5,12 on 3-5) is not a CRUSH",
   A.calcNextWeight(squat, sess("Lower Power", "Squat", [S(42.5,5,6), S(42.5,5,6), S(42.5,12,9)])).weight === 45);
 check("a genuine crush still double-jumps",

@@ -6319,6 +6319,7 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
   const [editingSet, setEditingSet] = useState(null);
   const [editW, setEditW] = useState("");
   const [editR, setEditR] = useState("");
+  const [editRpe, setEditRpe] = useState(null);
   const [expandedEx, setExpandedEx] = useState(null);
 
   const [hypeMsg] = useState(() => HYPE_MSGS[Math.floor(Math.random()*HYPE_MSGS.length)]);
@@ -6518,7 +6519,7 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
     setData(prev => {
       const sets = [...prev[editingSet.exName]];
       const existing = sets[editingSet.idx] || {};
-      sets[editingSet.idx] = { weight: String(editW).replace(",","."), reps: String(editR).replace(",","."), rpe: existing.rpe ?? null, done: true };
+      sets[editingSet.idx] = { weight: String(editW).replace(",","."), reps: String(editR).replace(",","."), rpe: editRpe, done: true };
       return { ...prev, [editingSet.exName]: sets };
     });
     setEditingSet(null);
@@ -6969,6 +6970,20 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
                   <input value={editR} onChange={e => setEditR(e.target.value)} type="text" inputMode="numeric" pattern="[0-9]*"/>
                 </div>
               </div>
+              {/* A mistyped RPE steers progression as much as a mistyped weight —
+                  branch 2a and the stall counter both read it. Tap the lit one to clear. */}
+              <div className="rpe-block" style={{marginTop:12}}>
+                <div className="rpe-head">
+                  <span className="k">RPE</span>
+                  <span className={`v ${!editRpe?"none":""}`}>{editRpe ? `${editRpe}/10` : "not set"}</span>
+                </div>
+                <div className="rpe-grid">
+                  {[1,2,3,4,5,6,7,8,9,10].map(n => (
+                    <button key={n} onClick={() => setEditRpe(editRpe===n?null:n)}
+                      className={editRpe===n ? "on" : n>=9 ? "hard" : n>=7 ? "mid" : ""}>{n}</button>
+                  ))}
+                </div>
+              </div>
               <div className="btn-row" style={{marginTop:14}}>
                 <button className="btn ghost" onClick={() => setEditingSet(null)}>Cancel</button>
                 <button className={`btn ${editR?"ok":""}`} onClick={saveEdit} disabled={!editR}>Save ✓</button>
@@ -7048,7 +7063,7 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
                               <div key={i} className="set-editable">
                                 <div className="k">Set {i+1}</div>
                                 {s.done ? (
-                                  <button onClick={() => { setEditingSet({ exName: ex.name, idx: i }); setEditW(s.weight); setEditR(s.reps); }}>
+                                  <button onClick={() => { setEditingSet({ exName: ex.name, idx: i }); setEditW(s.weight); setEditR(s.reps); setEditRpe(s.rpe ?? null); }}>
                                     <span className="tnum">{fmtSet(ex, s)}</span>{s.rpe ? <span style={{color:"var(--accent-hold)", marginLeft:4}}>@{s.rpe}</span> : null} ✎
                                   </button>
                                 ) : (
@@ -8718,7 +8733,7 @@ function StatsTab({ stats, setStats, phase, theme, setTheme }) {
             </button>
           ))}
         </div>
-        <div className="app-version">Gym Tracker · v9.5 — Volume</div>
+        <div className="app-version">Gym Tracker · v9.5.1 — Volume</div>
       </div>
 
       <PushToggle />
