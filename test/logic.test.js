@@ -295,7 +295,7 @@ console.log("\n── Hard mode gating ──");
   const monday = (weeksAgo) => { const d = new Date(); d.setHours(12,0,0,0);
     d.setDate(d.getDate() - ((d.getDay() + 6) % 7) - weeksAgo * 7); return d.getTime(); };
   const mk = (perWeek) => { const l = {}; perWeek.forEach((n, wk) => {
-    for (let i = 0; i < n; i++) l[`w${wk}s${i}`] = { ts: monday(wk) + i * DAY }; }); return l; };
+    for (let i = 0; i < n; i++) l[`w${wk}s${i}`] = { ts: monday(wk) + i * DAY, day: "Full Body A" }; }); return l; };
   // perWeek[0] is the current week.
   for (const [w, want] of [[0,false],[1,false],[2,false],[3,true],[5,true]])
     check(`${w} weeks at 2/week → hard mode ${want ? "ON" : "off"}`, A.hardModeState(mk(Array(w).fill(2))).on === want);
@@ -308,6 +308,20 @@ console.log("\n── Hard mode gating ──");
   check("one session so far this week is 'at risk', not broken",
     A.hardModeState(mk([1,2,2,2])).on === true && A.hardModeState(mk([1,2,2,2])).thisWeek === 1);
   check("4/week is not required", A.hardModeState(mk([2,2,2])).on === true);
+  // v9.5: only sessions done in full count. Real case (Oct 2026): three weeks
+  // of 2–3 gym days unlocked it while every one of those sessions was cut
+  // short by closing time.
+  const spoil = (logs, patch) => Object.fromEntries(Object.entries(logs).map(([k, v]) => [k, { ...v, ...patch }]));
+  const three = mk([2,2,2]);
+  check("ended-early sessions don't count", A.hardModeState(spoil(three, { abandoned: ["Cable Fly"] })).on === false);
+  check("time-boxed sessions don't count", A.hardModeState(spoil(three, { budget: 60 })).on === false);
+  check("catch-ups don't count", A.hardModeState(spoil(three, { isMakeup: true })).on === false);
+  check("custom sessions don't count", A.hardModeState(spoil(three, { day: "My run", isCustom: true })).on === false);
+  check("…but the visible streak still counts them",
+    A.consistency(spoil(three, { abandoned: ["Cable Fly"] })).streak === 3);
+  check("an empty abandoned list is a full session", A.hardModeState(spoil(three, { abandoned: [] })).on === true);
+  check("one short session in a 2-day week breaks the run",
+    A.hardModeState({ ...three, w1s1: { ...three.w1s1, abandoned: ["OHP"] } }).streak === 1);
 }
 
 console.log("\n── Gym days, not logs ──");
@@ -316,11 +330,11 @@ console.log("\n── Gym days, not logs ──");
   const now = new Date(); now.setHours(12,0,0,0);
   const monday = new Date(now); monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
   const at = (dayOffset, h) => { const d = new Date(monday); d.setDate(d.getDate() + dayOffset); d.setHours(h); return d.getTime(); };
-  const sameDay = { a:{ ts: at(0, 18) }, b:{ ts: at(0, 21) } };
+  const sameDay = { a:{ ts: at(0, 18), day: "Full Body A" }, b:{ ts: at(0, 21), day: "Full Body B" } };
   check("two logs on one date count as one day", A.consistency(sameDay).currentCount === 1);
   check("one double-session evening does not satisfy the gate's 2/week",
     A.hardModeState(sameDay).thisWeek === 1);
-  const twoDays = { a:{ ts: at(0, 18) }, b:{ ts: at(0, 21) }, c:{ ts: at(1, 18) } };
+  const twoDays = { ...sameDay, c:{ ts: at(1, 18), day: "Full Body A" } };
   check("two separate days do", A.hardModeState(twoDays).thisWeek === 2);
 }
 

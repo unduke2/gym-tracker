@@ -4655,7 +4655,7 @@ function startOfWeek(d) {
   x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); // Mon = 0 … Sun = 6
   return x;
 }
-function consistency(workoutLogs, weeksBack = 8) {
+function consistency(workoutLogs, weeksBack = 8, counts = null) {
   const current = startOfWeek(new Date());
   const weeks = [];
   for (let i = weeksBack - 1; i >= 0; i--) {
@@ -4669,7 +4669,7 @@ function consistency(workoutLogs, weeksBack = 8) {
   const seen = new Set();
   let last30 = 0;
   for (const s of Object.values(workoutLogs || {})) {
-    if (!s?.ts) continue;
+    if (!s?.ts || (counts && !counts(s))) continue;
     const day = localDate(s.ts);
     if (seen.has(day)) continue;
     seen.add(day);
@@ -4731,8 +4731,16 @@ const FINISHERS = {
 // lock, not a gate. A week under the minimum breaks the run; the current week
 // can't break it while it's still running (same rule as the visible streak).
 const HARD_MODE_MIN_SESSIONS = 2;
+// Only a session done IN FULL counts toward the gate (v9.5, the user's call):
+// hard mode adds to the plan, so it's earned by completing the plan as written.
+// Ended early, time-boxed (`budget`), a catch-up, or a custom session — none of
+// those proved the full session fits. The visible streak still counts them all.
+function isFullSession(log) {
+  return !!lookupDay(log?.day) && !log.isMakeup && !log.isCustom && !log.budget
+    && !(log.abandoned?.length);
+}
 function hardModeState(workoutLogs) {
-  const { weeks } = consistency(workoutLogs);
+  const { weeks } = consistency(workoutLogs, 8, isFullSession);
   const cur = weeks[weeks.length - 1];
   const currentQualifies = cur.count >= HARD_MODE_MIN_SESSIONS;
   let streak = 0;
@@ -5807,7 +5815,7 @@ function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, 
                 <span className="pg-sub">unlocked · week {hardMode.streak}{hardMode.atRisk ? ` · ${hardMode.min - hardMode.thisWeek} more this week to keep it` : ""}</span>
               </div>
               <div className="pg-body">
-                4 sets on the main lifts, AMRAP finish, myo-reps on isolations, 60s rest. Stays on while you keep {hardMode.min}+ sessions a week.
+                4 sets on the main lifts, AMRAP finish, myo-reps on isolations, 60s rest. Stays on while you keep {hardMode.min}+ full sessions a week.
               </div>
             </>
           ) : (
@@ -5823,8 +5831,8 @@ function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, 
               </div>
               <div className="pg-body">
                 Build the habit first. Effort was never your problem — turning up on a
-                boring Tuesday is. Three straight weeks of {hardMode.min}+ gym days (A and B on separate days)
-                and the intensity work switches on. A week under {hardMode.min} starts the count over.
+                boring Tuesday is. Three straight weeks of {hardMode.min}+ full sessions on separate days —
+                every lift done, no early finish, no short version — and the intensity work switches on. A week under {hardMode.min} starts the count over.
                 {hardMode.thisWeek > 0 && hardMode.thisWeek < hardMode.min ? ` This week: ${hardMode.thisWeek} of ${hardMode.min}.` : ""}
               </div>
             </>
@@ -8710,7 +8718,7 @@ function StatsTab({ stats, setStats, phase, theme, setTheme }) {
             </button>
           ))}
         </div>
-        <div className="app-version">Gym Tracker · v9.4.1 — Volume</div>
+        <div className="app-version">Gym Tracker · v9.5 — Volume</div>
       </div>
 
       <PushToggle />
