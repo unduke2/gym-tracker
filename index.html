@@ -2383,6 +2383,7 @@ button { cursor: pointer; }
   color: var(--ink-3);
   font-variant-numeric: tabular-nums;
 }
+.wu-row .wu-add { font-style: normal; color: var(--ink-4); }
 .wu-row.target .wu-tag { color: var(--accent); }
 .wu-row.target .wu-w { color: var(--ink); font-size: 16px; }
 
@@ -3652,14 +3653,14 @@ const MIGRATION_REPORT = runMigrations();
 // ─── EQUIPMENT & PROGRESSION ──────────────────────────────────────────────────
 function getEquipmentType(exName) {
   const barbell = ["Bench Press","OHP","Bent Over Row","Squat","Deadlift","Incline Barbell Press","Skull Crushers","EZ Bar Curl","Romanian Deadlift","Front Squat"];
-  const machine  = ["Leg Press","Lat Pulldown","Seated Cable Row","Leg Curl","Seated Leg Curl","Leg Extension","Calf Raise","Cable Fly","Face Pull","Tricep Pushdown","Hip Thrust","Hack Squat / Leg Press","Seated Calf Raise"];
+  const machine  = ["Leg Press","Lat Pulldown","Seated Cable Row","Leg Curl","Seated Leg Curl","Leg Extension","Calf Raise","Cable Fly","Face Pull","Tricep Pushdown","Hip Thrust","Hack Squat / Leg Press","Seated Calf Raise","Hack Squat","Hip Thrust Machine"];
   const dbLight  = ["DB Lateral Raise","Incline DB Curl","Rear Delt Fly","Hammer Curl","DB Curl"];
   const bodyweight = ["Side Plank"];
   if (barbell.includes(exName)) return "barbell";
   if (machine.includes(exName)) return "machine";
   if (dbLight.includes(exName)) return "dumbbell_light";
   if (bodyweight.includes(exName)) return "bodyweight";
-  return "dumbbell_heavy"; // incl. Bulgarian Split Squat, One Arm DB Row, Suitcase Carry
+  return "dumbbell_heavy"; // incl. Bulgarian Split Squat, One Arm DB Row, Suitcase Carry, Back Extension (plate held)
 }
 function getBaseIncrement(t) {
   if (t === "barbell") return 2.5;
@@ -4089,6 +4090,13 @@ function calcNextWeight(exercise, logs) {
 //   declining → almost always accumulated fatigue rather than lost strength
 //               (the old algorithm deloaded end-of-session accessories for being
 //               tired), so seed from the PEAK, not from the depressed last value
+// The user moved gyms at the end of Sep 2026. The new gym's machines (old-school
+// plate-loaded and Technogym) load nothing like the old ones, so a machine
+// number from before the move says nothing about a machine after it — 95kg of
+// old-gym leg press seeded a new-gym day where 55 was the real number. Barbells
+// and dumbbells weigh the same everywhere and carry across.
+const GYM_CHANGED_AT = new Date("2026-09-29T00:00:00").getTime();
+
 function computeRestartWeight(exercise, logs) {
   const names = exercise.seedFrom;
   if (!names || !names.length) return null;
@@ -4114,6 +4122,10 @@ function computeRestartWeight(exercise, logs) {
       const srcEx = lookupDay(session.day)?.exercises?.find(e => e.name === n);
       hits.push({ ts: session.ts, weight: Math.max(...ws), repMid: mid(srcEx?.repRange), name: n });
     }
+  }
+  if (eq === "machine" && hits.some(h => h.ts >= GYM_CHANGED_AT)) {
+    const here = hits.filter(h => h.ts >= GYM_CHANGED_AT);
+    hits.length = 0; hits.push(...here);
   }
   if (!hits.length) return null;
 
@@ -4177,7 +4189,7 @@ function computeRestartWeight(exercise, logs) {
 function getRestSeconds(exName, dayType) {
   // Between sets of the same exercise
   const heavy = ["Bench Press","OHP","Squat","Deadlift","Bent Over Row","Incline Barbell Press","Front Squat","Romanian Deadlift"];
-  const med   = ["Incline DB Press","Flat DB Press","Seated Cable Row","One Arm DB Row","Lat Pulldown","Leg Press","Hip Thrust","Hack Squat / Leg Press","Bulgarian Split Squat"];
+  const med   = ["Incline DB Press","Flat DB Press","Seated Cable Row","One Arm DB Row","Lat Pulldown","Leg Press","Hip Thrust","Hack Squat / Leg Press","Bulgarian Split Squat","Hack Squat","Hip Thrust Machine"];
   const short = ["Side Plank","Suitcase Carry"]; // trunk work — nothing systemic to recover from
   if (heavy.includes(exName)) return dayType === "power" ? 240 : 150;
   if (med.includes(exName))   return dayType === "power" ? 180 : 120;
@@ -4203,13 +4215,39 @@ function warmupSets(working, ex) {
     // straight from an empty bar to two-thirds of the working set.
     const bar = ex.barWeight || BAR.olympic;
     const total = working + bar;
-    const out = [{ weight: 0, reps: 10, label: "bar" }]; // 0 plates = empty bar
-    for (const [pct, reps] of [[0.5, 5], [0.7, 3], [0.87, 1]]) {
-      const plates = Math.max(0, snap(total * pct - bar, eq));
-      if (plates > out[out.length - 1].weight && plates < working) {
-        out.push({ weight: plates, reps, label: `${Math.round(pct*100)}%` });
-      }
+    const side = working / 2;
+    // v10: three steps at most — bar, ~half, ~80% — and every step only ADDS
+    // plates. The old ramp took 50/70/87% and loaded each with the fewest
+    // plates, so squat at 70kg went 7.5 → 15 → 20 → 25 a side: four warm-ups,
+    // nine plate moves, four of them taking a plate back off. Here the working
+    // stack is chosen so each warm-up is a prefix of it (10+10+5 a side
+    // instead of one 25): one more plate on the bar, none ever removed.
+    // Fewer, heavier steps cost nothing measurable at these loads — 0, 1 or 2
+    // warm-up sets made no difference at ~10RM (Korakakis/Enes 2025).
+    // A deadlift starts from the floor, where an empty bar can't sit at height.
+    const fromFloor = ex.name === "Deadlift";
+    const pct = x => (2 * x + bar) / total;
+    const plates = x => { // greedy count of plates for x kg a side, or null
+      let r = x, n = 0;
+      for (const p of PLATE_SET) while (r >= p - 1e-9) { r -= p; n++; }
+      return r > 1e-6 ? null : n;
+    };
+    const needMid = fromFloor || bar / total < 0.5;
+    let best = null;
+    for (let a = 0; a <= side + 1e-9; a += 1.25) for (let b = a; b <= side + 1e-9; b += 1.25) {
+      if (a === 0 ? needMid : (pct(a) < 0.5 || pct(a) > 0.68)) continue;
+      const below = a > 0 ? pct(a) : bar / total;
+      if (b === a ? below < 0.72 : (pct(b) < 0.72 || pct(b) > 0.9)) continue;
+      const n1 = plates(a), n2 = plates(b - a), n3 = plates(side - b);
+      if (n1 == null || n2 == null || n3 == null) continue;
+      const cost = n1 + n2 + n3 + 2 * (a > 0 ? Math.abs(pct(a) - 0.55) : 0) + 2 * (b > a ? Math.abs(pct(b) - 0.8) : 0);
+      if (!best || cost < best.cost) best = { cost, a, b };
     }
+    const out = fromFloor ? [] : [{ weight: 0, reps: 10, label: "bar", add: 0 }]; // 0 plates = empty bar
+    if (!best) return out;
+    const lbl = x => `${Math.round(pct(x) * 100)}%`;
+    if (best.a > 0) out.push({ weight: 2 * best.a, reps: 5, label: lbl(best.a), add: best.a });
+    if (best.b > best.a) out.push({ weight: 2 * best.b, reps: 2, label: lbl(best.b), add: best.b - best.a });
     return out;
   }
   // Machines / dumbbells — lighter ramp, two steps is plenty.
@@ -4577,6 +4615,77 @@ const FULLBODY = {
 };
 const FB_DAYS = ["Full Body A","Full Body B"];
 
+// ─── UPPER / LOWER (v10.0) ────────────────────────────────────────────────────
+// The full-body A/B days grew to 11 exercises / ~2h, which a weekday evening
+// (arrive ~19:30, close 21:00) never fit: from Sep 11 every session ended with
+// work skipped, and the user said what was wrong in his own words — "after I
+// finish the hardest squat, seeing 10 remaining exercises, that shit is hell",
+// "why can't it just feel like a regular gym plan". So: the same weekly work,
+// cut into four short days of plain gym exercises.
+//
+//  · Fewer exercises, more sets. Main movements get 4 sets, so four visits come
+//    to ~85 sets — what ABA (three full-body days) gave, not what A+B gave. The
+//    number of DIFFERENT things per visit is what made the old days endless; the
+//    number of sets wasn't. Split vs full body makes no difference to growth
+//    or strength when weekly sets match (Ramos-Campo 2024, 14 studies).
+//  · Legs on machines, no barbell on the spine: squat, deadlift, RDL, Bulgarian
+//    split squat, carry and plank are gone. They were there for a back exam;
+//    the user hates them and his back hurt. Machines grow muscle the same as
+//    free weights (Haugen 2023); strength is specific, and squat strength isn't
+//    a goal here.
+//  · It rotates like A/B: whatever day you train is the next one. A fifth visit
+//    in a week is just the next day — nothing caps it.
+const UPPERLOWER = {
+  "Upper A": {
+    type: "upper", color: "#4a9eff", icon: "◈",
+    description: "Bench · pulldown · row · fly · shoulders · arms.",
+    exercises: [
+      { name: "Bench Press",       day: "Upper A", tier: 1, sets: 4, repRange: "5-8",   startWeight: 30, barbell: true, barWeight: BAR.olympic, seedFrom: ["Bench Press"], hardMode: { finish: "amrap" }, note: "Stop with 1–2 clean reps left." },
+      { name: "Lat Pulldown",      day: "Upper A", tier: 1, sets: 4, repRange: "8-12",  startWeight: 35, seedFrom: ["Lat Pulldown"], hardMode: { finish: "amrap" }, note: "Full stretch at the top, elbows to ribs." },
+      { name: "One Arm DB Row",    day: "Upper A", tier: 2, sets: 3, repRange: "8-12",  startWeight: 12.5, seedFrom: ["One Arm DB Row"], hardMode: { finish: "amrap" }, note: "Knee and hand on the bench. Elbow to the hip." },
+      { name: "Cable Fly",         day: "Upper A", tier: 3, sets: 4, repRange: "10-15", startWeight: 5, seedFrom: ["Cable Fly"], hardMode: { finish: "myo" }, note: "Arms open wide at the bottom — the stretch is the point. Per side." },
+      { name: "DB Lateral Raise",  day: "Upper A", tier: 3, sets: 4, repRange: "12-15", startWeight: 7, seedFrom: ["DB Lateral Raise"], hardMode: { finish: "myo" }, note: "Lead with the elbows. Per dumbbell." },
+      { name: "EZ Bar Curl",       day: "Upper A", tier: 3, sets: 3, repRange: "8-12",  startWeight: 12.5, barbell: true, barWeight: BAR.ez, supersetWith: "Skull Crushers", seedFrom: ["EZ Bar Curl"], hardMode: { finish: "myo" }, note: "Slow on the way down." },
+      { name: "Skull Crushers",    day: "Upper A", tier: 3, sets: 3, repRange: "8-12",  startWeight: 12.5, barbell: true, barWeight: BAR.ez, supersetWith: "EZ Bar Curl", seedFrom: ["Skull Crushers"], hardMode: { finish: "myo" }, note: "Elbows tucked, don't flare." },
+    ]
+  },
+  "Lower A": {
+    type: "lower", color: "#4a9eff", icon: "◈",
+    description: "Hack squat · hip thrust · leg curl · leg extension · calves. All machines.",
+    exercises: [
+      { name: "Hack Squat",        day: "Lower A", tier: 1, sets: 4, repRange: "6-10",  startWeight: 40, hardMode: { finish: "amrap" }, note: "Back flat on the pad. Deep as is comfortable. Weight = plates loaded." },
+      { name: "Hip Thrust Machine", day: "Lower A", tier: 2, sets: 4, repRange: "8-12", startWeight: 40, hardMode: { finish: "amrap" }, note: "Pause a second at the top, squeeze the glutes. Ribs down — the hips move, not the lower back." },
+      { name: "Seated Leg Curl",   day: "Lower A", tier: 3, sets: 4, repRange: "10-15", startWeight: 25, seedFrom: ["Seated Leg Curl","Leg Curl"], hardMode: { finish: "myo" }, note: "Lean forward a little to stretch the hamstrings. 3s on the way back." },
+      { name: "Leg Extension",     day: "Lower A", tier: 3, sets: 4, repRange: "10-15", startWeight: 20, seedFrom: ["Leg Extension"], hardMode: { finish: "myo" }, note: "Pause a second at the top." },
+      { name: "Calf Raise",        day: "Lower A", tier: 3, sets: 3, repRange: "12-20", startWeight: 40, seedFrom: ["Calf Raise"], hardMode: { finish: "myo" }, note: "Full stretch at the bottom, pause." },
+    ]
+  },
+  "Upper B": {
+    type: "upper", color: "#4a9eff", icon: "◈",
+    description: "Incline press · cable row · overhead press · shoulders · arms.",
+    exercises: [
+      { name: "Incline Barbell Press", day: "Upper B", tier: 1, sets: 4, repRange: "8-12", startWeight: 17.5, barbell: true, barWeight: BAR.olympic, seedFrom: ["Incline Barbell Press"], hardMode: { finish: "amrap" }, note: "Slow on the way down. Stretch at the bottom." },
+      { name: "Seated Cable Row",  day: "Upper B", tier: 1, sets: 4, repRange: "8-12",  startWeight: 30, seedFrom: ["Seated Cable Row"], hardMode: { finish: "amrap" }, note: "Elbows tight, squeeze the shoulder blades together." },
+      { name: "OHP",               day: "Upper B", tier: 2, sets: 3, repRange: "6-10",  startWeight: 12.5, barbell: true, barWeight: BAR.olympic, seedFrom: ["OHP"], hardMode: { finish: "amrap" }, note: "Seated with back support if your back complains standing." },
+      { name: "DB Lateral Raise",  day: "Upper B", tier: 3, sets: 4, repRange: "12-15", startWeight: 7, seedFrom: ["DB Lateral Raise"], hardMode: { finish: "myo" }, note: "Lead with the elbows. Per dumbbell." },
+      { name: "Incline DB Curl",   day: "Upper B", tier: 3, sets: 3, repRange: "10-15", startWeight: 7.5, supersetWith: "Overhead DB Extension", seedFrom: ["Incline DB Curl"], hardMode: { finish: "myo" }, note: "Elbows behind the body. Per dumbbell." },
+      { name: "Overhead DB Extension", day: "Upper B", tier: 3, sets: 3, repRange: "10-15", startWeight: 12.5, supersetWith: "Incline DB Curl", seedFrom: ["Overhead DB Extension"], hardMode: { finish: "myo" }, note: "One dumbbell, both hands, elbows in." },
+    ]
+  },
+  "Lower B": {
+    type: "lower", color: "#4a9eff", icon: "◈",
+    description: "Leg press · back extension · leg curl · leg extension · calves. All machines.",
+    exercises: [
+      { name: "Leg Press",         day: "Lower B", tier: 1, sets: 4, repRange: "8-12",  startWeight: 50, seedFrom: ["Leg Press","Hack Squat / Leg Press"], hardMode: { finish: "amrap" }, note: "Deep, lower back stays on the pad." },
+      { name: "Back Extension",    day: "Lower B", tier: 2, sets: 3, repRange: "10-15", startWeight: 5, hardMode: { finish: "amrap" }, note: "45° bench. Hips do the work; stop at a straight line, don't arch past it. Weight = plate held to the chest." },
+      { name: "Leg Curl",          day: "Lower B", tier: 3, sets: 4, repRange: "10-15", startWeight: 25, seedFrom: ["Leg Curl","Seated Leg Curl"], hardMode: { finish: "myo" }, note: "Lying machine. 3s on the way back." },
+      { name: "Leg Extension",     day: "Lower B", tier: 3, sets: 4, repRange: "10-15", startWeight: 20, seedFrom: ["Leg Extension"], hardMode: { finish: "myo" }, note: "Pause a second at the top." },
+      { name: "Seated Calf Raise", day: "Lower B", tier: 3, sets: 3, repRange: "12-20", startWeight: 25, seedFrom: ["Seated Calf Raise"], hardMode: { finish: "myo" }, note: "Full stretch at the bottom, pause." },
+    ]
+  },
+};
+const UL_DAYS = ["Upper A","Lower A","Upper B","Lower B"];
+
 // ─── PROGRAM REGISTRY ─────────────────────────────────────────────────────────
 // The active program drives the rotation and the day picker. Historical logs
 // still reference days from whichever program was active when they were written,
@@ -4585,15 +4694,17 @@ const FB_DAYS = ["Full Body A","Full Body B"];
 const PROGRAMS = {
   fullbody: { id:"fullbody", name:"Full Body A/B", tagline:"2-day rotation · every session trains everything", days: FULLBODY, order: FB_DAYS },
   phul:     { id:"phul",     name:"PHUL",          tagline:"4-day power / hypertrophy split",                 days: PHUL,     order: DAYS },
+  upperlower: { id:"upperlower", name:"Upper / Lower", tagline:"4-day rotation · short days, legs on machines", days: UPPERLOWER, order: UL_DAYS },
 };
 const DEFAULT_PROGRAM = "fullbody";
-const ALL_PLAN_DAYS = { ...PHUL, ...FULLBODY };
+const ALL_PLAN_DAYS = { ...PHUL, ...FULLBODY, ...UPPERLOWER };
 function lookupDay(name) { return ALL_PLAN_DAYS[name] || null; }
 function getProgram(id) { return PROGRAMS[id] || PROGRAMS[DEFAULT_PROGRAM]; }
 // CSS class + short tag for a day, tolerant of days from any program (including
 // ones no longer active) and of custom sessions.
-function dayTypeClass(t) { return t === "power" ? "power" : t === "fullbody" ? "fullbody" : "hyper"; }
-function dayTypeTag(t)   { return t === "power" ? "PWR"   : t === "fullbody" ? "FULL"     : "HYP"; }
+function dayTypeClass(t) { return t === "power" ? "power" : (t === "fullbody" || t === "upper" || t === "lower") ? "fullbody" : "hyper"; }
+function dayTypeTag(t)   { return t === "power" ? "PWR"   : t === "fullbody" ? "FULL" : t === "upper" ? "UP" : t === "lower" ? "LOW" : "HYP"; }
+function dayTypeLabel(t) { return t === "power" ? "Power" : t === "fullbody" ? "Full body" : t === "upper" ? "Upper" : t === "lower" ? "Lower" : "Hypertrophy"; }
 // Core (non-optional) exercises for a plan — what "finishing" a session means.
 function coreExercises(plan) { return (plan?.exercises || []).filter(e => !e.optional); }
 // Legacy fixed targets. Kept only as a fallback for when there are no body
@@ -5149,7 +5260,9 @@ function App() {
   };
 
   // Derived: pending catch-up groups (for dashboard banner + makeup starter)
-  const pendingMakeups = computePendingMakeups(workoutLogs, dismissedMakeups);
+  // Only the active program's: after switching to Upper/Lower, a Full Body day's
+  // leftover Bulgarian split squats are not something to catch up on.
+  const pendingMakeups = computePendingMakeups(workoutLogs, dismissedMakeups).filter(g => program.days[g.dayType]);
 
   // Mark a specific abandoned exercise as done (offline / already caught up)
   // so it stops showing in the Catch Up card.
@@ -5646,7 +5759,7 @@ function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, 
       <div className="next-card">
         <div className="label-row">
           <span className={`eyebrow eyebrow-${nextTypeCls}`}>
-            Today · {nextPlan.type === "power" ? "Power" : nextPlan.type === "fullbody" ? "Full body" : "Hypertrophy"}
+            Today · {dayTypeLabel(nextPlan.type)}
           </span>
           <span className="subtitle">{coreExercises(nextPlan).length} lifts</span>
         </div>
@@ -5952,8 +6065,9 @@ function Dashboard({ latest, phase, kcalTarget, todayDiet, workoutLogs, setTab, 
           {recent.slice(0,3).map((s,i) => {
             const p = lookupDay(s.day);
             const t = s.type || p?.type;
-            const pillCls = t === "power" ? "power" : t === "hypertrophy" ? "hyper" : t === "fullbody" ? "fullbody" : "";
-            const pillLabel = t === "power" ? "PWR" : t === "hypertrophy" ? "HYP" : t === "fullbody" ? "FULL" : "CUS";
+            const known = ["power","hypertrophy","fullbody","upper","lower"].includes(t);
+            const pillCls = known ? dayTypeClass(t) : "";
+            const pillLabel = known ? dayTypeTag(t) : "CUS";
             const displayName = s.dayLabel || p?.name || s.day;
             return (
               <div key={i} style={{display:"flex", justifyContent:"space-between", padding:"10px 0", borderTop: i>0?"1px solid var(--line)":"none"}}>
@@ -6773,7 +6887,7 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
             <div className="ex-head">
               <div className="ex-meta-top">
                 <span className={`eyebrow eyebrow-${typeCls}`}>
-                  {plan.type === "power" ? "Power" : plan.type === "fullbody" ? "Full body" : "Hypertrophy"} · T{curEx.tier}
+                  {dayTypeLabel(plan.type)} · T{curEx.tier}
                 </span>
                 <span className="pill">{`${curEx.repRange} ${curEx.unit === "s" ? "sec" : "reps"}`}</span>
               </div>
@@ -6913,13 +7027,14 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
                             <div key={i} className="wu-row">
                               <span className="wu-tag">{w.label}</span>
                               <span className="wu-w tnum">{w.weight > 0 ? <>{w.weight}<em>kg</em></> : <em>bar only</em>}</span>
-                              <span className="wu-r">× {w.reps}</span>
+                              <span className="wu-r">× {w.reps}{w.add > 0 ? <em className="wu-add"> · +{formatPlateBreakdown(2 * w.add)}/side</em> : null}</span>
                             </div>
                           ))}
                           <div className="wu-row target">
                             <span className="wu-tag">work</span>
                             <span className="wu-w tnum">{sug?.weight}<em>kg</em></span>
-                            <span className="wu-r">× {curEx.repRange}</span>
+                            <span className="wu-r">× {curEx.repRange}{curEx.barbell && sug?.weight > (ramp[ramp.length - 1]?.weight || 0)
+                              ? <em className="wu-add"> · +{formatPlateBreakdown(sug.weight - ramp[ramp.length - 1].weight)}/side</em> : null}</span>
                           </div>
                         </div>
                       </div>
@@ -7347,7 +7462,7 @@ function WorkoutTab({ workoutLogs, setWorkoutLogs, setActiveSession, startSessio
                 <div className="day-card-head">
                   <div className="day-card-head-l">
                     <span className={`eyebrow eyebrow-${typeCls}`}>
-                      {p.type === "power" ? "Power" : p.type === "fullbody" ? `Full body · ${core.length} lifts` : "Hypertrophy"}{` · ≈ ${fmtMins(estimateMinutes(applyIntensity(p, !!hardMode?.on), workoutLogs, pace))}`}
+                      {p.type === "power" || p.type === "hypertrophy" ? dayTypeLabel(p.type) : `${dayTypeLabel(p.type)} · ${core.length} lifts`}{` · ≈ ${fmtMins(estimateMinutes(applyIntensity(p, !!hardMode?.on), workoutLogs, pace))}`}
                     </span>
                     <div className="day-card-name">{day}</div>
                     {p.description && <div className="day-card-desc">{p.description}</div>}
@@ -7438,7 +7553,7 @@ function WorkoutTab({ workoutLogs, setWorkoutLogs, setActiveSession, startSessio
           {history.map(([key,log]) => {
             const p = lookupDay(log.day);
             const lt = log.type || p?.type;
-            const typeCls = lt === "power" ? "power" : lt === "hypertrophy" ? "hyper" : lt === "fullbody" ? "fullbody" : "";
+            const typeCls = ["power","hypertrophy","fullbody","upper","lower"].includes(lt) ? dayTypeClass(lt) : "";
             const filled = Object.entries(log.exercises||{}).filter(([,sets]) => sets.some(s => s.weight||s.reps));
             const displayName = log.dayLabel || p?.name || log.day;
             return (
@@ -8793,7 +8908,7 @@ function StatsTab({ stats, setStats, phase, theme, setTheme }) {
             </button>
           ))}
         </div>
-        <div className="app-version">Gym Tracker · v9.6 — Volume</div>
+        <div className="app-version">Gym Tracker · v10.0 — Upper / Lower</div>
       </div>
 
       <PushToggle />

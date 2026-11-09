@@ -79,6 +79,18 @@ console.log("\n── Barbell loads are PLATE weight, bar excluded ──");
   check("machine ramp has two steps under the working weight",
     m.length === 2 && m.every(s => s.weight > 0 && s.weight < 45), JSON.stringify(m));
   check("no ramp when there is no weight", A.warmupSets(0, { name:"Squat" }).length === 0);
+  // v10: "5 warm-up sets ... the time it takes to load and unload ... cant we
+  // simplify to bar, halfway, nearly full, and make adding incremental"
+  for (const [n, wt] of [["Squat",50],["Bench Press",35],["Bench Press",80],["Incline Barbell Press",20],["OHP",12.5]]) {
+    const r = A.warmupSets(wt, { name:n, barbell:true, barWeight:20 });
+    check(`${n} ${wt + 20}kg: at most 3 warm-ups (bar, ~half, ~80%)`, r.length <= 3, JSON.stringify(r.map(s => s.weight)));
+    const perSide = r.map(s => s.weight / 2);
+    check(`${n} ${wt + 20}kg: every step only adds plates`,
+      r.every((s, i) => i === 0 ? s.add === s.weight / 2 : Math.abs(perSide[i] - perSide[i-1] - s.add) < 1e-9 && s.add > 0)
+        && wt / 2 >= perSide[perSide.length - 1], JSON.stringify(r));
+  }
+  check("deadlift skips the empty bar (it's on the floor)",
+    A.warmupSets(37.5, { name:"Deadlift", barbell:true, barWeight:20 })[0]?.weight > 0);
 }
 
 console.log("\n── Restart seeding ──");
@@ -643,7 +655,41 @@ console.log("\n── Program integrity ──");
     for (const e of prog.days[day].exercises) known.add(e.name);
   const unclassified = [...known].filter(n => A.getEquipmentType(n) === "dumbbell_heavy");
   check("no exercise falls through equipment classification unintentionally",
-    unclassified.every(n => /DB |Dumbbell|Overhead DB|Bulgarian Split Squat|Suitcase Carry/.test(n)), unclassified.join(", "));
+    unclassified.every(n => /DB |Dumbbell|Overhead DB|Bulgarian Split Squat|Suitcase Carry|Back Extension/.test(n)), unclassified.join(", "));
+}
+
+console.log("\n── v10: Upper / Lower ──");
+{
+  const ul = A.PROGRAMS.upperlower;
+  check("four days, rotating upper/lower", ul.order.join(",") === "Upper A,Lower A,Upper B,Lower B");
+  const all = ul.order.flatMap(d => ul.days[d].exercises);
+  // "FUCKING SQUATS, FUCKING FARMER WALKS, FUCKING PLANKS ... BULGARIAN SPLIT SQUATS"
+  for (const n of ["Squat","Deadlift","Romanian Deadlift","Bulgarian Split Squat","Side Plank","Suitcase Carry"])
+    check(`no ${n}`, !all.some(e => e.name === n));
+  check("no day over 7 exercises", ul.order.every(d => ul.days[d].exercises.length <= 7));
+  // "you said AB isn't enough, that I should do ABA — why are you limiting me?"
+  // Four visits must match three full-body days' muscle work, not two.
+  const fb = d => A.FULLBODY[d].exercises.filter(e => !e.optional && !["Side Plank","Suitcase Carry"].includes(e.name));
+  const aba = 2 * fb("Full Body A").reduce((s, e) => s + e.sets, 0) + fb("Full Body B").reduce((s, e) => s + e.sets, 0);
+  const cycle = all.reduce((s, e) => s + e.sets, 0);
+  check(`a 4-day cycle (${cycle} sets) is in ABA's range (${aba}), not A+B's`, cycle >= aba * 0.9, `${cycle} vs ${aba}`);
+  check("every exercise has a hard-mode finish", all.every(e => e.hardMode?.finish));
+}
+
+console.log("\n── v10: machine numbers don't cross gyms ──");
+{
+  const lp = A.UPPERLOWER["Lower B"].exercises.find(e => e.name === "Leg Press");
+  const at = d => new Date(d + "T19:00:00").getTime();
+  const log = (d, w) => ({ day: "Full Body B", ts: at(d), date: d, abandoned: [],
+    exercises: { "Leg Press": [S(w, 10, 8), S(w, 10, 8), S(w, 10, 8)] } });
+  const recent = new Date(Date.now() - 5 * DAY).toISOString().slice(0, 10);
+  const logs = { a: log("2026-09-10", 95), b: log("2026-09-14", 100), c: log(recent, 55) };
+  const r = A.calcNextWeight(lp, logs);
+  check("old-gym leg press (95–100) doesn't seed the new gym's (55)", r.weight <= 60, `${r.weight}kg`);
+  const bench = A.UPPERLOWER["Upper A"].exercises.find(e => e.name === "Bench Press");
+  const bl = (d, w) => ({ day: "Full Body A", ts: at(d), date: d, abandoned: [], exercises: { "Bench Press": [S(w, 6, 8), S(w, 6, 8), S(w, 6, 8)] } });
+  const rb = A.calcNextWeight(bench, { a: bl("2026-09-14", 40), b: bl(recent, 35) });
+  check("…but barbell history still carries across the move", rb.status === "restart" && rb.weight > 0, JSON.stringify(rb));
 }
 
 console.log(`\n${"─".repeat(52)}\n  ${pass} passed, ${fail} failed\n`);
