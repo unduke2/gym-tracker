@@ -664,8 +664,25 @@ console.log("\n── v10: Upper / Lower ──");
   check("four days, rotating upper/lower", ul.order.join(",") === "Upper A,Lower A,Upper B,Lower B");
   const all = ul.order.flatMap(d => ul.days[d].exercises);
   // "FUCKING SQUATS, FUCKING FARMER WALKS, FUCKING PLANKS ... BULGARIAN SPLIT SQUATS"
-  for (const n of ["Squat","Deadlift","Romanian Deadlift","Bulgarian Split Squat","Side Plank","Suitcase Carry"])
+  for (const n of ["Squat","Bulgarian Split Squat","Side Plank","Suitcase Carry"])
     check(`no ${n}`, !all.some(e => e.name === n));
+  // Deadlift and RDL don't hurt him, and deadlift training helped recurrent
+  // low back pain (Aasa/Berglund 2015) — removing them was a vibes call.
+  for (const n of ["Deadlift","Romanian Deadlift"]) check(`${n} stays`, all.some(e => e.name === n));
+  // v10.1 audit — every muscle gets direct work, on growth trials:
+  const has = n => all.some(e => e.name === n);
+  check("hamstrings: seated curl, not lying (Maeo 2021)", has("Seated Leg Curl") && !has("Leg Curl"));
+  check("calves: standing, not seated (Kinoshita 2023)", has("Calf Raise") && !has("Seated Calf Raise"));
+  check("glutes: hip thrust kept (Plotkin 2023)", has("Hip Thrust Machine"));
+  check("adductors: covered now squats are gone (Kubo 2019)", has("Adductor Machine"));
+  check("rear delts get direct work", has("Reverse Pec Deck"));
+  check("abs get direct work", has("Cable Crunch"));
+  check("no barbell OHP — machine press", !has("OHP") && has("Machine Shoulder Press"));
+  // "what if I get there and don't find a hip thrust machine?"
+  const machines = all.filter(e => A.getEquipmentType(e.name) === "machine"
+    && !["Lat Pulldown","Seated Cable Row","Leg Press","Leg Extension"].includes(e.name));
+  check("every less-common machine names a substitute in its note",
+    machines.every(e => /\?/.test(e.note)), machines.filter(e => !/\?/.test(e.note)).map(e => e.name).join(", "));
   check("no day over 7 exercises", ul.order.every(d => ul.days[d].exercises.length <= 7));
   // "you said AB isn't enough, that I should do ABA — why are you limiting me?"
   // Four visits must match three full-body days' muscle work, not two.
