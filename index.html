@@ -4718,6 +4718,7 @@ const UPPERLOWER = {
       { name: "Leg Extension",     day: "Lower B", tier: 3, sets: 4, repRange: "10-15", startWeight: 20, seedFrom: ["Leg Extension"], hardMode: { finish: "myo" }, note: "Pause a second at the top." },
       { name: "Adductor Machine",  day: "Lower B", tier: 3, sets: 3, repRange: "10-15", startWeight: 30, hardMode: { finish: "myo" }, note: "Inner thigh — what squats used to train. Let the legs open as wide as is comfortable. No machine? Cable adduction, one leg at a time." },
       { name: "Back Extension",    day: "Lower B", tier: 3, sets: 3, repRange: "10-15", startWeight: 5, hardMode: { finish: "amrap" }, note: "Pad high so the hips stay put; roll the spine down, then back up to straight — don't arch past it. Light. Weight = plate held to the chest. Or the seated lower-back machine." },
+      { name: "Calf Raise",        day: "Lower B", tier: 3, sets: 4, repRange: "10-15", startWeight: 40, seedFrom: ["Calf Raise"], hardMode: { finish: "myo" }, note: "STANDING, knees straight — the seated one doesn't grow the visible calf (Kinoshita 2023). Deep stretch at the bottom, 2s pause. No standing machine? Calf raises on the leg press." },
     ]
   },
 };
@@ -8970,7 +8971,7 @@ function StatsTab({ stats, setStats, phase, theme, setTheme }) {
             </button>
           ))}
         </div>
-        <div className="app-version">Gym Tracker · v10.3 — Upper / Lower</div>
+        <div className="app-version">Gym Tracker · v10.4 — Upper / Lower</div>
       </div>
 
       <PushToggle />

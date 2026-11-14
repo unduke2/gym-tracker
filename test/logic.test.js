@@ -676,6 +676,8 @@ console.log("\n── v10: Upper / Lower ──");
   // bends the hip partway and is one leg at a time. He tried both and picked it.
   check("hamstrings: standing curl, leaning in — not lying", has("Standing Leg Curl") && !has("Leg Curl"));
   check("calves: standing, not seated (Kinoshita 2023)", has("Calf Raise") && !has("Seated Calf Raise"));
+  // Calves had 4 sets a cycle when everything else had ~8 — both lower days now.
+  check("calves on both lower days", ["Lower A","Lower B"].every(d => ul.days[d].exercises.some(e => e.name === "Calf Raise")));
   check("glutes: hip thrust kept (Plotkin 2023)", has("Hip Thrust Machine"));
   check("adductors: covered now squats are gone (Kubo 2019)", has("Adductor Machine"));
   check("rear delts get direct work", has("Reverse Pec Deck"));
