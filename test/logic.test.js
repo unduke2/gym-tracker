@@ -688,7 +688,12 @@ console.log("\n── v10: Upper / Lower ──");
     && !["Lat Pulldown","Seated Cable Row","Leg Press","Leg Extension"].includes(e.name));
   check("every less-common machine names a substitute in its note",
     machines.every(e => /\?/.test(e.note)), machines.filter(e => !/\?/.test(e.note)).map(e => e.name).join(", "));
-  check("no day over 7 exercises", ul.order.every(d => ul.days[d].exercises.length <= 7));
+  // 11 broke the old plan; 8 (one of them a superset pair at one station) is
+  // what his PHUL days were. 90 min was "the perfect length" (2026-11-10).
+  check("no day over 8 exercises", ul.order.every(d => ul.days[d].exercises.length <= 8));
+  check("every day fits ~90 min at his pace", ul.order.every(d => A.estimateMinutes(ul.days[d], {}, 1.33) <= 92),
+    ul.order.map(d => `${d} ${A.estimateMinutes(ul.days[d], {}, 1.33)}`).join(", "));
+  check("pec deck, not cable fly (long arms ran the cable out)", has("Pec Deck") && !has("Cable Fly"));
   // "you said AB isn't enough, that I should do ABA — why are you limiting me?"
   // Four visits must match three full-body days' muscle work, not two.
   const fb = d => A.FULLBODY[d].exercises.filter(e => !e.optional && !["Side Plank","Suitcase Carry"].includes(e.name));

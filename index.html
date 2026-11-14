@@ -3660,7 +3660,7 @@ const MIGRATION_REPORT = runMigrations();
 // ─── EQUIPMENT & PROGRESSION ──────────────────────────────────────────────────
 function getEquipmentType(exName) {
   const barbell = ["Bench Press","OHP","Bent Over Row","Squat","Deadlift","Incline Barbell Press","Skull Crushers","EZ Bar Curl","Romanian Deadlift","Front Squat"];
-  const machine  = ["Leg Press","Lat Pulldown","Seated Cable Row","Leg Curl","Seated Leg Curl","Standing Leg Curl","Leg Extension","Calf Raise","Cable Fly","Face Pull","Tricep Pushdown","Hip Thrust","Hack Squat / Leg Press","Seated Calf Raise","Hack Squat","Hip Thrust Machine","Machine Shoulder Press","Reverse Pec Deck","Adductor Machine","Cable Crunch","Machine Lateral Raise"];
+  const machine  = ["Leg Press","Lat Pulldown","Seated Cable Row","Leg Curl","Seated Leg Curl","Standing Leg Curl","Leg Extension","Calf Raise","Cable Fly","Face Pull","Tricep Pushdown","Hip Thrust","Hack Squat / Leg Press","Seated Calf Raise","Hack Squat","Hip Thrust Machine","Machine Shoulder Press","Reverse Pec Deck","Adductor Machine","Cable Crunch","Machine Lateral Raise","Pec Deck"];
   const dbLight  = ["DB Lateral Raise","Incline DB Curl","Rear Delt Fly","Hammer Curl","DB Curl"];
   const bodyweight = ["Side Plank"];
   if (barbell.includes(exName)) return "barbell";
@@ -4676,7 +4676,7 @@ const UPPERLOWER = {
       { name: "Bench Press",       day: "Upper A", tier: 1, sets: 4, repRange: "5-8",   startWeight: 30, barbell: true, barWeight: BAR.olympic, seedFrom: ["Bench Press"], hardMode: { finish: "amrap" }, note: "Stop with 1–2 clean reps left." },
       { name: "Lat Pulldown",      day: "Upper A", tier: 1, sets: 4, repRange: "8-12",  startWeight: 35, seedFrom: ["Lat Pulldown"], hardMode: { finish: "amrap" }, note: "Full stretch at the top, elbows to ribs." },
       { name: "One Arm DB Row",    day: "Upper A", tier: 2, sets: 3, repRange: "8-12",  startWeight: 12.5, seedFrom: ["One Arm DB Row"], hardMode: { finish: "amrap" }, note: "Knee and hand on the bench. Elbow to the hip." },
-      { name: "Cable Fly",         day: "Upper A", tier: 3, sets: 4, repRange: "10-15", startWeight: 5, seedFrom: ["Cable Fly"], hardMode: { finish: "myo" }, note: "Arms open wide at the bottom — the stretch is the point. Per side. No cables free? Pec deck." },
+      { name: "Pec Deck",          day: "Upper A", tier: 3, sets: 4, repRange: "10-15", startWeight: 30, hardMode: { finish: "myo" }, note: "Seat so the handles line up with mid-chest. Let the arms open wide — the stretch is the point — then squeeze together. No machine? Cable fly, or dumbbell flyes on a flat bench." },
       { name: "Machine Lateral Raise", day: "Upper A", tier: 3, sets: 4, repRange: "12-15", startWeight: 10, hardMode: { finish: "myo" }, note: "Arm pads, fixed path — no swinging. Pick a weight you can do 12–15 with ~2 left; the app takes it from there. No machine? Dumbbells, lead with the elbows." },
       { name: "EZ Bar Curl",       day: "Upper A", tier: 3, sets: 3, repRange: "8-12",  startWeight: 12.5, barbell: true, barWeight: BAR.ez, supersetWith: "Skull Crushers", seedFrom: ["EZ Bar Curl"], hardMode: { finish: "myo" }, note: "Slow on the way down." },
       { name: "Skull Crushers",    day: "Upper A", tier: 3, sets: 3, repRange: "8-12",  startWeight: 12.5, barbell: true, barWeight: BAR.ez, supersetWith: "EZ Bar Curl", seedFrom: ["Skull Crushers"], hardMode: { finish: "myo" }, note: "Elbows tucked; lower the bar behind your head, not to your forehead — more stretch." },
@@ -8971,7 +8971,7 @@ function StatsTab({ stats, setStats, phase, theme, setTheme }) {
             </button>
           ))}
         </div>
-        <div className="app-version">Gym Tracker · v10.4 — Upper / Lower</div>
+        <div className="app-version">Gym Tracker · v10.5 — Upper / Lower</div>
       </div>
 
       <PushToggle />
