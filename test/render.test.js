@@ -339,5 +339,16 @@ console.log("\n── v9.6: coming up, on the rest screen ──");
   ordered ? console.log("  ok   current exercise first, then T1 before isolations") : (fails++, console.log("  FAIL coming-up order"));
 }
 
+console.log("\n── v10.3: goes up by ──");
+{
+  const plan = M.UPPERLOWER["Upper A"];
+  const data = Object.fromEntries(plan.exercises.map(e => [e.name, Array.from({ length: e.sets }, () => ({ weight:"", reps:"", rpe:null, done:false }))]));
+  const at = name => T(`SessionLogger [${name}]`, h(M.SessionLogger, { dayName:"Upper A", plan, workoutLogs: {},
+    onFinish:noop, onCancel:noop, onDiscard:noop, onSaveSession:noop,
+    savedSession: { data, activeEx: name, activeIdx: 0, exerciseHolds: {} } })).replace(/<!-- -->/g, "");
+  has("a machine shows what it goes up by", at("Machine Lateral Raise"), "Goes up by");
+  hasnt("a barbell doesn't (plates are fixed)", at("Bench Press"), "Goes up by");
+}
+
 console.log(`\n${"─".repeat(52)}\n  ${fails ? fails + " FAILED" : "all render checks passed"}\n`);
 process.exit(fails ? 1 : 0);

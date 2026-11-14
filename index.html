@@ -1122,6 +1122,13 @@ button { cursor: pointer; }
 .wblock .sug-note.bad { color: var(--bad); }
 .wblock .sug-note.hold { color: var(--accent-hold); }
 .wblock .sug-note.info { color: var(--accent-full); }
+.wblock .step-row { margin-top: 10px; text-align: left; }
+.wblock .step-btn { background: none; border: 0; padding: 4px 0; color: var(--ink-3); font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em; cursor: pointer; }
+.wblock .step-btn strong { color: var(--ink-2); font-weight: 700; }
+.wblock .step-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.wblock .step-chip { min-width: 40px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--card-2); color: var(--ink-2); font-family: var(--font-mono); font-size: 13px; font-weight: 700; cursor: pointer; }
+.wblock .step-chip.on { border-color: var(--accent-full); color: var(--accent-full); }
+.wblock .step-chip.reset { font-weight: 500; color: var(--ink-3); }
 
 /* Plate diagram */
 .barbell {
@@ -3653,7 +3660,7 @@ const MIGRATION_REPORT = runMigrations();
 // ─── EQUIPMENT & PROGRESSION ──────────────────────────────────────────────────
 function getEquipmentType(exName) {
   const barbell = ["Bench Press","OHP","Bent Over Row","Squat","Deadlift","Incline Barbell Press","Skull Crushers","EZ Bar Curl","Romanian Deadlift","Front Squat"];
-  const machine  = ["Leg Press","Lat Pulldown","Seated Cable Row","Leg Curl","Seated Leg Curl","Standing Leg Curl","Leg Extension","Calf Raise","Cable Fly","Face Pull","Tricep Pushdown","Hip Thrust","Hack Squat / Leg Press","Seated Calf Raise","Hack Squat","Hip Thrust Machine","Machine Shoulder Press","Reverse Pec Deck","Adductor Machine","Cable Crunch"];
+  const machine  = ["Leg Press","Lat Pulldown","Seated Cable Row","Leg Curl","Seated Leg Curl","Standing Leg Curl","Leg Extension","Calf Raise","Cable Fly","Face Pull","Tricep Pushdown","Hip Thrust","Hack Squat / Leg Press","Seated Calf Raise","Hack Squat","Hip Thrust Machine","Machine Shoulder Press","Reverse Pec Deck","Adductor Machine","Cable Crunch","Machine Lateral Raise"];
   const dbLight  = ["DB Lateral Raise","Incline DB Curl","Rear Delt Fly","Hammer Curl","DB Curl"];
   const bodyweight = ["Side Plank"];
   if (barbell.includes(exName)) return "barbell";
@@ -3662,26 +3669,41 @@ function getEquipmentType(exName) {
   if (bodyweight.includes(exName)) return "bodyweight";
   return "dumbbell_heavy"; // incl. Bulgarian Split Squat, One Arm DB Row, Suitcase Carry, Back Extension (plate held)
 }
-function getBaseIncrement(t) {
+// What each exercise actually goes up by at THIS gym (v10.3). The defaults are
+// guesses per equipment class; a pin stack might step 8, and a suggestion of a
+// weight the stack doesn't have is one he has to round himself every set. Set
+// in the session ("Goes up by"), kept per exercise in phul_steps.
+const STEP_CHOICES = [1, 2, 2.5, 4, 5, 7.5, 8, 10];
+let EX_STEPS = lsGet("phul_steps") || {};
+function exStep(name) { const v = EX_STEPS[name]; return v > 0 ? v : null; }
+function setExStep(name, step) {
+  EX_STEPS = { ...EX_STEPS };
+  if (step > 0) EX_STEPS[name] = step; else delete EX_STEPS[name];
+  lsSet("phul_steps", EX_STEPS);
+}
+// Dumbbells: the gym's rack goes up in 2.5s all the way (Nov 2026) — the old
+// 1kg-under-10 steps asked for a 7kg dumbbell that doesn't exist.
+function getBaseIncrement(t, step) {
+  if (step > 0) return step;
   if (t === "barbell") return 2.5;
   if (t === "dumbbell_heavy") return 2.5;
-  if (t === "dumbbell_light") return 1;
+  if (t === "dumbbell_light") return 2.5;
   if (t === "machine") return 5;
   if (t === "bodyweight") return 0;
   return 2.5;
 }
 function snapDB(weight) {
-  if (weight <= 10) return Math.round(weight);
   return Math.round(weight / 2.5) * 2.5;
 }
-function snap(weight, equipType) {
+function snap(weight, equipType, step) {
+  if (step > 0) return parseFloat((Math.round(weight / step) * step).toFixed(2));
   if (equipType === "dumbbell_heavy" || equipType === "dumbbell_light") return snapDB(weight);
-  const step = getBaseIncrement(equipType);
-  if (!step) return weight; // bodyweight — nothing to snap to
-  return Math.round(weight / step) * step;
+  const inc = getBaseIncrement(equipType);
+  if (!inc) return weight; // bodyweight — nothing to snap to
+  return Math.round(weight / inc) * inc;
 }
-function dbIncrement(currentWeight) {
-  return currentWeight <= 10 ? 1 : 2.5;
+function dbIncrement(currentWeight, step) {
+  return step > 0 ? step : 2.5;
 }
 function avgReps(sets) {
   const f = sets.filter(s => s.reps && !isNaN(parseInt(s.reps)));
@@ -3732,7 +3754,8 @@ function calcNextHold(exercise, logs) {
 function calcNextWeight(exercise, logs) {
   if (exercise.bodyweight && exercise.unit === "s") return calcNextHold(exercise, logs);
   const eq = getEquipmentType(exercise.name);
-  const baseInc = getBaseIncrement(eq);
+  const step = exStep(exercise.name);
+  const baseInc = getBaseIncrement(eq, step);
   // Lowest sane suggestion: one increment. NOT the bar weight — barbell loads
   // here are PLATE weight with the bar excluded, so clamping at barWeight would
   // put a floor of 20kg of plates (60kg total) under every barbell lift and make
@@ -3773,7 +3796,7 @@ function calcNextWeight(exercise, logs) {
       if (!sets?.length) continue;
       const filled = sets.filter(s => num(s.weight) > 0);
       if (!filled.length) continue;
-      const w = snap(num(filled[0].weight), eq);
+      const w = snap(num(filled[0].weight), eq, step);
       return {
         weight: w, status: "hold-partial", increment: baseInc, eq,
         note: `You only got partway through this last time. Finish the sets this round.`
@@ -3809,7 +3832,7 @@ function calcNextWeight(exercise, logs) {
   const reps      = judgeSets.map(s => num(s.reps)).filter(Number.isFinite);
   const setCount  = reps.length;
   if (!setCount) {
-    const w = snap(lastWeight, eq);
+    const w = snap(lastWeight, eq, step);
     return { weight: w, status: "same", increment: baseInc, eq, note: `Log clean sets at this weight.` };
   }
 
@@ -3899,7 +3922,7 @@ function calcNextWeight(exercise, logs) {
   // can round back to the same number, so force at least one increment down and
   // clamp to a sane floor (empty bar / one increment) — never 0kg.
   const dropTo = (p) =>
-    Math.max(minWeight, Math.min(snap(lastWeight * p, eq), snap(lastWeight - baseInc, eq)));
+    Math.max(minWeight, Math.min(snap(lastWeight * p, eq, step), snap(lastWeight - baseInc, eq, step)));
 
   // ─── DECISION TREE (priority order, first match wins) ──────────────────
   const decide = () => {
@@ -3908,7 +3931,7 @@ function calcNextWeight(exercise, logs) {
   //    so one big finisher set can't manufacture a double jump on its own.
   if (allTop && minOverTop >= 1) {
     const inc  = grinding ? baseInc : baseInc * 2;   // near-max effort → temper the jump
-    const next = snap(lastWeight + inc, eq);
+    const next = snap(lastWeight + inc, eq, step);
     return {
       weight: next, status: "crush", increment: inc, eq,
       note: grinding
@@ -3921,13 +3944,13 @@ function calcNextWeight(exercise, logs) {
   if (allTop) {
     // Hit every top rep AND it felt easy → there's clear headroom, jump harder.
     if (rpeEasy && !burnoutPattern) {
-      const next = snap(lastWeight + baseInc * 2, eq);
+      const next = snap(lastWeight + baseInc * 2, eq, step);
       return {
         weight: next, status: "crush", increment: baseInc * 2, eq,
         note: `↑↑ +${baseInc*2}kg — all sets at ${maxR} reps, RPE ~${rpeShow} (easy). Jump.`
       };
     }
-    const next = snap(lastWeight + baseInc, eq);
+    const next = snap(lastWeight + baseInc, eq, step);
     return {
       weight: next, status: "increase", increment: baseInc, eq,
       note: grinding
@@ -3947,7 +3970,7 @@ function calcNextWeight(exercise, logs) {
   //     to a 9 as a matter of course, and 8,8,9 averaging out to a "no" sent
   //     clean squat sessions into the stall counter instead.
   if (failedSets === 0 && (exercise.tier || 3) <= 2 && avgRpe !== null && avgRpe <= 8.5 && perf >= 0.5) {
-    const next = snap(lastWeight + baseInc, eq);
+    const next = snap(lastWeight + baseInc, eq, step);
     if (next > lastWeight) {
       return {
         weight: next, status: "increase", increment: baseInc, eq,
@@ -3989,7 +4012,7 @@ function calcNextWeight(exercise, logs) {
 
   // 5. STEP DOWN — 1 fail, deficit ≥2 reps (weight was too heavy on one set)
   if (failedSets === 1 && worstDeficit >= 2) {
-    const drop = Math.max(minWeight, snap(lastWeight - baseInc, eq));
+    const drop = Math.max(minWeight, snap(lastWeight - baseInc, eq, step));
     return {
       weight: drop, status: "step-down", increment: baseInc, eq,
       note: `↓ -${baseInc}kg — one set hit ${worstReps}. One step back.`
@@ -4018,8 +4041,8 @@ function calcNextWeight(exercise, logs) {
   if (perf >= 0.75) {
     // Close to top AND it felt easy → don't sit here, add load now.
     if (rpeEasy) {
-      const inc  = eq === "dumbbell_light" ? dbIncrement(lastWeight) : baseInc;
-      const next = snap(lastWeight + inc, eq);
+      const inc  = eq === "dumbbell_light" ? dbIncrement(lastWeight, step) : baseInc;
+      const next = snap(lastWeight + inc, eq, step);
       if (next > lastWeight) {
         return {
           weight: next, status: "increase", increment: inc, eq,
@@ -4036,8 +4059,8 @@ function calcNextWeight(exercise, logs) {
     }
     // Micro-progression for light dumbbells (rep-only default).
     if (eq === "dumbbell_light") {
-      const microInc = dbIncrement(lastWeight);
-      const next = snap(lastWeight + microInc, eq);
+      const microInc = dbIncrement(lastWeight, step);
+      const next = snap(lastWeight + microInc, eq, step);
       if (next > lastWeight) {
         return {
           weight: next, status: "micro-up", increment: microInc, eq,
@@ -4066,7 +4089,7 @@ function calcNextWeight(exercise, logs) {
   // session turns into another month off — so scale the suggestion to the gap
   // and say plainly that it's deliberate.
   if (stale) {
-    const scaled = Math.max(minWeight, snap(result.weight * stalenessFactor(daysSince), eq));
+    const scaled = Math.max(minWeight, snap(result.weight * stalenessFactor(daysSince), eq, step));
     if (scaled < result.weight) {
       const wks = Math.round(daysSince / 7);
       return {
@@ -4101,7 +4124,8 @@ function computeRestartWeight(exercise, logs) {
   const names = exercise.seedFrom;
   if (!names || !names.length) return null;
   const eq = getEquipmentType(exercise.name);
-  const minWeight = getBaseIncrement(eq); // plate weight — see calcNextWeight
+  const step = exStep(exercise.name);
+  const minWeight = getBaseIncrement(eq, step); // plate weight — see calcNextWeight
 
   const mid = (range) => {
     const [a, b] = String(range || "").split("-").map(Number);
@@ -4170,12 +4194,12 @@ function computeRestartWeight(exercise, logs) {
     rangeAdj = Math.min(1.1, Math.max(0.8, 1 - 0.025 * (targetMid - srcMid)));
   }
 
-  const w = Math.max(minWeight, snap(base * factor * trendAdj * rangeAdj, eq));
+  const w = Math.max(minWeight, snap(base * factor * trendAdj * rangeAdj, eq, step));
   const wks = Math.round(days / 7);
   const when = wks <= 1 ? "last week" : `${wks}w ago`;
   const from = hits[0].name; // the lift actually drawn on, not just the first alias
   return {
-    weight: w, status: "restart", increment: getBaseIncrement(eq), eq,
+    weight: w, status: "restart", increment: getBaseIncrement(eq, step), eq,
     note: from === exercise.name
       ? `From your own numbers — ${why}, ${when}. Starts light by design.`
       : `Carried over from ${from} — ${why}, ${when}. Starts light by design.`
@@ -4253,7 +4277,7 @@ function warmupSets(working, ex) {
   // Machines / dumbbells — lighter ramp, two steps is plenty.
   const out = [];
   for (const [pct, reps] of [[0.5, 10], [0.75, 5]]) {
-    const w = snap(working * pct, eq);
+    const w = snap(working * pct, eq, exStep(ex?.name));
     if (w > 0 && w < working && (!out.length || w > out[out.length - 1].weight)) {
       out.push({ weight: w, reps, label: `${Math.round(pct*100)}%` });
     }
@@ -4653,7 +4677,7 @@ const UPPERLOWER = {
       { name: "Lat Pulldown",      day: "Upper A", tier: 1, sets: 4, repRange: "8-12",  startWeight: 35, seedFrom: ["Lat Pulldown"], hardMode: { finish: "amrap" }, note: "Full stretch at the top, elbows to ribs." },
       { name: "One Arm DB Row",    day: "Upper A", tier: 2, sets: 3, repRange: "8-12",  startWeight: 12.5, seedFrom: ["One Arm DB Row"], hardMode: { finish: "amrap" }, note: "Knee and hand on the bench. Elbow to the hip." },
       { name: "Cable Fly",         day: "Upper A", tier: 3, sets: 4, repRange: "10-15", startWeight: 5, seedFrom: ["Cable Fly"], hardMode: { finish: "myo" }, note: "Arms open wide at the bottom — the stretch is the point. Per side. No cables free? Pec deck." },
-      { name: "DB Lateral Raise",  day: "Upper A", tier: 3, sets: 4, repRange: "12-15", startWeight: 7, seedFrom: ["DB Lateral Raise"], hardMode: { finish: "myo" }, note: "Lead with the elbows. Per dumbbell." },
+      { name: "Machine Lateral Raise", day: "Upper A", tier: 3, sets: 4, repRange: "12-15", startWeight: 10, hardMode: { finish: "myo" }, note: "Arm pads, fixed path — no swinging. Pick a weight you can do 12–15 with ~2 left; the app takes it from there. No machine? Dumbbells, lead with the elbows." },
       { name: "EZ Bar Curl",       day: "Upper A", tier: 3, sets: 3, repRange: "8-12",  startWeight: 12.5, barbell: true, barWeight: BAR.ez, supersetWith: "Skull Crushers", seedFrom: ["EZ Bar Curl"], hardMode: { finish: "myo" }, note: "Slow on the way down." },
       { name: "Skull Crushers",    day: "Upper A", tier: 3, sets: 3, repRange: "8-12",  startWeight: 12.5, barbell: true, barWeight: BAR.ez, supersetWith: "EZ Bar Curl", seedFrom: ["Skull Crushers"], hardMode: { finish: "myo" }, note: "Elbows tucked; lower the bar behind your head, not to your forehead — more stretch." },
     ]
@@ -4678,7 +4702,7 @@ const UPPERLOWER = {
       { name: "Incline Barbell Press", day: "Upper B", tier: 1, sets: 4, repRange: "8-12", startWeight: 17.5, barbell: true, barWeight: BAR.olympic, seedFrom: ["Incline Barbell Press"], hardMode: { finish: "amrap" }, note: "Slow on the way down. Stretch at the bottom." },
       { name: "Seated Cable Row",  day: "Upper B", tier: 1, sets: 4, repRange: "8-12",  startWeight: 30, seedFrom: ["Seated Cable Row"], hardMode: { finish: "amrap" }, note: "Let the shoulders reach forward, then elbows tight and squeeze the shoulder blades together." },
       { name: "Machine Shoulder Press", day: "Upper B", tier: 2, sets: 3, repRange: "8-12", startWeight: 20, hardMode: { finish: "amrap" }, note: "Back flat on the pad. No machine? Seated dumbbell press." },
-      { name: "DB Lateral Raise",  day: "Upper B", tier: 3, sets: 4, repRange: "12-15", startWeight: 7, seedFrom: ["DB Lateral Raise"], hardMode: { finish: "myo" }, note: "Lead with the elbows. Per dumbbell." },
+      { name: "Machine Lateral Raise", day: "Upper B", tier: 3, sets: 4, repRange: "12-15", startWeight: 10, hardMode: { finish: "myo" }, note: "Arm pads, fixed path — no swinging. Pick a weight you can do 12–15 with ~2 left; the app takes it from there. No machine? Dumbbells, lead with the elbows." },
       { name: "Reverse Pec Deck",  day: "Upper B", tier: 3, sets: 3, repRange: "12-20", startWeight: 20, hardMode: { finish: "myo" }, note: "Face the pad, arms out wide, push the handles back with the backs of your hands. Rear delts only get rows otherwise. No machine? Bent-over dumbbell rear delt fly." },
       { name: "Incline DB Curl",   day: "Upper B", tier: 3, sets: 3, repRange: "10-15", startWeight: 7.5, supersetWith: "Overhead DB Extension", seedFrom: ["Incline DB Curl"], hardMode: { finish: "myo" }, note: "Elbows behind the body. Per dumbbell." },
       { name: "Overhead DB Extension", day: "Upper B", tier: 3, sets: 3, repRange: "10-15", startWeight: 12.5, supersetWith: "Incline DB Curl", seedFrom: ["Overhead DB Extension"], hardMode: { finish: "myo" }, note: "One dumbbell, both hands, elbows in." },
@@ -6289,11 +6313,14 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
   const fmt = s => `${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
   const curIdx    = plan.exercises.findIndex(e => e.name===activeEx);
   const curEx     = plan.exercises[curIdx];
+  // Bumped when "Goes up by" changes, so every suggestion re-snaps at once.
+  const [stepsVer, setStepsVer] = useState(0);
+  const [stepOpen, setStepOpen] = useState(null); // exercise name whose picker is open
   const sug       = curEx ? calcNextWeight(curEx, workoutLogs) : null;
   // Every exercise's suggestion, for the "Coming up" list on the rest screen.
   // Memoised: the rest timer re-renders every second.
   const sugAll = useMemo(() => Object.fromEntries(plan.exercises.map(e => [e.name, calcNextWeight(e, workoutLogs)])),
-    [plan, workoutLogs]);
+    [plan, workoutLogs, stepsVer]);
   // What's left, in the order the session will take it: the current exercise,
   // then tier by tier, plan order, held ones last within a tier — the same
   // order findNextExercise walks.
@@ -6976,6 +7003,28 @@ function SessionLogger({ dayName, plan: planProp, workoutLogs, onFinish, onCance
                   {sug.note}
                 </div>
               )}
+              {/* What this machine / rack really steps by. Plates are fixed, so
+                  barbells don't get one. */}
+              {!curEx.barbell && !curEx.bodyweight && (() => {
+                const own = exStep(curEx.name);
+                const cur = getBaseIncrement(getEquipmentType(curEx.name), own);
+                const pick = v => { setExStep(curEx.name, v); setStepsVer(n => n + 1); setStepOpen(null); };
+                return (
+                  <div className="step-row">
+                    <button className="step-btn" onClick={() => setStepOpen(stepOpen === curEx.name ? null : curEx.name)}>
+                      Goes up by <strong className="tnum">{cur}kg</strong>{own ? "" : " · guess"} · change
+                    </button>
+                    {stepOpen === curEx.name && (
+                      <div className="step-chips">
+                        {STEP_CHOICES.map(v => (
+                          <button key={v} className={`step-chip tnum ${own === v ? "on" : ""}`} onClick={() => pick(v)}>{v}</button>
+                        ))}
+                        {own && <button className="step-chip reset" onClick={() => pick(null)}>default</button>}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Technique cue — only on the final set, only in hard mode. Shown
@@ -8921,7 +8970,7 @@ function StatsTab({ stats, setStats, phase, theme, setTheme }) {
             </button>
           ))}
         </div>
-        <div className="app-version">Gym Tracker · v10.2 — Upper / Lower</div>
+        <div className="app-version">Gym Tracker · v10.3 — Upper / Lower</div>
       </div>
 
       <PushToggle />
@@ -9049,7 +9098,7 @@ function PushToggle() {
 
 function DataBackup() {
   const [status, setStatus] = useState("");
-  const keys = ["phul_phase","phul_stats","phul_logs","phul_diet","phul_draft","phul_makeup_draft","phul_meals","phul_custom_sessions","phul_theme","phul_dismissed_makeups","phul_program","phul_migration_v"];
+  const keys = ["phul_phase","phul_stats","phul_logs","phul_diet","phul_draft","phul_makeup_draft","phul_meals","phul_custom_sessions","phul_theme","phul_dismissed_makeups","phul_program","phul_migration_v","phul_steps"];
 
   const exportData = () => {
     const data = {};
@@ -9079,6 +9128,7 @@ function DataBackup() {
     phul_custom_sessions: v => Array.isArray(v),
     phul_theme:  v => typeof v === "string",
     phul_dismissed_makeups: v => Array.isArray(v),
+    phul_steps:  v => v && typeof v === "object" && !Array.isArray(v),
   };
   const importData = (e) => {
     const file = e.target.files[0];
@@ -9126,7 +9176,7 @@ class ErrorBoundary extends React.Component {
   componentDidCatch(error, info) { console.error("PHUL crashed during render:", error, info); }
   exportBackup() {
     try {
-      const keys = ["phul_phase","phul_stats","phul_logs","phul_diet","phul_draft","phul_makeup_draft","phul_meals","phul_custom_sessions","phul_theme","phul_dismissed_makeups","phul_program","phul_migration_v"];
+      const keys = ["phul_phase","phul_stats","phul_logs","phul_diet","phul_draft","phul_makeup_draft","phul_meals","phul_custom_sessions","phul_theme","phul_dismissed_makeups","phul_program","phul_migration_v","phul_steps"];
       const data = {};
       keys.forEach(k => { try { const v = localStorage.getItem(k); if (v != null) data[k] = JSON.parse(v); } catch {} });
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });

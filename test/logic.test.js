@@ -708,6 +708,32 @@ console.log("\n── v10.2: standing curl keeps the seated-curl history ──"
   }
 }
 
+console.log("\n── v10.3: suggestions use what the gym actually has ──");
+{
+  const ts = new Date("2026-11-12T20:00:00").getTime();
+  const mk = (day, name, w, reps, rpe = 7) => ({ k: { day, ts, date: "2026-11-12", abandoned: [],
+    exercises: { [name]: reps.map(r => ({ weight: String(w), reps: String(r), completed: true, rpe })) } } });
+  // "a 7kg dumbbell doesn't exist in this gym" — the rack goes up in 2.5s.
+  const lat = A.FULLBODY["Full Body A"].exercises.find(e => e.name === "DB Lateral Raise");
+  const r = A.calcNextWeight(lat, mk("Full Body A", "DB Lateral Raise", 5, [15,15,15], 6));
+  check(`dumbbells only land on 2.5s (got ${r.weight})`, r.weight % 2.5 === 0 && r.weight > 5);
+  // "calf raise machine was in 8kg increments, not 5"
+  const calf = A.UPPERLOWER["Lower A"].exercises.find(e => e.name === "Calf Raise");
+  const logs = mk("Lower A", "Calf Raise", 48, [15,15,15,15], 7);
+  const before = A.calcNextWeight(calf, logs).weight;
+  A.setExStep("Calf Raise", 8);
+  const after = A.calcNextWeight(calf, logs);
+  check(`with a step of 8, calf only lands on 8s (${before} → ${after.weight})`, after.weight % 8 === 0 && after.weight > 48 && after.increment % 8 === 0);
+  check("the step is kept for next time", JSON.parse(localStorage.getItem("phul_steps"))["Calf Raise"] === 8);
+  A.setExStep("Calf Raise", null);
+  check("…and 'default' clears it", A.exStep("Calf Raise") === null && A.calcNextWeight(calf, logs).weight === before);
+  // Larsen/Wolf 2025: cable ≈ dumbbell for growth, so the call is practical —
+  // the dedicated machine has a pin stack and no swinging.
+  const ul = A.PROGRAMS.upperlower, all = ul.order.flatMap(d => ul.days[d].exercises);
+  check("upper days use the lateral raise machine", all.filter(e => e.name === "Machine Lateral Raise").length === 2 && !all.some(e => e.name === "DB Lateral Raise"));
+  check("…classed as a machine", A.getEquipmentType("Machine Lateral Raise") === "machine");
+}
+
 console.log("\n── v10: machine numbers don't cross gyms ──");
 {
   const lp = A.UPPERLOWER["Lower B"].exercises.find(e => e.name === "Leg Press");
