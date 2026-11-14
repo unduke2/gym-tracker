@@ -671,7 +671,10 @@ console.log("\n── v10: Upper / Lower ──");
   for (const n of ["Deadlift","Romanian Deadlift"]) check(`${n} stays`, all.some(e => e.name === n));
   // v10.1 audit — every muscle gets direct work, on growth trials:
   const has = n => all.some(e => e.name === n);
-  check("hamstrings: seated curl, not lying (Maeo 2021)", has("Seated Leg Curl") && !has("Leg Curl"));
+  // Maeo 2021: hip-flexed curls grow the hamstrings more than hip-straight ones.
+  // His gym has no seated curl (2026-11-10); standing, leaning into the chest pad,
+  // bends the hip partway and is one leg at a time. He tried both and picked it.
+  check("hamstrings: standing curl, leaning in — not lying", has("Standing Leg Curl") && !has("Leg Curl"));
   check("calves: standing, not seated (Kinoshita 2023)", has("Calf Raise") && !has("Seated Calf Raise"));
   check("glutes: hip thrust kept (Plotkin 2023)", has("Hip Thrust Machine"));
   check("adductors: covered now squats are gone (Kubo 2019)", has("Adductor Machine"));
@@ -691,6 +694,18 @@ console.log("\n── v10: Upper / Lower ──");
   const cycle = all.reduce((s, e) => s + e.sets, 0);
   check(`a 4-day cycle (${cycle} sets) is in ABA's range (${aba}), not A+B's`, cycle >= aba * 0.9, `${cycle} vs ${aba}`);
   check("every exercise has a hard-mode finish", all.every(e => e.hardMode?.finish));
+}
+
+console.log("\n── v10.2: standing curl keeps the seated-curl history ──");
+{
+  // His first Lower A logged the curl as "Seated Leg Curl" (20kg, one leg).
+  const ts = new Date("2026-11-12T20:00:00").getTime();
+  const sets = [12,12,11,10].map(r => ({ weight: "20", reps: String(r), completed: true, rpe: 8 }));
+  const logs = { k: { day: "Lower A", ts, date: "2026-11-12", abandoned: [], exercises: { "Seated Leg Curl": sets } } };
+  for (const d of ["Lower A","Lower B"]) {
+    const ex = A.UPPERLOWER[d].exercises.find(e => e.name === "Standing Leg Curl");
+    check(`${d}: standing curl seeds from the seated log`, A.calcNextWeight(ex, logs).weight === 20);
+  }
 }
 
 console.log("\n── v10: machine numbers don't cross gyms ──");

@@ -3653,7 +3653,7 @@ const MIGRATION_REPORT = runMigrations();
 // ─── EQUIPMENT & PROGRESSION ──────────────────────────────────────────────────
 function getEquipmentType(exName) {
   const barbell = ["Bench Press","OHP","Bent Over Row","Squat","Deadlift","Incline Barbell Press","Skull Crushers","EZ Bar Curl","Romanian Deadlift","Front Squat"];
-  const machine  = ["Leg Press","Lat Pulldown","Seated Cable Row","Leg Curl","Seated Leg Curl","Leg Extension","Calf Raise","Cable Fly","Face Pull","Tricep Pushdown","Hip Thrust","Hack Squat / Leg Press","Seated Calf Raise","Hack Squat","Hip Thrust Machine","Machine Shoulder Press","Reverse Pec Deck","Adductor Machine","Cable Crunch"];
+  const machine  = ["Leg Press","Lat Pulldown","Seated Cable Row","Leg Curl","Seated Leg Curl","Standing Leg Curl","Leg Extension","Calf Raise","Cable Fly","Face Pull","Tricep Pushdown","Hip Thrust","Hack Squat / Leg Press","Seated Calf Raise","Hack Squat","Hip Thrust Machine","Machine Shoulder Press","Reverse Pec Deck","Adductor Machine","Cable Crunch"];
   const dbLight  = ["DB Lateral Raise","Incline DB Curl","Rear Delt Fly","Hammer Curl","DB Curl"];
   const bodyweight = ["Side Plank"];
   if (barbell.includes(exName)) return "barbell";
@@ -4665,7 +4665,7 @@ const UPPERLOWER = {
       { name: "Hack Squat",        day: "Lower A", tier: 1, sets: 4, repRange: "6-10",  startWeight: 40, hardMode: { finish: "amrap" }, note: "Back flat on the pad, as deep as is comfortable. Weight = plates loaded. No hack squat? Pendulum squat, or leg press with feet low." },
       { name: "Romanian Deadlift", day: "Lower A", tier: 2, sets: 3, repRange: "8-12",  startWeight: 20, barbell: true, barWeight: BAR.olympic, seedFrom: ["Romanian Deadlift"], hardMode: { finish: "amrap" }, note: "Hinge, don't squat. Bar close to the legs, feel the hamstrings stretch. Straps if grip goes first." },
       { name: "Hip Thrust Machine", day: "Lower A", tier: 2, sets: 3, repRange: "8-12", startWeight: 40, hardMode: { finish: "amrap" }, note: "Pause a second at the top, ribs down — the hips move, not the lower back. No machine? Barbell hip thrust, upper back on a bench (Smith machine works too)." },
-      { name: "Seated Leg Curl",   day: "Lower A", tier: 3, sets: 4, repRange: "10-15", startWeight: 25, seedFrom: ["Seated Leg Curl","Leg Curl"], hardMode: { finish: "myo" }, note: "Lean forward a little to stretch the hamstrings. 3s on the way back. Only a lying curl? Do it — still good, just less growth in the one trial." },
+      { name: "Standing Leg Curl", day: "Lower A", tier: 3, sets: 4, repRange: "10-15", startWeight: 20, seedFrom: ["Seated Leg Curl","Leg Curl"], hardMode: { finish: "myo" }, note: "One leg at a time: do both, log one leg. Lean well into the chest pad — the bent hip stretches the hamstrings. 3s on the way back. No standing machine? Seated if there is one, else lying." },
       { name: "Leg Extension",     day: "Lower A", tier: 3, sets: 4, repRange: "10-15", startWeight: 20, seedFrom: ["Leg Extension"], hardMode: { finish: "myo" }, note: "Lean the seat back if it lets you. Pause a second at the top." },
       { name: "Calf Raise",        day: "Lower A", tier: 3, sets: 4, repRange: "10-15", startWeight: 40, seedFrom: ["Calf Raise"], hardMode: { finish: "myo" }, note: "STANDING, knees straight — that's what grows the visible calf. Deep stretch at the bottom, 2s pause. No standing machine? Calf raises on the leg press." },
       { name: "Cable Crunch",      day: "Lower A", tier: 3, sets: 3, repRange: "10-15", startWeight: 25, hardMode: { finish: "myo" }, note: "Kneel facing the stack, rope by your head. Curl your ribs to your hips — round the spine, don't just bow at the hips. No cable? Weighted crunch on a decline bench." },
@@ -4690,7 +4690,7 @@ const UPPERLOWER = {
     exercises: [
       { name: "Deadlift",          day: "Lower B", tier: 1, sets: 3, repRange: "5-8",   startWeight: 35, barbell: true, barWeight: BAR.olympic, seedFrom: ["Deadlift"], hardMode: { finish: "amrap" }, note: "Brace, push the floor away, reset each rep. Straps on the working sets — your grip shouldn't end the set." },
       { name: "Leg Press",         day: "Lower B", tier: 1, sets: 4, repRange: "8-12",  startWeight: 50, seedFrom: ["Leg Press","Hack Squat / Leg Press"], hardMode: { finish: "amrap" }, note: "Deep, lower back stays on the pad." },
-      { name: "Seated Leg Curl",   day: "Lower B", tier: 3, sets: 4, repRange: "10-15", startWeight: 25, seedFrom: ["Seated Leg Curl","Leg Curl"], hardMode: { finish: "myo" }, note: "Lean forward a little. 3s on the way back. Only a lying curl? Do it." },
+      { name: "Standing Leg Curl", day: "Lower B", tier: 3, sets: 4, repRange: "10-15", startWeight: 20, seedFrom: ["Seated Leg Curl","Leg Curl"], hardMode: { finish: "myo" }, note: "One leg at a time: do both, log one leg. Lean well into the chest pad — the bent hip stretches the hamstrings. 3s on the way back. No standing machine? Seated if there is one, else lying." },
       { name: "Leg Extension",     day: "Lower B", tier: 3, sets: 4, repRange: "10-15", startWeight: 20, seedFrom: ["Leg Extension"], hardMode: { finish: "myo" }, note: "Pause a second at the top." },
       { name: "Adductor Machine",  day: "Lower B", tier: 3, sets: 3, repRange: "10-15", startWeight: 30, hardMode: { finish: "myo" }, note: "Inner thigh — what squats used to train. Let the legs open as wide as is comfortable. No machine? Cable adduction, one leg at a time." },
       { name: "Back Extension",    day: "Lower B", tier: 3, sets: 3, repRange: "10-15", startWeight: 5, hardMode: { finish: "amrap" }, note: "Pad high so the hips stay put; roll the spine down, then back up to straight — don't arch past it. Light. Weight = plate held to the chest. Or the seated lower-back machine." },
@@ -8921,7 +8921,7 @@ function StatsTab({ stats, setStats, phase, theme, setTheme }) {
             </button>
           ))}
         </div>
-        <div className="app-version">Gym Tracker · v10.1 — Upper / Lower</div>
+        <div className="app-version">Gym Tracker · v10.2 — Upper / Lower</div>
       </div>
 
       <PushToggle />
